@@ -19,11 +19,42 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <glib.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 int
 main (int argc, char *argv[])
 {
+  /* Command line opetions */
+  gboolean verbose = FALSE;
+  GOptionEntry options[] = {
+    {"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Be verbose", NULL},
+    {NULL}
+  };
+  GOptionContext *ctx;
+  GError *err = NULL;
+
+  /* Create option context parser */
+  ctx = g_option_context_new ("");
+
+  /* Add main entries to context */
+  g_option_context_add_main_entries (ctx, options, NULL);
+
+  /* Parse command line */
+  if (!g_option_context_parse (ctx, &argc, &argv, &err)) {
+    g_printerr ("Option parsion failed: %s\n", err->message);
+    g_clear_error (&err);
+    g_option_context_free (ctx);
+    return -1;
+  }
+
+  /* Free option context */
+  g_option_context_free (ctx);
+
   return 0;
 }

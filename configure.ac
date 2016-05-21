@@ -17,8 +17,16 @@ dnl Check for programs
 AC_PROG_CC
 AM_PROG_CC_C_O
 
-dnl Checks for header files
+dnl Check for header files
 AC_HEADER_STDC
+
+dnl Check for GLib
+GLIB_REQ=2.40.0
+PKG_CHECK_MODULES([GLIB],
+  glib-2.0 >= $GLIB_REQ gobject-2.0 gmodule-no-export-2.0, [],
+  [
+    AC_MSG_ERROR(GLIB $GLIB_REQ or later is required)
+  ])
 
 AC_CONFIG_FILES(
 Makefile
