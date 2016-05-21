@@ -1,0 +1,45 @@
+# Melo: your personal music hub
+
+This file intends to describe how to retrieve and compile Melo from a clean setup.
+For more details and updates on Melo, please refers to its Wiki pages: https://github.com/dillya/melo/wiki
+
+## Build from source tarball
+
+Melo uses the autotools build system for configuring, compiling and installing binaries and associated files. So, basically, Melo can be compiled with the commands commonly used with autotools. 
+
+After downloading and extracted the latest tarball release from Melo with the following commands:
+
+```sh
+tar xzf melo-latest.tar.gz
+cd melo-latest
+```
+
+To configure, compile and install Melo, please use the following commands:
+
+```sh
+./configure
+make
+make install
+```
+
+Melo will be installed on your root file system, under the /usr/local/bin path.
+
+## Build from git source
+
+In order to build from git sources, you need to generate build system files with the autogen.sh script provided in the repository.
+This script needs some additional tools like autoconf and automake.
+
+To initialize a basic build system, please use the following commands:
+
+```sh
+git clone https://github.com/dillya/melo.git
+cd melo
+./autogen.sh
+```
+
+When initialization is done, building is exactly the same as with the source tarball. So, for more details, please read Build from source tarball section.
+
+## License
+
+Melo is licensed under the GPLv2. For more details about the license, please visit the following website: http://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
+
