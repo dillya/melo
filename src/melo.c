@@ -19,9 +19,13 @@
  * Boston, MA  02110-1301, USA.
  */
 
-#include <glib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+#include <glib.h>
+
+#include "melo_httpd.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -38,6 +42,10 @@ main (int argc, char *argv[])
   };
   GOptionContext *ctx;
   GError *err = NULL;
+  /* HTTP server */
+  SoupServer *server;
+  /* Main loop */
+  GMainLoop *loop;
 
   /* Create option context parser */
   ctx = g_option_context_new ("");
@@ -55,6 +63,21 @@ main (int argc, char *argv[])
 
   /* Free option context */
   g_option_context_free (ctx);
+
+  /* Create and start HTTP server */
+  server = melo_httpd_new (8080);
+
+  /* Start main loop */
+  loop = g_main_loop_new (NULL, FALSE);
+
+  /* Run main loop */
+  g_main_loop_run (loop);
+
+  /* End of loop: free main loop */
+  g_main_loop_unref (loop);
+
+  /* Stop and Free HTTP server */
+  melo_httpd_free (server);
 
   return 0;
 }

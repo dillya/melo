@@ -25,7 +25,15 @@ GLIB_REQ=2.40.0
 PKG_CHECK_MODULES([GLIB],
   glib-2.0 >= $GLIB_REQ gobject-2.0 gmodule-no-export-2.0, [],
   [
-    AC_MSG_ERROR(GLIB $GLIB_REQ or later is required)
+    AC_MSG_ERROR(GLib $GLIB_REQ or later is required)
+  ])
+
+dnl Check for LibSoup
+SOUP_REQ=2.40.0
+PKG_CHECK_MODULES([LIBSOUP],
+  libsoup-2.4 >= $SOUP_REQ, [],
+  [
+    AC_MSG_ERROR(LibSoup $SOUP_REQ or later is required)
   ])
 
 AC_CONFIG_FILES(
