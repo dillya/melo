@@ -21,10 +21,11 @@
 
 #include "melo_module.h"
 
+G_DEFINE_ABSTRACT_TYPE (MeloModule, melo_module, G_TYPE_OBJECT)
+
 static void
 melo_module_class_init (MeloModuleClass *klass)
 {
-
 }
 
 static void
