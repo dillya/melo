@@ -2,6 +2,7 @@ bin_PROGRAMS = melo
 
 melo_SOURCES = \
 	melo_module.c \
+	melo_file.c \
 	melo_httpd.c \
 	melo.c
 
@@ -15,4 +16,5 @@ meloinclude_HEADERS = \
 	melo_module.h
 
 noinst_HEADERS = \
+	melo_file.h \
 	melo_httpd.h
