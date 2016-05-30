@@ -39,5 +39,6 @@ PKG_CHECK_MODULES([LIBSOUP],
 AC_CONFIG_FILES(
 Makefile
 src/Makefile
+www/Makefile
 )
 AC_OUTPUT
