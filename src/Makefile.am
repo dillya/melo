@@ -8,6 +8,9 @@ melo_SOURCES = \
 
 melo_CFLAGS = $(GLIB_CFLAGS) $(LIBSOUP_CFLAGS)
 
+melo_CFLAGS += \
+	-DMELO_DATA_DIR=\"$(pkgdatadir)\"
+
 melo_LDFLAGS = $(GLIB_LIBS) $(LIBSOUP_LIBS)
 
 meloincludedir = $(includedir)/melo

@@ -119,7 +119,7 @@ melo_httpd_default_handler (SoupServer *server, SoupMessage *msg,
     soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
 
   /* Generate absolute path in file system */
-  f_path = g_strdup_printf (".%s", path);
+  f_path = g_strdup_printf (MELO_DATA_DIR "/www/%s", path);
 
   /* Check file status */
   if (g_stat (f_path, &st) == -1) {
