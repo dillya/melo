@@ -1,4 +1,5 @@
 wwwdatadir = $(pkgdatadir)/www
 
-dist_wwwdata_DATA = \
+nobase_dist_wwwdata_DATA = \
+	debug/index.html \
 	index.html
