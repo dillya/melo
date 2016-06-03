@@ -114,8 +114,10 @@ melo_httpd_file_handler (SoupServer *server, SoupMessage *msg,
   char *f_path;
 
   /* We only support GET and HEAD methods */
-  if (msg->method != SOUP_METHOD_GET && msg->method != SOUP_METHOD_HEAD)
+  if (msg->method != SOUP_METHOD_GET && msg->method != SOUP_METHOD_HEAD) {
     soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
+    return;
+  }
 
   /* Generate absolute path in file system */
   f_path = g_strdup_printf (MELO_DATA_DIR "/www/%s", path);
