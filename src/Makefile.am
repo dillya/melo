@@ -5,6 +5,7 @@ melo_SOURCES = \
 	melo_file.c \
 	melo_jsonrpc.c \
 	melo_httpd.c \
+	melo_httpd_rpc.c \
 	melo_httpd_file.c \
 	melo.c
 
@@ -29,4 +30,5 @@ noinst_HEADERS = \
 	melo_file.h \
 	melo_jsonrpc.h \
 	melo_httpd.h \
+	melo_httpd_rpc.h \
 	melo_httpd_file.h

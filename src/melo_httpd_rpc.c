@@ -1,5 +1,5 @@
 /*
- * melo_httpd.c: HTTP server for Melo remote control
+ * melo_httpd_rpc.c: Json-RPC handler for Melo HTTP server
  *
  * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
  *
@@ -23,51 +23,33 @@
 #include <string.h>
 #include <errno.h>
 
-#include <glib.h>
+#include "melo_jsonrpc.h"
 
-#include "melo_httpd.h"
 #include "melo_httpd_rpc.h"
-#include "melo_httpd_file.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-SoupServer *
-melo_httpd_new (guint port)
+void
+melo_httpd_rpc_handler (SoupServer *server, SoupMessage *msg,
+                        const char *path, GHashTable *query,
+                        SoupClientContext *client, gpointer user_data)
 {
-  SoupServer *server;
-  GError *err = NULL;
-  gboolean res;
-
-  /* Create a new HTTP server */
-  server = soup_server_new (0, NULL);
-
-  /* Start listening */
-  res = soup_server_listen_all (server, port, 0, &err);
-  if (res == FALSE) {
-    g_clear_error (&err);
-    g_object_unref(&server);
-    return NULL;
+  /* We only support GET and POST methods */
+  if (msg->method != SOUP_METHOD_GET && msg->method != SOUP_METHOD_POST) {
+    soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
+    return;
   }
 
-  /* Add a default handler */
-  soup_server_add_handler (server, NULL, melo_httpd_file_handler, NULL,
-                           NULL);
+  /* We only accept "/rpc" path */
+  if (path[4] != '\0') {
+    soup_message_set_status (msg, SOUP_STATUS_BAD_REQUEST);
+    return;
+  }
 
-  /* Add an handler for RPC */
-  soup_server_add_handler (server, "/rpc", melo_httpd_rpc_handler, NULL,
-                           NULL);
-
-  return server;
-}
-
-void
-melo_httpd_free (SoupServer *server)
-{
-  /* Disconnect all remaining clients */
-  soup_server_disconnect (server);
-
-  /* Free HTTP server */
-  g_object_unref (server);
+  /* Set default message */
+  melo_jsonrpc_message_set_error (msg, NULL,
+                                   MELO_JSONRPC_ERROR_INTERNAL_ERROR,
+                                   "JSON-RPC is not yet implemented!");
 }
