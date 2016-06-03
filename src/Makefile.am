@@ -4,6 +4,7 @@ melo_SOURCES = \
 	melo_module.c \
 	melo_file.c \
 	melo_httpd.c \
+	melo_httpd_file.c \
 	melo.c
 
 melo_CFLAGS = $(GLIB_CFLAGS) $(LIBSOUP_CFLAGS)
@@ -20,4 +21,5 @@ meloinclude_HEADERS = \
 
 noinst_HEADERS = \
 	melo_file.h \
-	melo_httpd.h
+	melo_httpd.h \
+	melo_httpd_file.h

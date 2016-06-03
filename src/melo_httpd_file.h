@@ -1,5 +1,5 @@
 /*
- * melo_httpd.h: HTTP server for Melo remote control
+ * melo_httpd_file.h: File handler for Melo HTTP server
  *
  * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
  *
@@ -19,12 +19,14 @@
  * Boston, MA  02110-1301, USA.
  */
 
-#ifndef __MELO_HTTPD_H__
-#define __MELO_HTTPD_H__
+#ifndef __MELO_HTTPD_FILE_H__
+#define __MELO_HTTPD_FILE_H__
 
+#include <glib.h>
 #include <libsoup/soup.h>
 
-SoupServer *melo_httpd_new (guint port);
-void melo_httpd_free (SoupServer *server);
+void melo_httpd_file_handler (SoupServer *server, SoupMessage *msg,
+                              const char *path, GHashTable *query,
+                              SoupClientContext *client, gpointer user_data);
 
-#endif /* __MELO_HTTPD_H__ */
+#endif /* __MELO_HTTPD_FILE_H__ */
