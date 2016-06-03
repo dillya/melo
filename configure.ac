@@ -36,6 +36,14 @@ PKG_CHECK_MODULES([LIBSOUP],
     AC_MSG_ERROR(LibSoup $SOUP_REQ or later is required)
   ])
 
+dnl Check for Json-glib
+JSON_GLIB_REQ=1.0.2
+PKG_CHECK_MODULES([LIBJSON_GLIB],
+  json-glib-1.0 >= $JSON_GLIB_REQ, [],
+  [
+    AC_MSG_ERROR(Libjson-glib $JSON_GLIB_REQ or later is required)
+  ])
+
 AC_CONFIG_FILES(
 Makefile
 src/Makefile
