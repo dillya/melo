@@ -45,8 +45,8 @@ melo_httpd_rpc_handler (SoupServer *server, SoupMessage *msg,
   MeloJSONRPC *parser;
   char *response;
 
-  /* We only support GET and POST methods */
-  if (msg->method != SOUP_METHOD_GET && msg->method != SOUP_METHOD_POST) {
+  /* We only support POST method */
+  if (msg->method != SOUP_METHOD_POST) {
     soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
     return;
   }
