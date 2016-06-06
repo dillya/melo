@@ -1,3 +1,4 @@
 SUBDIRS = \
 	src \
+	tests \
 	www

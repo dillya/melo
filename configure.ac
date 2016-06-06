@@ -47,6 +47,7 @@ PKG_CHECK_MODULES([LIBJSON_GLIB],
 AC_CONFIG_FILES(
 Makefile
 src/Makefile
+tests/Makefile
 www/Makefile
 )
 AC_OUTPUT
