@@ -136,13 +136,20 @@ melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
     gvar_params = json_gvariant_deserialize (params, NULL, NULL);
 
   /* No callback provided */
-  if (!callback)
+  if (!callback) {
+    if (gvar_params)
+      g_variant_unref (gvar_params);
     goto not_found;
+  }
 
   /* Call user callback */
   priv->current_error = NULL;
   priv->current_result = NULL;
   callback (method, gvar_params, user_data);
+
+  /* Free GVariant */
+  if (gvar_params)
+    g_variant_unref (gvar_params);
 
   /* No error or result */
   if (!priv->current_error && !priv->current_result)
@@ -235,6 +242,7 @@ melo_jsonrpc_parse_request (MeloJSONRPC *self,
   /* Parse request */
   if (!json_parser_load_from_data (parser, request, length, &err) ||
       (root = json_parser_get_root (parser)) == NULL) {
+    g_clear_error (&err);
     g_object_unref (parser);
     priv->root = melo_jsonrpc_build_error_node (NULL, -1,
                                                 MELO_JSONRPC_ERROR_PARSE_ERROR,
