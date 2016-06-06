@@ -4,7 +4,7 @@ post()
 {
     echo "--> $1"
     echo -n "<-- "
-    curl -d "$1" -o - "localhost:8080/rpc"
+    curl -d "$1" -s "localhost:8080/rpc"
     echo ""
 }
 
