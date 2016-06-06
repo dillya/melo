@@ -23,7 +23,20 @@
 #define __MELO_JSONRPC_H__
 
 #include <glib.h>
-#include <libsoup/soup.h>
+#include <glib-object.h>
+
+G_BEGIN_DECLS
+
+#define MELO_TYPE_JSONRPC             (melo_jsonrpc_get_type ())
+#define MELO_JSONRPC(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), MELO_TYPE_JSONRPC, MeloJSONRPC))
+#define MELO_IS_JSONRPC(obj)          (G_TYPE_CHECK_INSTANCE_TYPE ((obj), MELO_TYPE_JSONRPC))
+#define MELO_JSONRPC_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST ((klass), MELO_TYPE_JSONRPC, MeloJSONRPCClass))
+#define MELO_IS_JSONRPC_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE ((klass), MELO_TYPE_JSONRPC))
+#define MELO_JSONRPC_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), MELO_TYPE_JSONRPC, MeloJSONRPCClass))
+
+typedef struct _MeloJSONRPC MeloJSONRPC;
+typedef struct _MeloJSONRPCPrivate MeloJSONRPCPrivate;
+typedef struct _MeloJSONRPCClass MeloJSONRPCClass;
 
 /* JSON RPC error codes */
 typedef enum {
@@ -35,13 +48,38 @@ typedef enum {
   MELO_JSONRPC_ERROR_SERVER_ERROR = -32000,
 } MeloJSONRPCError;
 
+typedef void (*MeloJSONRPCCallback) (const char *method, GVariant *params,
+                                     gpointer user_data);
+
+struct _MeloJSONRPC {
+  GObject parent_instance;
+
+  /*< private >*/
+  MeloJSONRPCPrivate *priv;
+};
+
+struct _MeloJSONRPCClass {
+  GObjectClass parent_class;
+};
+
+GType melo_jsonrpc_get_type (void);
+
+MeloJSONRPC *melo_jsonrpc_new (void);
+gboolean melo_jsonrpc_parse_request (MeloJSONRPC *self,
+                                     const char *request, gsize length,
+                                     MeloJSONRPCCallback callback,
+                                     gpointer user_data);
+void melo_jsonrpc_set_response (MeloJSONRPC *self, GVariant *variant);
+void melo_jsonrpc_set_error (MeloJSONRPC *self, MeloJSONRPCError error_code,
+                             const char *error_format,
+                              ...) G_GNUC_PRINTF (3, 4);
+char *melo_jsonrpc_get_response (MeloJSONRPC *self);
+
+/* Utils */
 char *melo_jsonrpc_build_error (const char *id, MeloJSONRPCError error_code,
                                 const char *error_format,
                                 ...) G_GNUC_PRINTF (3, 4);
 
-void melo_jsonrpc_message_set_error (SoupMessage *msg, const char *id,
-                                     MeloJSONRPCError error_code,
-                                     const char *error_format,
-                                     ...) G_GNUC_PRINTF (4, 5);
+G_END_DECLS
 
 #endif /* __MELO_JSONRPC_H__ */

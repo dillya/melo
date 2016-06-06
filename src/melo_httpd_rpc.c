@@ -31,11 +31,20 @@
 #include "config.h"
 #endif
 
+static void
+melo_httpd_rpc_parse_handler (const char *method, GVariant *params,
+                              gpointer user_data)
+{
+}
+
 void
 melo_httpd_rpc_handler (SoupServer *server, SoupMessage *msg,
                         const char *path, GHashTable *query,
                         SoupClientContext *client, gpointer user_data)
 {
+  MeloJSONRPC *parser;
+  char *response;
+
   /* We only support GET and POST methods */
   if (msg->method != SOUP_METHOD_GET && msg->method != SOUP_METHOD_POST) {
     soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
@@ -48,8 +57,23 @@ melo_httpd_rpc_handler (SoupServer *server, SoupMessage *msg,
     return;
   }
 
-  /* Set default message */
-  melo_jsonrpc_message_set_error (msg, NULL,
-                                   MELO_JSONRPC_ERROR_INTERNAL_ERROR,
-                                   "JSON-RPC is not yet implemented!");
+  /* Create a new JSON-RPC parser */
+  parser = melo_jsonrpc_new ();
+
+  /* Parse request */
+  melo_jsonrpc_parse_request (parser,
+                              msg->request_body->data,
+                              msg->request_body->length,
+                              melo_httpd_rpc_parse_handler, NULL);
+
+  /* Build response */
+  response = melo_jsonrpc_get_response (parser);
+
+  /* Free parser */
+  g_object_unref (parser);
+
+  /* Set response */
+  soup_message_set_status (msg, SOUP_STATUS_OK);
+  soup_message_set_response (msg, "application/json", SOUP_MEMORY_TAKE,
+                             response, strlen (response));
 }
