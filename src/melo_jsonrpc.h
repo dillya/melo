@@ -49,6 +49,7 @@ typedef enum {
 } MeloJSONRPCError;
 
 typedef void (*MeloJSONRPCCallback) (const char *method, GVariant *params,
+                                     gboolean is_notification,
                                      gpointer user_data);
 
 struct _MeloJSONRPC {

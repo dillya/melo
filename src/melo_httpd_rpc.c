@@ -33,6 +33,7 @@
 
 static void
 melo_httpd_rpc_parse_handler (const char *method, GVariant *params,
+                              gboolean is_notification,
                               gpointer user_data)
 {
 }
@@ -72,8 +73,12 @@ melo_httpd_rpc_handler (SoupServer *server, SoupMessage *msg,
   /* Free parser */
   g_object_unref (parser);
 
-  /* Set response */
+  /* Set response status */
   soup_message_set_status (msg, SOUP_STATUS_OK);
+  if (!response)
+    return;
+
+  /* Set response */
   soup_message_set_response (msg, "application/json", SOUP_MEMORY_TAKE,
                              response, strlen (response));
 }

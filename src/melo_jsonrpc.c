@@ -122,14 +122,6 @@ melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
   if (!method)
     goto invalid;
 
-  /* Check if id is present */
-  if (!json_object_has_member (obj, "id"))
-    return NULL;
-
-  /* Get id */
-  nid = json_object_get_int_member (obj, "id");
-  id = json_object_get_string_member (obj, "id");
-
   /* Get params */
   params = json_object_get_member (obj, "params");
   if (params) {
@@ -144,6 +136,29 @@ melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
     gvar_params = json_gvariant_deserialize (params, NULL, NULL);
   }
 
+  /* Check if id is present */
+  if (!json_object_has_member (obj, "id")) {
+    /* This is a notification: try to call callback */
+    if (callback) {
+      priv->current_error = NULL;
+      priv->current_result = NULL;
+      callback (method, gvar_params, TRUE, user_data);
+      if (priv->current_error)
+        json_node_free (priv->current_error);
+      if (priv->current_result)
+        json_node_free (priv->current_result);
+    }
+
+    /* Free GVariant */
+    if (gvar_params)
+      g_variant_unref (gvar_params);
+    return NULL;
+  }
+
+  /* Get id */
+  nid = json_object_get_int_member (obj, "id");
+  id = json_object_get_string_member (obj, "id");
+
   /* No callback provided */
   if (!callback) {
     if (gvar_params)
@@ -154,7 +169,7 @@ melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
   /* Call user callback */
   priv->current_error = NULL;
   priv->current_result = NULL;
-  callback (method, gvar_params, user_data);
+  callback (method, gvar_params, FALSE, user_data);
 
   /* Free GVariant */
   if (gvar_params)
@@ -303,6 +318,13 @@ melo_jsonrpc_parse_request (MeloJSONRPC *self,
       if (node)
         json_array_add_element (res_array, node);
     }
+
+    /* Check if array is empty */
+    count = json_array_get_length (res_array);
+    if (!count) {
+      json_node_free (priv->root);
+      priv->root = NULL;
+    }
   } else {
     /* Invalid request */
     g_object_unref (parser);
@@ -373,8 +395,7 @@ melo_jsonrpc_get_response (MeloJSONRPC *self)
 
   /* No root built */
   if (!self->priv->root)
-    return melo_jsonrpc_build_error (NULL, MELO_JSONRPC_ERROR_INTERNAL_ERROR,
-                                     "Internal error");
+    return NULL;
 
   /* Generate final string */
   gen = json_generator_new ();
