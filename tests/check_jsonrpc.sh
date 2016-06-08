@@ -66,5 +66,9 @@ post '[
         {"jsonrpc": "2.0", "method": "get_data", "id": "9"}
     ]'
 
-
+# rpc call Batch (all notifications):
+post '[
+        {"jsonrpc": "2.0", "method": "notify_sum", "params": [1,2,4]},
+        {"jsonrpc": "2.0", "method": "notify_hello", "params": [7]}
+    ]'
 
