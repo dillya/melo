@@ -132,8 +132,17 @@ melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
 
   /* Get params */
   params = json_object_get_member (obj, "params");
-  if (params)
+  if (params) {
+    JsonNodeType type;
+
+    /* Check params type: only object or array allowed */
+    type = json_node_get_node_type (params);
+    if (type != JSON_NODE_ARRAY && type != JSON_NODE_OBJECT)
+      goto invalid;
+
+    /* Get variant from JsonNode */
     gvar_params = json_gvariant_deserialize (params, NULL, NULL);
+  }
 
   /* No callback provided */
   if (!callback) {
