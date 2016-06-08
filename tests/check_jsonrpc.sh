@@ -37,6 +37,10 @@ post '{"jsonrpc": "2.0", "method": "foobar, "params": "bar", "baz]'
 # rpc call with invalid Request object:
 post '{"jsonrpc": "2.0", "method": 1, "params": "bar"}'
 
+# rpc call with invalid Params object:
+post '{"jsonrpc": "2.0", "method": "foobar", "params": "bar", "id": "1"}'
+post '{"jsonrpc": "2.0", "method": "foobar", "params": "bar"}'
+
 # rpc call Batch, invalid JSON:
 post '[
   {"jsonrpc": "2.0", "method": "sum", "params": [1,2,4], "id": "1"},
