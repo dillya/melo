@@ -20,7 +20,6 @@
  */
 
 #include <string.h>
-#include <json-glib/json-glib.h>
 
 #include "melo_jsonrpc.h"
 
@@ -83,13 +82,13 @@ melo_jsonrpc_new (void)
 }
 
 static JsonNode *
-melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
+melo_jsonrpc_parse_node (MeloJSONRPC *self, JsonNode *node,
                          MeloJSONRPCCallback callback, gpointer user_data)
 {
+  MeloJSONRPCPrivate *priv = self->priv;
   JsonBuilder *builder;
   JsonObject *obj;
   JsonNode *params;
-  GVariant *gvar_params = NULL;
   const char *version;
   const char *method;
   const char *id = NULL;
@@ -131,9 +130,6 @@ melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
     type = json_node_get_node_type (params);
     if (type != JSON_NODE_ARRAY && type != JSON_NODE_OBJECT)
       goto invalid;
-
-    /* Get variant from JsonNode */
-    gvar_params = json_gvariant_deserialize (params, NULL, NULL);
   }
 
   /* Check if id is present */
@@ -142,16 +138,12 @@ melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
     if (callback) {
       priv->current_error = NULL;
       priv->current_result = NULL;
-      callback (method, gvar_params, TRUE, user_data);
+      callback (self, method, params, TRUE, user_data);
       if (priv->current_error)
         json_node_free (priv->current_error);
       if (priv->current_result)
         json_node_free (priv->current_result);
     }
-
-    /* Free GVariant */
-    if (gvar_params)
-      g_variant_unref (gvar_params);
     return NULL;
   }
 
@@ -160,20 +152,13 @@ melo_jsonrpc_parse_node (MeloJSONRPCPrivate *priv, JsonNode *node,
   id = json_object_get_string_member (obj, "id");
 
   /* No callback provided */
-  if (!callback) {
-    if (gvar_params)
-      g_variant_unref (gvar_params);
+  if (!callback)
     goto not_found;
-  }
 
   /* Call user callback */
   priv->current_error = NULL;
   priv->current_result = NULL;
-  callback (method, gvar_params, FALSE, user_data);
-
-  /* Free GVariant */
-  if (gvar_params)
-    g_variant_unref (gvar_params);
+  callback (self, method, params, FALSE, user_data);
 
   /* No error or result */
   if (!priv->current_error && !priv->current_result)
@@ -280,7 +265,7 @@ melo_jsonrpc_parse_request (MeloJSONRPC *self,
   /* Parse node */
   if (type == JSON_NODE_OBJECT) {
     /* Parse single request */
-    priv->root = melo_jsonrpc_parse_node (priv, root, callback, user_data);
+    priv->root = melo_jsonrpc_parse_node (self, root, callback, user_data);
   } else if (type == JSON_NODE_ARRAY) {
     /* Parse multiple requests: batch */
     JsonArray *req_array;
@@ -312,7 +297,7 @@ melo_jsonrpc_parse_request (MeloJSONRPC *self,
       node = json_array_get_element (req_array, i);
 
       /* Process requesit */
-      node = melo_jsonrpc_parse_node (priv, node, callback, user_data);
+      node = melo_jsonrpc_parse_node (self, node, callback, user_data);
 
       /* Add new response to array */
       if (node)
@@ -340,10 +325,10 @@ melo_jsonrpc_parse_request (MeloJSONRPC *self,
 }
 
 void
-melo_jsonrpc_set_response (MeloJSONRPC *self, GVariant *variant)
+melo_jsonrpc_set_result (MeloJSONRPC *self, JsonNode *result)
 {
   /* Transform GVariant to JsonNode */
-  self->priv->current_result = json_gvariant_serialize (variant);
+  self->priv->current_result = result;
 }
 
 static void

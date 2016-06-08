@@ -32,7 +32,9 @@
 #endif
 
 static void
-melo_httpd_rpc_parse_handler (const char *method, GVariant *params,
+melo_httpd_rpc_parse_handler (MeloJSONRPC *parser,
+                              const char *method,
+                              JsonNode *params,
                               gboolean is_notification,
                               gpointer user_data)
 {

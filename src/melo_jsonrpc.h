@@ -24,6 +24,7 @@
 
 #include <glib.h>
 #include <glib-object.h>
+#include <json-glib/json-glib.h>
 
 G_BEGIN_DECLS
 
@@ -48,7 +49,9 @@ typedef enum {
   MELO_JSONRPC_ERROR_SERVER_ERROR = -32000,
 } MeloJSONRPCError;
 
-typedef void (*MeloJSONRPCCallback) (const char *method, GVariant *params,
+typedef void (*MeloJSONRPCCallback) (MeloJSONRPC *self,
+                                     const char *method,
+                                     JsonNode *params,
                                      gboolean is_notification,
                                      gpointer user_data);
 
@@ -70,7 +73,7 @@ gboolean melo_jsonrpc_parse_request (MeloJSONRPC *self,
                                      const char *request, gsize length,
                                      MeloJSONRPCCallback callback,
                                      gpointer user_data);
-void melo_jsonrpc_set_response (MeloJSONRPC *self, GVariant *variant);
+void melo_jsonrpc_set_result (MeloJSONRPC *self, JsonNode *result);
 void melo_jsonrpc_set_error (MeloJSONRPC *self, MeloJSONRPCError error_code,
                              const char *error_format,
                               ...) G_GNUC_PRINTF (3, 4);
