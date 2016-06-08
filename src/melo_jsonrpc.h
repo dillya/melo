@@ -39,6 +39,8 @@ typedef struct _MeloJSONRPC MeloJSONRPC;
 typedef struct _MeloJSONRPCPrivate MeloJSONRPCPrivate;
 typedef struct _MeloJSONRPCClass MeloJSONRPCClass;
 
+typedef struct _MeloJSONRPCDef MeloJSONRPCDef;
+
 /* JSON RPC error codes */
 typedef enum {
   MELO_JSONRPC_ERROR_PARSE_ERROR = -32700,
@@ -54,6 +56,20 @@ typedef void (*MeloJSONRPCCallback) (MeloJSONRPC *self,
                                      JsonNode *params,
                                      gboolean is_notification,
                                      gpointer user_data);
+
+typedef enum {
+  MELO_JSONRPC_DEF_TYPE_BOOLEAN,
+  MELO_JSONRPC_DEF_TYPE_INT,
+  MELO_JSONRPC_DEF_TYPE_DOUBLE,
+  MELO_JSONRPC_DEF_TYPE_STRING,
+  MELO_JSONRPC_DEF_TYPE_OBJECT,
+  MELO_JSONRPC_DEF_TYPE_ARRAY,
+} MeloJSONRPCDefType;
+
+struct _MeloJSONRPCDef {
+  const char *name;
+  MeloJSONRPCDefType type;
+};
 
 struct _MeloJSONRPC {
   GObject parent_instance;
@@ -78,6 +94,14 @@ void melo_jsonrpc_set_error (MeloJSONRPC *self, MeloJSONRPCError error_code,
                              const char *error_format,
                               ...) G_GNUC_PRINTF (3, 4);
 char *melo_jsonrpc_get_response (MeloJSONRPC *self);
+
+/* Params utils */
+gboolean melo_jsonrpc_check_params (JsonNode *params, MeloJSONRPCDef *def,
+                                    guint count);
+JsonObject *melo_jsonrpc_get_object (JsonNode *params, MeloJSONRPCDef *def,
+                                     guint count);
+JsonArray *melo_jsonrpc_get_array (JsonNode *params, MeloJSONRPCDef *def,
+                                   guint count);
 
 /* Utils */
 char *melo_jsonrpc_build_error (const char *id, MeloJSONRPCError error_code,

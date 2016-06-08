@@ -393,6 +393,214 @@ melo_jsonrpc_get_response (MeloJSONRPC *self)
   return str;
 }
 
+/* Params utils */
+static gboolean
+melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
+                       JsonObject *obj, JsonArray *array)
+{
+  GType vtype = G_TYPE_INVALID;
+  JsonNodeType type;
+
+  /* Get type */
+  type = json_node_get_node_type (node);
+  if (type == JSON_NODE_VALUE)
+    vtype = json_node_get_value_type (node);
+
+  switch (def->type) {
+    case MELO_JSONRPC_DEF_TYPE_BOOLEAN:
+      /* Check type */
+      if (vtype != G_TYPE_BOOLEAN)
+        return FALSE;
+
+      /* Add to object / array */
+      if (obj || array) {
+        gboolean v;
+        v = json_node_get_boolean (node);
+        if (obj)
+          json_object_set_boolean_member (obj, def->name, v);
+        else
+          json_array_add_boolean_element (array, v);
+        break;
+      }
+      break;
+    case MELO_JSONRPC_DEF_TYPE_INT:
+      /* Check type */
+      if (vtype != G_TYPE_INT64)
+        return FALSE;
+
+      /* Add to object / array */
+      if (obj || array) {
+        gint64 v;
+        v = json_node_get_int (node);
+        if (obj)
+          json_object_set_int_member (obj, def->name, v);
+        else
+          json_array_add_int_element (array, v);
+      }
+      break;
+    case MELO_JSONRPC_DEF_TYPE_DOUBLE:
+      /* Check type */
+      if (vtype != G_TYPE_DOUBLE)
+        return FALSE;
+
+      /* Add to object / array */
+      if (obj || array) {
+        gdouble v;
+        v = json_node_get_double (node);
+        if (obj)
+          json_object_set_double_member (obj, def->name, v);
+        else
+          json_array_add_double_element (array, v);
+      }
+      break;
+    case MELO_JSONRPC_DEF_TYPE_STRING:
+      /* Check type */
+      if (vtype != G_TYPE_STRING)
+        return FALSE;
+
+      /* Add to object / array */
+      if (obj || array) {
+        const gchar *v;
+        v = json_node_get_string (node);
+        if (obj)
+          json_object_set_string_member (obj, def->name, v);
+        else
+          json_array_add_string_element (array, v);
+      }
+      break;
+    case MELO_JSONRPC_DEF_TYPE_OBJECT:
+      /* Check type */
+      if (type != JSON_NODE_OBJECT)
+        return FALSE;
+
+      /* Add to object / array */
+      if (obj || array) {
+        JsonObject *v;
+        v = json_node_dup_object (node);
+        if (obj)
+          json_object_set_object_member (obj, def->name, v);
+        else
+          json_array_add_object_element (array, v);
+      }
+      break;
+    case MELO_JSONRPC_DEF_TYPE_ARRAY:
+      /* Check type */
+      if (type != JSON_NODE_ARRAY)
+        return FALSE;
+
+      /* Add to object / array */
+      if (obj || array) {
+        JsonArray *v;
+        v = json_node_dup_array (node);
+        if (obj)
+          json_object_set_array_member (obj, def->name, v);
+        else
+          json_array_add_array_element (array, v);
+      }
+      break;
+    default:
+      return FALSE;
+  }
+  return TRUE;
+}
+
+static gboolean
+melo_jsonrpc_get_json_node (JsonNode *params, MeloJSONRPCDef *def, guint count,
+                            JsonObject *obj, JsonArray *array)
+{
+  JsonNodeType type;
+  JsonNode *node;
+  guint i;
+
+  /* Get type */
+  type = json_node_get_node_type (params);
+
+  /* Already an object */
+  if (type == JSON_NODE_OBJECT) {
+    JsonObject *o;
+
+    /* Get object */
+    o = json_node_get_object (params);
+
+    /* Parse object */
+    for (i = 0; i < count; i++) {
+      /* Get node */
+      node = json_object_get_member (o, def[i].name);
+      if (!node)
+        goto failed;
+
+      /* Check node type */
+      if (!melo_jsonrpc_add_node (node, &def[i], obj, array))
+        goto failed;
+    }
+  } else if (type == JSON_NODE_ARRAY) {
+    JsonArray *a;
+
+    /* Get array */
+    a = json_node_get_array (params);
+
+    /* Check array count */
+    if (count != json_array_get_length (a))
+      goto failed;
+
+    /* Parse object */
+    for (i = 0; i < count; i++) {
+      /* Get node */
+      node = json_array_get_element (a, i);
+      if (!node)
+        goto failed;
+
+      /* Check node type */
+      if (!melo_jsonrpc_add_node (node, &def[i], obj, array))
+        goto failed;
+    }
+  }
+  return TRUE;
+
+failed:
+  return FALSE;
+}
+
+gboolean
+melo_jsonrpc_check_params (JsonNode *params, MeloJSONRPCDef *def, guint count)
+{
+  return melo_jsonrpc_get_json_node (params, def, count, NULL, NULL);
+}
+
+JsonObject *
+melo_jsonrpc_get_object (JsonNode *params, MeloJSONRPCDef *def, guint count)
+{
+  JsonObject *obj;
+
+  /* Allocate new object */
+  obj = json_object_new ();
+
+  /* Get node */
+  if (!melo_jsonrpc_get_json_node (params, def, count, obj, NULL)) {
+    json_object_unref (obj);
+    return NULL;
+  }
+
+  return obj;
+}
+
+JsonArray *
+melo_jsonrpc_get_array (JsonNode *params, MeloJSONRPCDef *def, guint count)
+{
+  JsonArray *array;
+
+  /* Allocate new array */
+  array = json_array_sized_new (count);
+
+  /* Get array */
+  if (!melo_jsonrpc_get_json_node (params, def, count, NULL, array)) {
+    json_array_unref (array);
+    return NULL;
+  }
+
+  return array;
+}
+
 /* Utils */
 static JsonNode *
 melo_jsonrpc_build_errorv (const char *id, gint64 nid,
