@@ -26,8 +26,8 @@
 #include <glib.h>
 
 #include "melo_httpd.h"
-#include "melo_httpd_rpc.h"
 #include "melo_httpd_file.h"
+#include "melo_httpd_jsonrpc.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -55,8 +55,8 @@ melo_httpd_new (guint port)
   soup_server_add_handler (server, NULL, melo_httpd_file_handler, NULL,
                            NULL);
 
-  /* Add an handler for RPC */
-  soup_server_add_handler (server, "/rpc", melo_httpd_rpc_handler, NULL,
+  /* Add an handler for JSON-RPC */
+  soup_server_add_handler (server, "/rpc", melo_httpd_jsonrpc_handler, NULL,
                            NULL);
 
   return server;

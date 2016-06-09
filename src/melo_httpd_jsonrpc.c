@@ -1,5 +1,5 @@
 /*
- * melo_httpd_rpc.c: Json-RPC handler for Melo HTTP server
+ * melo_httpd_jsonrpc.c: JSON-RPC 2.0 handler for Melo HTTP server
  *
  * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
  *
@@ -25,25 +25,25 @@
 
 #include "melo_jsonrpc.h"
 
-#include "melo_httpd_rpc.h"
+#include "melo_httpd_jsonrpc.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
 static void
-melo_httpd_rpc_parse_handler (MeloJSONRPC *parser,
-                              const char *method,
-                              JsonNode *params,
-                              gboolean is_notification,
-                              gpointer user_data)
+melo_httpd_jsonrpc_parse_handler (MeloJSONRPC *parser,
+                                  const char *method,
+                                  JsonNode *params,
+                                  gboolean is_notification,
+                                  gpointer user_data)
 {
 }
 
 void
-melo_httpd_rpc_handler (SoupServer *server, SoupMessage *msg,
-                        const char *path, GHashTable *query,
-                        SoupClientContext *client, gpointer user_data)
+melo_httpd_jsonrpc_handler (SoupServer *server, SoupMessage *msg,
+                            const char *path, GHashTable *query,
+                            SoupClientContext *client, gpointer user_data)
 {
   MeloJSONRPC *parser;
   char *response;
@@ -67,7 +67,7 @@ melo_httpd_rpc_handler (SoupServer *server, SoupMessage *msg,
   melo_jsonrpc_parse_request (parser,
                               msg->request_body->data,
                               msg->request_body->length,
-                              melo_httpd_rpc_parse_handler, NULL);
+                              melo_httpd_jsonrpc_parse_handler, NULL);
 
   /* Build response */
   response = melo_jsonrpc_get_response (parser);

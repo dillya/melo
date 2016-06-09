@@ -1,5 +1,5 @@
 /*
- * melo_httpd_rpc.h: Json-RPC handler for Melo HTTP server
+ * melo_httpd_jsonrpc.h: JSON-RPC 2.0 handler for Melo HTTP server
  *
  * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
  *
@@ -19,14 +19,14 @@
  * Boston, MA  02110-1301, USA.
  */
 
-#ifndef __MELO_HTTPD_RPC_H__
-#define __MELO_HTTPD_RPC_H__
+#ifndef __MELO_HTTPD_JSONRPC_H__
+#define __MELO_HTTPD_JSONRPC_H__
 
 #include <glib.h>
 #include <libsoup/soup.h>
 
-void melo_httpd_rpc_handler (SoupServer *server, SoupMessage *msg,
-                             const char *path, GHashTable *query,
-                             SoupClientContext *client, gpointer user_data);
+void melo_httpd_jsonrpc_handler (SoupServer *server, SoupMessage *msg,
+                                 const char *path, GHashTable *query,
+                                 SoupClientContext *client, gpointer user_data);
 
-#endif /* __MELO_HTTPD_RPC_H__ */
+#endif /* __MELO_HTTPD_JSONRPC_H__ */
