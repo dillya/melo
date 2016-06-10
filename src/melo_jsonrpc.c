@@ -281,12 +281,14 @@ melo_jsonrpc_parse_node (JsonNode *node)
 
   /* Get registered method */
   G_LOCK (melo_jsonrpc_mutex);
-  m = g_hash_table_lookup (melo_jsonrpc_methods, method);
-  if (m) {
-    callback = m->callback;
-    user_data = m->user_data;
-    if (m->params)
-      s_params = json_array_ref (m->params);
+  if (melo_jsonrpc_methods) {
+    m = g_hash_table_lookup (melo_jsonrpc_methods, method);
+    if (m) {
+      callback = m->callback;
+      user_data = m->user_data;
+      if (m->params)
+        s_params = json_array_ref (m->params);
+    }
   }
   G_UNLOCK (melo_jsonrpc_mutex);
 
