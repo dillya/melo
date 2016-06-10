@@ -22,8 +22,45 @@
 #include "melo_module.h"
 #include "melo_jsonrpc.h"
 
+/* Method callbacks */
+static void
+melo_module_jsonrpc_get_list (const gchar *method,
+                              JsonArray *s_params, JsonNode *params,
+                              JsonNode **result, JsonNode **error,
+                              gpointer user_data)
+{
+  JsonArray *array;
+  const gchar *id;
+  GList *list;
+  GList *l;
+
+  /* Get module list */
+  list = melo_module_get_module_list ();
+
+  /* Generate list */
+  array = json_array_new ();
+  for (l = list; l != NULL; l = l->next) {
+    id = melo_module_get_id ((MeloModule *) l->data);
+    json_array_add_string_element (array, id);
+  }
+
+  /* Free module list */
+  g_list_free_full (list, g_object_unref);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_ARRAY);
+  json_node_take_array (*result, array);
+}
+
 /* List of methods */
 static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
+  {
+    .method = "get_list",
+    .params = "[]",
+    .result = "{\"type\":\"array\"}",
+    .callback = melo_module_jsonrpc_get_list,
+    .user_data = NULL,
+  },
 };
 
 /* Register / Unregister methods */
