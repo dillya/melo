@@ -24,6 +24,7 @@
 /* Internal module list */
 G_LOCK_DEFINE_STATIC (melo_module_mutex);
 static GHashTable *melo_modules_hash = NULL;
+static GList *melo_modules_list = NULL;
 
 G_DEFINE_ABSTRACT_TYPE (MeloModule, melo_module, G_TYPE_OBJECT)
 
@@ -37,10 +38,10 @@ melo_module_init (MeloModule *self)
 {
 }
 
+/* Register a new module */
 gboolean
 melo_module_register (GType type, const gchar *name)
 {
-  gchar *module_name;
   MeloModule *mod;
 
   g_return_val_if_fail (g_type_is_a (type, MELO_TYPE_MODULE), FALSE);
@@ -62,11 +63,9 @@ melo_module_register (GType type, const gchar *name)
   if (!mod)
     goto failed;
 
-  /* Copy module name */
-  module_name = g_strdup (name);
-
   /* Add module instance to modules list */
-  g_hash_table_insert (melo_modules_hash, module_name, mod);
+  g_hash_table_insert (melo_modules_hash, g_strdup (name), mod);
+  melo_modules_list = g_list_append (melo_modules_list, mod);
 
   /* Unlock module list */
   G_UNLOCK (melo_module_mutex);
@@ -81,10 +80,18 @@ failed:
 void
 melo_module_unregister (const gchar *name)
 {
+  MeloModule *mod;
+
   /* Lock module list */
   G_LOCK (melo_module_mutex);
 
-  /* Remove module from hash table */
+  /* Find module in hash table */
+  mod = g_hash_table_lookup (melo_modules_hash, name);
+  if (!mod)
+    goto unlock;
+
+  /* Remove module from list */
+  melo_modules_list = g_list_remove (melo_modules_list, mod);
   g_hash_table_remove (melo_modules_hash, name);
 
   /* Module list is empty */
@@ -94,6 +101,24 @@ melo_module_unregister (const gchar *name)
     melo_modules_hash = NULL;
   }
 
+unlock:
   /* Unlock module list */
   G_UNLOCK (melo_module_mutex);
+}
+
+GList *
+melo_module_get_module_list (void)
+{
+  GList *list;
+
+  /* Lock module list */
+  G_LOCK (melo_module_mutex);
+
+  /* Copy list */
+  list = g_list_copy_deep (melo_modules_list, (GCopyFunc) g_object_ref, NULL);
+
+  /* Unlock module list */
+  G_UNLOCK (melo_module_mutex);
+
+  return list;
 }
