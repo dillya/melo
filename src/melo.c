@@ -25,6 +25,7 @@
 
 #include <glib.h>
 
+#include "melo_file.h"
 #include "melo_httpd.h"
 
 #ifdef HAVE_CONFIG_H
@@ -64,6 +65,9 @@ main (int argc, char *argv[])
   /* Free option context */
   g_option_context_free (ctx);
 
+  /* Register built-in modules */
+  melo_module_register (MELO_TYPE_FILE, "file");
+
   /* Create and start HTTP server */
   server = melo_httpd_new (8080);
 
@@ -78,6 +82,9 @@ main (int argc, char *argv[])
 
   /* Stop and Free HTTP server */
   melo_httpd_free (server);
+
+  /* Unregister built-in modules */
+  melo_module_unregister ("file");
 
   return 0;
 }
