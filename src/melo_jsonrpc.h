@@ -1,5 +1,5 @@
 /*
- * melo_json_rpc.h: JSON-RPC server helpers
+ * melo_jsonrpc.h: JSON-RPC 2.0 Parser
  *
  * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
  *
@@ -23,23 +23,7 @@
 #define __MELO_JSONRPC_H__
 
 #include <glib.h>
-#include <glib-object.h>
 #include <json-glib/json-glib.h>
-
-G_BEGIN_DECLS
-
-#define MELO_TYPE_JSONRPC             (melo_jsonrpc_get_type ())
-#define MELO_JSONRPC(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), MELO_TYPE_JSONRPC, MeloJSONRPC))
-#define MELO_IS_JSONRPC(obj)          (G_TYPE_CHECK_INSTANCE_TYPE ((obj), MELO_TYPE_JSONRPC))
-#define MELO_JSONRPC_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST ((klass), MELO_TYPE_JSONRPC, MeloJSONRPCClass))
-#define MELO_IS_JSONRPC_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE ((klass), MELO_TYPE_JSONRPC))
-#define MELO_JSONRPC_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), MELO_TYPE_JSONRPC, MeloJSONRPCClass))
-
-typedef struct _MeloJSONRPC MeloJSONRPC;
-typedef struct _MeloJSONRPCPrivate MeloJSONRPCPrivate;
-typedef struct _MeloJSONRPCClass MeloJSONRPCClass;
-
-typedef struct _MeloJSONRPCDef MeloJSONRPCDef;
 
 /* JSON RPC error codes */
 typedef enum {
@@ -51,63 +35,49 @@ typedef enum {
   MELO_JSONRPC_ERROR_SERVER_ERROR = -32000,
 } MeloJSONRPCError;
 
-typedef void (*MeloJSONRPCCallback) (MeloJSONRPC *self,
-                                     const char *method,
-                                     JsonNode *params,
-                                     gboolean is_notification,
+/* Callback for method */
+typedef void (*MeloJSONRPCCallback) (const gchar *method,
+                                     JsonArray *schema_params, JsonNode *params,
+                                     JsonNode **result, JsonNode **error,
                                      gpointer user_data);
 
-typedef enum {
-  MELO_JSONRPC_DEF_TYPE_BOOLEAN,
-  MELO_JSONRPC_DEF_TYPE_INT,
-  MELO_JSONRPC_DEF_TYPE_DOUBLE,
-  MELO_JSONRPC_DEF_TYPE_STRING,
-  MELO_JSONRPC_DEF_TYPE_OBJECT,
-  MELO_JSONRPC_DEF_TYPE_ARRAY,
-} MeloJSONRPCDefType;
+/* Method definition */
+typedef struct _MeloJSONRPCMethod {
+  /* Method name */
+  const gchar *method;
+  /* Params and result schemas */
+  const gchar *params;
+  const gchar *result;
+  /* Method callback */
+  MeloJSONRPCCallback callback;
+  gpointer user_data;
+} MeloJSONRPCMethod;
 
-struct _MeloJSONRPCDef {
-  const char *name;
-  MeloJSONRPCDefType type;
-};
+/* Register a JSON-RPC method */
+gboolean melo_jsonrpc_register_method (const gchar *group, const gchar *method,
+                                       JsonArray *params, JsonObject *result,
+                                       MeloJSONRPCCallback callback,
+                                       gpointer user_data);
+void melo_jsonrpc_unregister_method (const gchar *group, const gchar *method);
 
-struct _MeloJSONRPC {
-  GObject parent_instance;
+/* Register an array of JSON-RPC methods */
+guint melo_jsonrpc_register_methods (const gchar *group,
+                                     MeloJSONRPCMethod *methods, guint count);
+void melo_jsonrpc_unregister_methods (const gchar *group,
+                                     MeloJSONRPCMethod *methods, guint count);
 
-  /*< private >*/
-  MeloJSONRPCPrivate *priv;
-};
+/* Parse a JSON-RPC request */
+gchar *melo_jsonrpc_parse_request (const gchar *request, gsize length,
+                                   GError **eror);
 
-struct _MeloJSONRPCClass {
-  GObjectClass parent_class;
-};
-
-GType melo_jsonrpc_get_type (void);
-
-MeloJSONRPC *melo_jsonrpc_new (void);
-gboolean melo_jsonrpc_parse_request (MeloJSONRPC *self,
-                                     const char *request, gsize length,
-                                     MeloJSONRPCCallback callback,
-                                     gpointer user_data);
-void melo_jsonrpc_set_result (MeloJSONRPC *self, JsonNode *result);
-void melo_jsonrpc_set_error (MeloJSONRPC *self, MeloJSONRPCError error_code,
-                             const char *error_format,
-                              ...) G_GNUC_PRINTF (3, 4);
-char *melo_jsonrpc_get_response (MeloJSONRPC *self);
-
-/* Params utils */
-gboolean melo_jsonrpc_check_params (JsonNode *params, MeloJSONRPCDef *def,
-                                    guint count);
-JsonObject *melo_jsonrpc_get_object (JsonNode *params, MeloJSONRPCDef *def,
-                                     guint count);
-JsonArray *melo_jsonrpc_get_array (JsonNode *params, MeloJSONRPCDef *def,
-                                   guint count);
+/* Parameters utils */
+gboolean melo_jsonrpc_check_params (JsonArray *schema_params, JsonNode *params);
+JsonArray *melo_jsonrpc_get_array (JsonArray *schema_params, JsonNode *params);
+JsonObject *melo_jsonrpc_get_object (JsonArray *schema_params,
+                                     JsonNode *params);
 
 /* Utils */
-char *melo_jsonrpc_build_error (const char *id, MeloJSONRPCError error_code,
-                                const char *error_format,
-                                ...) G_GNUC_PRINTF (3, 4);
-
-G_END_DECLS
+JsonNode *melo_jsonrpc_build_error_node (MeloJSONRPCError error_code,
+                                         const char *error_format, ...);
 
 #endif /* __MELO_JSONRPC_H__ */

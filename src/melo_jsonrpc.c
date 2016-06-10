@@ -1,5 +1,5 @@
 /*
- * melo_json_rpc.c: JSON-RPC server helpers
+ * melo_jsonrpc.c: JSON-RPC 2.0 Parser
  *
  * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
  *
@@ -27,68 +27,215 @@
 #include "config.h"
 #endif
 
-struct _MeloJSONRPCPrivate {
-  /* Final response node */
-  JsonNode *root;
+typedef struct _MeloJSONRPCInternalMethod {
+  /* Schema nodes */
+  JsonArray *params;
+  JsonObject *result;
+  /* Callback */
+  MeloJSONRPCCallback callback;
+  gpointer user_data;
 
-  /* Current error and/or result for callback */
-  JsonNode *current_error;
-  JsonNode *current_result;
-};
+} MeloJSONRPCInternalMethod;
 
-G_DEFINE_TYPE_WITH_PRIVATE (MeloJSONRPC, melo_jsonrpc, G_TYPE_OBJECT)
+/* List of groups and methods */
+G_LOCK_DEFINE_STATIC (melo_jsonrpc_mutex);
+static GHashTable *melo_jsonrpc_methods = NULL;
 
-static JsonNode *melo_jsonrpc_build_error_node (const char *id, gint64 nid,
-                                                MeloJSONRPCError error_code,
-                                                const char *error_format, ...);
+/* Helpers */
+static gchar *melo_jsonrpc_node_to_string (JsonNode *node);
+static JsonNode *melo_jsonrpc_build_error (const char *id, gint64 nid,
+                                           MeloJSONRPCError error_code,
+                                           const char *error_format, ...);
+static gchar *melo_jsonrpc_build_error_str (MeloJSONRPCError error_code,
+                                            const char *error_format, ...);
+static JsonNode *melo_jsonrpc_build_response_node (JsonNode *result,
+                                                   JsonNode *error,
+                                                   const gchar *id,
+                                                   gint64 nid);
 
+/* Register a JSON-RPC method */
 static void
-melo_jsonrpc_finalize (GObject *gobject)
+melo_jsonrpc_free_method (gpointer data)
 {
-  MeloJSONRPCPrivate *priv = melo_jsonrpc_get_instance_private (
-                                                       (MeloJSONRPC *) gobject);
-  /* Free final response */
-  if (priv->root)
-    json_node_free (priv->root);
+  MeloJSONRPCInternalMethod *m = data;
 
-  G_OBJECT_CLASS (melo_jsonrpc_parent_class)->finalize (gobject);
+  /* Free nodes */
+  if (m->params)
+    json_array_unref (m->params);
+  if (m->result)
+    json_object_unref (m->result);
+
+  /* Free method */
+  g_slice_free (MeloJSONRPCInternalMethod, m);
 }
 
-static void
-melo_jsonrpc_class_init (MeloJSONRPCClass *klass)
+gboolean
+melo_jsonrpc_register_method (const gchar *group, const gchar *method,
+                              JsonArray *params, JsonObject *result,
+                              MeloJSONRPCCallback callback,
+                              gpointer user_data)
 {
-  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  MeloJSONRPCInternalMethod *m;
+  gchar *complete_method;
 
-  /* Set private finalize */
-  gobject_class->finalize = melo_jsonrpc_finalize;
+  /* Create complete method */
+  complete_method = g_strdup_printf ("%s.%s", group, method);
+
+  /* Lock method list access */
+  G_LOCK (melo_jsonrpc_mutex);
+
+  /* Create hash table if not yet created */
+  if (!melo_jsonrpc_methods) {
+    melo_jsonrpc_methods = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                  g_free,
+                                                  melo_jsonrpc_free_method);
+  }
+
+  /* Method already exists */
+  if (g_hash_table_lookup (melo_jsonrpc_methods, complete_method))
+    goto failed;
+
+  /* Create new method handler */
+  m = g_slice_new (MeloJSONRPCInternalMethod);
+  if (!m)
+    goto failed;
+
+  /* Fill handler */
+  m->params = params;
+  m->result = result;
+  m->callback = callback;
+  m->user_data = user_data;
+
+  /* Add method */
+  g_hash_table_insert (melo_jsonrpc_methods, complete_method, m);
+
+  /* Unlock method list access */
+  G_UNLOCK (melo_jsonrpc_mutex);
+
+  return TRUE;
+
+failed:
+  G_UNLOCK (melo_jsonrpc_mutex);
+  g_free (complete_method);
+  return FALSE;
 }
 
-static void
-melo_jsonrpc_init (MeloJSONRPC *self)
+void
+melo_jsonrpc_unregister_method (const gchar *group, const gchar *method)
 {
-  MeloJSONRPCPrivate *priv = melo_jsonrpc_get_instance_private (self);
+  gchar *complete_method;
 
-  /* Get private data */
-  self->priv = priv;
+  /* Create complete method */
+  complete_method = g_strdup_printf ("%s.%s", group, method);
 
-  /* Not response at init */
-  priv->root = NULL;
+  /* Lock method list access */
+  G_LOCK (melo_jsonrpc_mutex);
+
+  /* Remove method */
+  g_hash_table_remove (melo_jsonrpc_methods, complete_method);
+
+  /* Free hash table if empty */
+  if (!g_hash_table_size (melo_jsonrpc_methods)) {
+    g_hash_table_unref (melo_jsonrpc_methods);
+    melo_jsonrpc_methods = NULL;
+  }
+
+  /* Unlock method list access */
+  G_UNLOCK (melo_jsonrpc_mutex);
+
+  /* Free complete method */
+  g_free (complete_method);
 }
 
-MeloJSONRPC *
-melo_jsonrpc_new (void)
+/* Register an array of JSON-RPC methods */
+guint
+melo_jsonrpc_register_methods (const gchar *group, MeloJSONRPCMethod *methods,
+                               guint count)
 {
-  return g_object_new (MELO_TYPE_JSONRPC, NULL);
+  JsonParser *parser;
+  JsonObject *result;
+  JsonArray *params;
+  JsonNode *node;
+  guint errors = 0, i;
+  gboolean ret;
+
+  /* Create a parser */
+  parser = json_parser_new ();
+
+  /* Register all methods */
+  for (i = 0; i < count; i++) {
+    /* Generate params schema */
+    if (json_parser_load_from_data (parser, methods[i].params, -1, NULL)) {
+      /* Convert string to node */
+      node = json_parser_get_root (parser);
+
+      /* Node params type must be an array */
+      if (json_node_get_node_type (node) != JSON_NODE_ARRAY)
+        continue;
+
+      /* Get array */
+      params = json_node_dup_array (node);
+    } else
+      params = NULL;
+
+    /* Generate result schema */
+    if (json_parser_load_from_data (parser, methods[i].result, -1, NULL)) {
+      /* Convert string to node */
+      node = json_parser_get_root (parser);
+
+      /* Node result type must be an object */
+      if (json_node_get_node_type (node) != JSON_NODE_OBJECT)
+        continue;
+
+      /* Get array */
+      result = json_node_dup_object (node);
+    } else
+      result = NULL;
+
+    /* Register method */
+    ret = melo_jsonrpc_register_method (group, methods[i].method, params,
+                                        result, methods[i].callback,
+                                        methods[i].user_data);
+
+    /* Failed to register method */
+    if (!ret) {
+      if (params)
+        json_array_unref (params);
+      if (result)
+        json_object_unref (result);
+      errors++;
+    }
+  }
+
+  /* Release parser */
+  g_object_unref (parser);
+
+  return errors;
 }
 
+void
+melo_jsonrpc_unregister_methods (const gchar *group, MeloJSONRPCMethod *methods,
+                                 guint count)
+{
+  guint i;
+
+  /* Unregister all methods */
+  for (i = 0; i < count; i++)
+    melo_jsonrpc_unregister_method (group, methods[i].method);
+}
+
+/* Parse JSON-RPC request */
 static JsonNode *
-melo_jsonrpc_parse_node (MeloJSONRPC *self, JsonNode *node,
-                         MeloJSONRPCCallback callback, gpointer user_data)
+melo_jsonrpc_parse_node (JsonNode *node)
 {
-  MeloJSONRPCPrivate *priv = self->priv;
-  JsonBuilder *builder;
-  JsonObject *obj;
+  MeloJSONRPCInternalMethod *m;
+  MeloJSONRPCCallback callback = NULL;
+  gpointer user_data = NULL;
+  JsonArray *s_params = NULL;
+  JsonNode *result = NULL;
+  JsonNode *error = NULL;
   JsonNode *params;
+  JsonObject *obj;
   const char *version;
   const char *method;
   const char *id = NULL;
@@ -98,7 +245,7 @@ melo_jsonrpc_parse_node (MeloJSONRPC *self, JsonNode *node,
   if (JSON_NODE_TYPE (node) != JSON_NODE_OBJECT)
     goto invalid;
 
-  /* Create a new reader */
+  /* Get object from nide */
   obj = json_node_get_object (node);
   if (!obj)
     goto internal;
@@ -132,17 +279,28 @@ melo_jsonrpc_parse_node (MeloJSONRPC *self, JsonNode *node,
       goto invalid;
   }
 
+  /* Get registered method */
+  G_LOCK (melo_jsonrpc_mutex);
+  m = g_hash_table_lookup (melo_jsonrpc_methods, method);
+  if (m) {
+    callback = m->callback;
+    user_data = m->user_data;
+    if (m->params)
+      s_params = json_array_ref (m->params);
+  }
+  G_UNLOCK (melo_jsonrpc_mutex);
+
   /* Check if id is present */
   if (!json_object_has_member (obj, "id")) {
     /* This is a notification: try to call callback */
     if (callback) {
-      priv->current_error = NULL;
-      priv->current_result = NULL;
-      callback (self, method, params, TRUE, user_data);
-      if (priv->current_error)
-        json_node_free (priv->current_error);
-      if (priv->current_result)
-        json_node_free (priv->current_result);
+      callback (method, s_params, params, &result, &error, user_data);
+      if (s_params)
+        json_array_unref (s_params);
+      if (error)
+        json_node_free (error);
+      if (result)
+        json_node_free (result);
     }
     return NULL;
   }
@@ -156,116 +314,61 @@ melo_jsonrpc_parse_node (MeloJSONRPC *self, JsonNode *node,
     goto not_found;
 
   /* Call user callback */
-  priv->current_error = NULL;
-  priv->current_result = NULL;
-  callback (self, method, params, FALSE, user_data);
+  callback (method, s_params, params, &result, &error, user_data);
+  if (s_params)
+    json_array_unref (s_params);
 
   /* No error or result */
-  if (!priv->current_error && !priv->current_result)
+  if (!error && !result)
     goto not_found;
 
-  /* Create new builder */
-  builder = json_builder_new ();
-  if (!builder)
-    goto internal;
-
-  /* Begin a new object */
-  json_builder_begin_object (builder);
-
-  /* Add jsonrpc member */
-  json_builder_set_member_name (builder, "jsonrpc");
-  json_builder_add_string_value (builder, "2.0");
-
-  /* Set result or error */
-  if (priv->current_error) {
-    /* Add error member */
-    json_builder_set_member_name (builder, "error");
-    json_builder_add_value (builder, priv->current_error);
-
-    /* Free response if exists */
-    if (priv->current_result)
-      json_node_free (priv->current_result);
-  } else if (priv->current_result) {
-    /* Add result member */
-    json_builder_set_member_name (builder, "result");
-    json_builder_add_value (builder, priv->current_result);
-  }
-
-  /* Add id member: we assume ID cannot be negative */
-  json_builder_set_member_name (builder, "id");
-  if (nid < 0 || id)
-    json_builder_add_string_value (builder, id);
-  else
-    json_builder_add_int_value (builder, nid);
-
-  json_builder_end_object (builder);
-
-  /* Get final object */
-  node = json_builder_get_root (builder);
-
-  /* Free objects */
-  g_object_unref (builder);
-
-  return node;
+  /* Build response */
+  return melo_jsonrpc_build_response_node (result, error, id, nid);
 
 invalid:
-  return melo_jsonrpc_build_error_node (NULL, -1,
+  return melo_jsonrpc_build_error (NULL, -1,
                                         MELO_JSONRPC_ERROR_INVALID_REQUEST,
                                         "Invalid request");
 not_found:
-  return melo_jsonrpc_build_error_node (id, nid,
+  return melo_jsonrpc_build_error (id, nid,
                                         MELO_JSONRPC_ERROR_METHOD_NOT_FOUND,
                                         "Method not found");
 internal:
-  return melo_jsonrpc_build_error_node (id, -1,
+  return melo_jsonrpc_build_error (id, -1,
                                         MELO_JSONRPC_ERROR_INTERNAL_ERROR,
                                         "Internal error");
 }
 
-gboolean
-melo_jsonrpc_parse_request (MeloJSONRPC *self,
-                            const char *request, gsize length,
-                            MeloJSONRPCCallback callback,
-                            gpointer user_data)
+gchar *
+melo_jsonrpc_parse_request (const gchar *request, gsize length, GError **eror)
 {
-  MeloJSONRPCPrivate *priv = self->priv;
   JsonParser *parser;
   JsonNodeType type;
-  JsonNode *root;
+  JsonNode *req;
+  JsonNode *res;
   GError *err = NULL;
-
-  /* Free previous final node */
-  if (priv->root)
-    json_node_free (priv->root);
+  gchar *str;
 
   /* Create parser */
   parser = json_parser_new ();
-  if (!parser) {
-    priv->root = melo_jsonrpc_build_error_node (
-                                              NULL, -1,
-                                              MELO_JSONRPC_ERROR_INTERNAL_ERROR,
-                                              "Internal error");
-    return FALSE;
-  }
+  if (!parser)
+    return melo_jsonrpc_build_error_str (MELO_JSONRPC_ERROR_INTERNAL_ERROR,
+                                         "Internal error");
 
   /* Parse request */
   if (!json_parser_load_from_data (parser, request, length, &err) ||
-      (root = json_parser_get_root (parser)) == NULL) {
+      (req = json_parser_get_root (parser)) == NULL) {
     g_clear_error (&err);
-    g_object_unref (parser);
-    priv->root = melo_jsonrpc_build_error_node (NULL, -1,
-                                                MELO_JSONRPC_ERROR_PARSE_ERROR,
-                                                "Parse error");
-    return FALSE;
+    goto parse_error;
   }
 
   /* Get node type */
-  type = json_node_get_node_type (root);
+  type = json_node_get_node_type (req);
 
   /* Parse node */
   if (type == JSON_NODE_OBJECT) {
     /* Parse single request */
-    priv->root = melo_jsonrpc_parse_node (self, root, callback, user_data);
+    res = melo_jsonrpc_parse_node (req);
   } else if (type == JSON_NODE_ARRAY) {
     /* Parse multiple requests: batch */
     JsonArray *req_array;
@@ -274,22 +377,15 @@ melo_jsonrpc_parse_request (MeloJSONRPC *self,
     guint count, i;
 
     /* Get array from node */
-    req_array = json_node_get_array (root);
+    req_array = json_node_get_array (req);
     count = json_array_get_length (req_array);
-    if (!count) {
-      /* Invalid request */
-      g_object_unref (parser);
-      priv->root = melo_jsonrpc_build_error_node (
-                                             NULL, -1,
-                                             MELO_JSONRPC_ERROR_INVALID_REQUEST,
-                                             "Invalid request");
-      return FALSE;
-    }
+    if (!count)
+      goto invalid;
 
     /* Create a new array for response */
     res_array = json_array_sized_new (count);
-    priv->root = json_node_new (JSON_NODE_ARRAY);
-    json_node_take_array (priv->root, res_array);
+    res = json_node_new (JSON_NODE_ARRAY);
+    json_node_take_array (res, res_array);
 
     /* Parse each elements of array */
     for (i = 0; i < count; i++) {
@@ -297,7 +393,7 @@ melo_jsonrpc_parse_request (MeloJSONRPC *self,
       node = json_array_get_element (req_array, i);
 
       /* Process requesit */
-      node = melo_jsonrpc_parse_node (self, node, callback, user_data);
+      node = melo_jsonrpc_parse_node (node);
 
       /* Add new response to array */
       if (node)
@@ -307,108 +403,65 @@ melo_jsonrpc_parse_request (MeloJSONRPC *self,
     /* Check if array is empty */
     count = json_array_get_length (res_array);
     if (!count) {
-      json_node_free (priv->root);
-      priv->root = NULL;
+      json_node_free (res);
+      goto empty;
     }
-  } else {
-    /* Invalid request */
-    g_object_unref (parser);
-    priv->root = melo_jsonrpc_build_error_node (
-                                             NULL, -1,
-                                             MELO_JSONRPC_ERROR_INVALID_REQUEST,
-                                             "Invalid request");
-    return FALSE;
-  }
+  } else
+    goto invalid;
 
-  g_object_unref (parser);
-  return TRUE;
-}
-
-void
-melo_jsonrpc_set_result (MeloJSONRPC *self, JsonNode *result)
-{
-  /* Transform GVariant to JsonNode */
-  self->priv->current_result = result;
-}
-
-static void
-melo_jsonrpc_set_errorv (MeloJSONRPC *self, MeloJSONRPCError error_code,
-                         const char *error_format, va_list args)
-{
-  JsonBuilder *builder;
-  char *error_message;
-
-  /* Generate error message */
-  error_message = g_strdup_vprintf (error_format, args);
-
-  /* Create a new JSON builder */
-  builder = json_builder_new ();
-
-  /* Create error object */
-  json_builder_begin_object (builder);
-  json_builder_set_member_name (builder, "code");
-  json_builder_add_int_value (builder, error_code);
-  json_builder_set_member_name (builder, "message");
-  json_builder_add_string_value (builder, error_message);
-  json_builder_end_object (builder);
-
-  /* Get final object */
-  self->priv->current_error = json_builder_get_root (builder);
-
-  /* Free objects */
-  g_object_unref (builder);
-  g_free (error_message);
-}
-
-void
-melo_jsonrpc_set_error (MeloJSONRPC *self, MeloJSONRPCError error_code,
-                        const char *error_format, ...)
-{
-  va_list args;
-
-  /* Generate message error */
-  va_start (args, error_format);
-  melo_jsonrpc_set_errorv (self, error_code, error_format, args);
-  va_end (args);
-}
-
-char *
-melo_jsonrpc_get_response (MeloJSONRPC *self)
-{
-  JsonGenerator *gen;
-  char *str;
-
-  /* No root built */
-  if (!self->priv->root)
-    return NULL;
+  /* No response */
+  if (!res)
+    goto empty;
 
   /* Generate final string */
-  gen = json_generator_new ();
-  json_generator_set_root (gen, self->priv->root);
-  str = json_generator_to_data (gen, NULL);
+  str = melo_jsonrpc_node_to_string (res);
 
-  /* Free objects */
-  g_object_unref (gen);
+  /* Free parser and root node */
+  json_node_free (res);
+  g_object_unref (parser);
 
   return str;
+
+parse_error:
+  g_object_unref (parser);
+  return melo_jsonrpc_build_error_str (MELO_JSONRPC_ERROR_PARSE_ERROR,
+                                       "Parse error");
+invalid:
+  g_object_unref (parser);
+  return melo_jsonrpc_build_error_str (MELO_JSONRPC_ERROR_INVALID_REQUEST,
+                                       "Invalid request");
+empty:
+  g_object_unref (parser);
+  return NULL;
 }
 
 /* Params utils */
 static gboolean
-melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
+melo_jsonrpc_add_node (JsonNode *node, JsonObject *schema,
                        JsonObject *obj, JsonArray *array)
 {
   GType vtype = G_TYPE_INVALID;
+  const gchar *s_name;
+  const gchar *s_type;
   JsonNodeType type;
+
+  /* Get name and type from schema */
+  s_name = json_object_get_string_member (schema, "name");
+  s_type = json_object_get_string_member (schema, "type");
+  if (!s_name || !s_type)
+    return FALSE;
 
   /* Get type */
   type = json_node_get_node_type (node);
   if (type == JSON_NODE_VALUE)
     vtype = json_node_get_value_type (node);
 
-  switch (def->type) {
-    case MELO_JSONRPC_DEF_TYPE_BOOLEAN:
-      /* Check type */
+  /* Check type:
+   * We check only first letter of the type string.
+   */
+  switch (s_type[0]) {
+    case 'b':
+      /* Boolean: check type */
       if (vtype != G_TYPE_BOOLEAN)
         return FALSE;
 
@@ -417,14 +470,14 @@ melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
         gboolean v;
         v = json_node_get_boolean (node);
         if (obj)
-          json_object_set_boolean_member (obj, def->name, v);
+          json_object_set_boolean_member (obj, s_name, v);
         else
           json_array_add_boolean_element (array, v);
         break;
       }
       break;
-    case MELO_JSONRPC_DEF_TYPE_INT:
-      /* Check type */
+    case 'i':
+      /* Integer: check type */
       if (vtype != G_TYPE_INT64)
         return FALSE;
 
@@ -433,13 +486,13 @@ melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
         gint64 v;
         v = json_node_get_int (node);
         if (obj)
-          json_object_set_int_member (obj, def->name, v);
+          json_object_set_int_member (obj, s_name, v);
         else
           json_array_add_int_element (array, v);
       }
       break;
-    case MELO_JSONRPC_DEF_TYPE_DOUBLE:
-      /* Check type */
+    case 'd':
+      /* Double: check type */
       if (vtype != G_TYPE_DOUBLE)
         return FALSE;
 
@@ -448,13 +501,13 @@ melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
         gdouble v;
         v = json_node_get_double (node);
         if (obj)
-          json_object_set_double_member (obj, def->name, v);
+          json_object_set_double_member (obj, s_name, v);
         else
           json_array_add_double_element (array, v);
       }
       break;
-    case MELO_JSONRPC_DEF_TYPE_STRING:
-      /* Check type */
+    case 's':
+      /* String: check type */
       if (vtype != G_TYPE_STRING)
         return FALSE;
 
@@ -463,13 +516,13 @@ melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
         const gchar *v;
         v = json_node_get_string (node);
         if (obj)
-          json_object_set_string_member (obj, def->name, v);
+          json_object_set_string_member (obj, s_name, v);
         else
           json_array_add_string_element (array, v);
       }
       break;
-    case MELO_JSONRPC_DEF_TYPE_OBJECT:
-      /* Check type */
+    case 'o':
+      /* Object: check type */
       if (type != JSON_NODE_OBJECT)
         return FALSE;
 
@@ -478,13 +531,13 @@ melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
         JsonObject *v;
         v = json_node_dup_object (node);
         if (obj)
-          json_object_set_object_member (obj, def->name, v);
+          json_object_set_object_member (obj, s_name, v);
         else
           json_array_add_object_element (array, v);
       }
       break;
-    case MELO_JSONRPC_DEF_TYPE_ARRAY:
-      /* Check type */
+    case 'a':
+      /* Array: check type */
       if (type != JSON_NODE_ARRAY)
         return FALSE;
 
@@ -493,7 +546,7 @@ melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
         JsonArray *v;
         v = json_node_dup_array (node);
         if (obj)
-          json_object_set_array_member (obj, def->name, v);
+          json_object_set_array_member (obj, s_name, v);
         else
           json_array_add_array_element (array, v);
       }
@@ -505,18 +558,27 @@ melo_jsonrpc_add_node (JsonNode *node, MeloJSONRPCDef *def,
 }
 
 static gboolean
-melo_jsonrpc_get_json_node (JsonNode *params, MeloJSONRPCDef *def, guint count,
+melo_jsonrpc_get_json_node (JsonArray *schema_params, JsonNode *params,
                             JsonObject *obj, JsonArray *array)
 {
+  JsonObject *schema;
   JsonNodeType type;
   JsonNode *node;
-  guint i;
+  guint count, i;
+
+  /* Check schema */
+  if (!schema_params)
+    return FALSE;
+
+  /* Get element count from schema */
+  count = json_array_get_length (schema_params);
 
   /* Get type */
   type = json_node_get_node_type (params);
 
   /* Already an object */
   if (type == JSON_NODE_OBJECT) {
+    const gchar *name;
     JsonObject *o;
 
     /* Get object */
@@ -524,13 +586,23 @@ melo_jsonrpc_get_json_node (JsonNode *params, MeloJSONRPCDef *def, guint count,
 
     /* Parse object */
     for (i = 0; i < count; i++) {
+      /* Get next schema object */
+      schema = json_array_get_object_element (schema_params, i);
+      if (!schema)
+        goto failed;
+
+      /* Get parameter name */
+      name = json_object_get_string_member (schema, "name");
+      if (!name)
+        goto failed;
+
       /* Get node */
-      node = json_object_get_member (o, def[i].name);
+      node = json_object_get_member (o, name);
       if (!node)
         goto failed;
 
       /* Check node type */
-      if (!melo_jsonrpc_add_node (node, &def[i], obj, array))
+      if (!melo_jsonrpc_add_node (node, schema, obj, array))
         goto failed;
     }
   } else if (type == JSON_NODE_ARRAY) {
@@ -545,13 +617,18 @@ melo_jsonrpc_get_json_node (JsonNode *params, MeloJSONRPCDef *def, guint count,
 
     /* Parse object */
     for (i = 0; i < count; i++) {
+      /* Get next schema object */
+      schema = json_array_get_object_element (schema_params, i);
+      if (!schema)
+        goto failed;
+
       /* Get node */
       node = json_array_get_element (a, i);
       if (!node)
         goto failed;
 
       /* Check node type */
-      if (!melo_jsonrpc_add_node (node, &def[i], obj, array))
+      if (!melo_jsonrpc_add_node (node, schema, obj, array))
         goto failed;
     }
   }
@@ -562,13 +639,13 @@ failed:
 }
 
 gboolean
-melo_jsonrpc_check_params (JsonNode *params, MeloJSONRPCDef *def, guint count)
+melo_jsonrpc_check_params (JsonArray *schema_params, JsonNode *params)
 {
-  return melo_jsonrpc_get_json_node (params, def, count, NULL, NULL);
+  return melo_jsonrpc_get_json_node (schema_params, params, NULL, NULL);
 }
 
 JsonObject *
-melo_jsonrpc_get_object (JsonNode *params, MeloJSONRPCDef *def, guint count)
+melo_jsonrpc_get_object (JsonArray *schema_params, JsonNode *params)
 {
   JsonObject *obj;
 
@@ -576,7 +653,7 @@ melo_jsonrpc_get_object (JsonNode *params, MeloJSONRPCDef *def, guint count)
   obj = json_object_new ();
 
   /* Get node */
-  if (!melo_jsonrpc_get_json_node (params, def, count, obj, NULL)) {
+  if (!melo_jsonrpc_get_json_node (schema_params, params, obj, NULL)) {
     json_object_unref (obj);
     return NULL;
   }
@@ -585,15 +662,19 @@ melo_jsonrpc_get_object (JsonNode *params, MeloJSONRPCDef *def, guint count)
 }
 
 JsonArray *
-melo_jsonrpc_get_array (JsonNode *params, MeloJSONRPCDef *def, guint count)
+melo_jsonrpc_get_array (JsonArray *schema_params, JsonNode *params)
 {
   JsonArray *array;
+  guint count;
+
+  /* Get array length */
+  count = json_array_get_length (schema_params);
 
   /* Allocate new array */
   array = json_array_sized_new (count);
 
   /* Get array */
-  if (!melo_jsonrpc_get_json_node (params, def, count, NULL, array)) {
+  if (!melo_jsonrpc_get_json_node (schema_params, params, NULL, array)) {
     json_array_unref (array);
     return NULL;
   }
@@ -601,39 +682,65 @@ melo_jsonrpc_get_array (JsonNode *params, MeloJSONRPCDef *def, guint count)
   return array;
 }
 
-/* Utils */
+/* Helpers */
+static gchar *
+melo_jsonrpc_node_to_string (JsonNode *node)
+{
+  JsonGenerator *gen;
+  gchar *str;
+
+  /* Create a new generator */
+  gen = json_generator_new ();
+  if (!gen)
+    return NULL;
+
+  /* Set root node */
+  json_generator_set_root (gen, node);
+
+  /* Generate string */
+  str = json_generator_to_data (gen, NULL);
+
+  /* Free generator */
+  g_object_unref (gen);
+
+  return str;
+}
+
 static JsonNode *
-melo_jsonrpc_build_errorv (const char *id, gint64 nid,
-                           MeloJSONRPCError error_code,
-                           const char *error_format, va_list args)
+melo_jsonrpc_build_response_node (JsonNode *result, JsonNode *error,
+                                  const gchar *id, gint64 nid)
 {
   JsonBuilder *builder;
   JsonNode *node;
-  char *error_message;
 
-  /* Generate error message */
-  error_message = g_strdup_vprintf (error_format, args);
-
-  /* Create a new JSON builder */
+  /* Create new builder */
   builder = json_builder_new ();
+  if (!builder)
+    return NULL;
 
   /* Begin a new object */
   json_builder_begin_object (builder);
 
-  /* Set required jsonrpc version field */
+  /* Add jsonrpc member */
   json_builder_set_member_name (builder, "jsonrpc");
   json_builder_add_string_value (builder, "2.0");
 
-  /* Create error object */
-  json_builder_set_member_name (builder, "error");
-  json_builder_begin_object (builder);
-  json_builder_set_member_name (builder, "code");
-  json_builder_add_int_value (builder, error_code);
-  json_builder_set_member_name (builder, "message");
-  json_builder_add_string_value (builder, error_message);
-  json_builder_end_object (builder);
+  /* Set result or error */
+  if (error) {
+    /* Add error member */
+    json_builder_set_member_name (builder, "error");
+    json_builder_add_value (builder, error);
 
-  /* Set id */
+    /* Free result if exists */
+    if (result)
+      json_node_free (result);
+  } else if (result) {
+    /* Add result member */
+    json_builder_set_member_name (builder, "result");
+    json_builder_add_value (builder, result);
+  }
+
+  /* Add id member: we assume ID cannot be negative */
   json_builder_set_member_name (builder, "id");
   if (nid < 0 || id)
     json_builder_add_string_value (builder, id);
@@ -645,49 +752,93 @@ melo_jsonrpc_build_errorv (const char *id, gint64 nid,
   /* Get final object */
   node = json_builder_get_root (builder);
 
-  /* Free objects */
+  /* Free builder */
   g_object_unref (builder);
-  g_free (error_message);
 
   return node;
 }
 
 static JsonNode *
-melo_jsonrpc_build_error_node (const char *id, gint64 nid,
-                               MeloJSONRPCError error_code,
-                               const char *error_format, ...)
+melo_jsonrpc_build_error_nodev (MeloJSONRPCError error_code,
+                                const char *error_format, va_list args)
 {
-  va_list args;
+  gchar *error_message;
+  JsonObject *obj;
   JsonNode *node;
 
-  va_start (args, error_format);
-  node = melo_jsonrpc_build_errorv (id, nid, error_code, error_format, args);
-  va_end (args);
+  /* Create a new JSON builder */
+  obj = json_object_new ();
+  if (!obj)
+    return NULL;
+
+  /* Generate error message */
+  error_message = g_strdup_vprintf (error_format, args);
+
+  /* Begin a new object */
+  json_object_set_int_member (obj, "code", error_code);
+  json_object_set_string_member (obj, "message", error_message);
+
+  /* Free message */
+  g_free (error_message);
+
+  /* Create node */
+  node = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (node, obj);
 
   return node;
 }
 
-char *
-melo_jsonrpc_build_error (const char *id, MeloJSONRPCError error_code,
+static JsonNode *
+melo_jsonrpc_build_error (const char *id, gint64 nid,
+                          MeloJSONRPCError error_code,
                           const char *error_format, ...)
 {
-  JsonGenerator *gen;
   JsonNode *node;
   va_list args;
-  char *str;
 
+  /* Generate error node */
   va_start (args, error_format);
-  node = melo_jsonrpc_build_errorv (id, -1, error_code, error_format, args);
+  node = melo_jsonrpc_build_error_nodev (error_code, error_format, args);
   va_end (args);
 
-  /* Generate final string */
-  gen = json_generator_new ();
-  json_generator_set_root (gen, node);
-  str = json_generator_to_data (gen, NULL);
+  /* Generate final response */
+  return melo_jsonrpc_build_response_node (NULL, node, id, nid);
+}
 
-  /* Free objects */
+static gchar *
+melo_jsonrpc_build_error_str (MeloJSONRPCError error_code,
+                              const char *error_format, ...)
+{
+  JsonNode *node;
+  va_list args;
+  gchar *str;
+
+  /* Generate error node */
+  va_start (args, error_format);
+  node = melo_jsonrpc_build_error_nodev (error_code, error_format, args);
+  va_end (args);
+
+  /* Generate final response */
+  node = melo_jsonrpc_build_response_node (NULL, node, NULL, -1);
+
+  /* Generate string */
+  str = melo_jsonrpc_node_to_string (node);
   json_node_free (node);
-  g_object_unref (gen);
 
   return str;
+}
+
+JsonNode *
+melo_jsonrpc_build_error_node (MeloJSONRPCError error_code,
+                               const char *error_format, ...)
+{
+  JsonNode *node;
+  va_list args;
+
+  /* Generate error node */
+  va_start (args, error_format);
+  node = melo_jsonrpc_build_error_nodev (error_code, error_format, args);
+  va_end (args);
+
+  return node;
 }

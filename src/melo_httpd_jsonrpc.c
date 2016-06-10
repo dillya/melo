@@ -31,22 +31,13 @@
 #include "config.h"
 #endif
 
-static void
-melo_httpd_jsonrpc_parse_handler (MeloJSONRPC *parser,
-                                  const char *method,
-                                  JsonNode *params,
-                                  gboolean is_notification,
-                                  gpointer user_data)
-{
-}
-
 void
 melo_httpd_jsonrpc_handler (SoupServer *server, SoupMessage *msg,
                             const char *path, GHashTable *query,
                             SoupClientContext *client, gpointer user_data)
 {
-  MeloJSONRPC *parser;
-  char *response;
+  GError *err = NULL;
+  char *res;
 
   /* We only support POST method */
   if (msg->method != SOUP_METHOD_POST) {
@@ -60,27 +51,17 @@ melo_httpd_jsonrpc_handler (SoupServer *server, SoupMessage *msg,
     return;
   }
 
-  /* Create a new JSON-RPC parser */
-  parser = melo_jsonrpc_new ();
-
   /* Parse request */
-  melo_jsonrpc_parse_request (parser,
-                              msg->request_body->data,
-                              msg->request_body->length,
-                              melo_httpd_jsonrpc_parse_handler, NULL);
-
-  /* Build response */
-  response = melo_jsonrpc_get_response (parser);
-
-  /* Free parser */
-  g_object_unref (parser);
+  res = melo_jsonrpc_parse_request (msg->request_body->data,
+                                    msg->request_body->length,
+                                    &err);
 
   /* Set response status */
   soup_message_set_status (msg, SOUP_STATUS_OK);
-  if (!response)
+  if (!res)
     return;
 
   /* Set response */
   soup_message_set_response (msg, "application/json", SOUP_MEMORY_TAKE,
-                             response, strlen (response));
+                             res, strlen (res));
 }
