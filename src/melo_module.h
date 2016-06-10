@@ -47,11 +47,13 @@ struct _MeloModuleClass {
 GType melo_module_get_type (void);
 
 /* Register a new module */
-gboolean melo_module_register (GType type, const gchar *name);
-void melo_module_unregister (const gchar *name);
+gboolean melo_module_register (GType type, const gchar *id);
+void melo_module_unregister (const gchar *id);
 
 /* Get MeloModule list */
 GList *melo_module_get_module_list (void);
+/* Get MeloModule by id */
+MeloModule *melo_module_get_module_by_id (const gchar *id);
 
 /* JSON-RPC methods */
 void melo_module_register_methods (void);

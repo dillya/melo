@@ -40,7 +40,7 @@ melo_module_init (MeloModule *self)
 
 /* Register a new module */
 gboolean
-melo_module_register (GType type, const gchar *name)
+melo_module_register (GType type, const gchar *id)
 {
   MeloModule *mod;
 
@@ -55,7 +55,7 @@ melo_module_register (GType type, const gchar *name)
                                                g_free, g_object_unref);
 
   /* Check if module is already registered */
-  if (g_hash_table_lookup (melo_modules_hash, name))
+  if (g_hash_table_lookup (melo_modules_hash, id))
     goto failed;
 
   /* Create a new instance of module */
@@ -64,7 +64,7 @@ melo_module_register (GType type, const gchar *name)
     goto failed;
 
   /* Add module instance to modules list */
-  g_hash_table_insert (melo_modules_hash, g_strdup (name), mod);
+  g_hash_table_insert (melo_modules_hash, g_strdup (id), mod);
   melo_modules_list = g_list_append (melo_modules_list, mod);
 
   /* Unlock module list */
@@ -78,7 +78,7 @@ failed:
 }
 
 void
-melo_module_unregister (const gchar *name)
+melo_module_unregister (const gchar *id)
 {
   MeloModule *mod;
 
@@ -86,13 +86,13 @@ melo_module_unregister (const gchar *name)
   G_LOCK (melo_module_mutex);
 
   /* Find module in hash table */
-  mod = g_hash_table_lookup (melo_modules_hash, name);
+  mod = g_hash_table_lookup (melo_modules_hash, id);
   if (!mod)
     goto unlock;
 
   /* Remove module from list */
-  melo_modules_list = g_list_remove (melo_modules_list, mod);
-  g_hash_table_remove (melo_modules_hash, name);
+  melo_modules_list = g_list_remove (melo_modules_list, id);
+  g_hash_table_remove (melo_modules_hash, id);
 
   /* Module list is empty */
   if (!g_hash_table_size (melo_modules_hash)) {
@@ -121,4 +121,25 @@ melo_module_get_module_list (void)
   G_UNLOCK (melo_module_mutex);
 
   return list;
+}
+
+MeloModule *
+melo_module_get_module_by_id (const gchar *id)
+{
+  MeloModule *mod;
+
+  /* Lock module list */
+  G_LOCK (melo_module_mutex);
+
+  /* Get module by id */
+  mod = g_hash_table_lookup (melo_modules_hash, id);
+
+  /* Increment ref count */
+  if (mod)
+    g_object_ref (mod);
+
+  /* Unlock module list */
+  G_UNLOCK (melo_module_mutex);
+
+  return mod;
 }
