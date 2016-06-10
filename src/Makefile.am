@@ -2,6 +2,7 @@ bin_PROGRAMS = melo
 
 melo_SOURCES = \
 	melo_module.c \
+	melo_module_jsonrpc.c \
 	melo_file.c \
 	melo_jsonrpc.c \
 	melo_httpd.c \

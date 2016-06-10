@@ -65,6 +65,9 @@ main (int argc, char *argv[])
   /* Free option context */
   g_option_context_free (ctx);
 
+  /* Register standard JSON-RPC methods */
+  melo_module_register_methods ();
+
   /* Register built-in modules */
   melo_module_register (MELO_TYPE_FILE, "file");
 
@@ -85,6 +88,9 @@ main (int argc, char *argv[])
 
   /* Unregister built-in modules */
   melo_module_unregister ("file");
+
+  /* Unregister standard JSON-RPC methods */
+  melo_module_unregister_methods ();
 
   return 0;
 }

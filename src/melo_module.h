@@ -50,6 +50,10 @@ GType melo_module_get_type (void);
 gboolean melo_module_register (GType type, const gchar *name);
 void melo_module_unregister (const gchar *name);
 
+/* JSON-RPC methods */
+void melo_module_register_methods (void);
+void melo_module_unregister_methods (void);
+
 G_END_DECLS
 
 #endif /* __MELO_MODULE_H__ */
