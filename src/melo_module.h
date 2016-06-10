@@ -46,6 +46,10 @@ struct _MeloModuleClass {
 
 GType melo_module_get_type (void);
 
+/* Register a new module */
+gboolean melo_module_register (GType type, const gchar *name);
+void melo_module_unregister (const gchar *name);
+
 G_END_DECLS
 
 #endif /* __MELO_MODULE_H__ */
