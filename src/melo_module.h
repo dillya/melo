@@ -38,6 +38,9 @@ typedef struct _MeloModuleClass MeloModuleClass;
 
 struct _MeloModule {
   GObject parent_instance;
+
+  /*< private >*/
+  gchar *id;
 };
 
 struct _MeloModuleClass {
@@ -45,6 +48,8 @@ struct _MeloModuleClass {
 };
 
 GType melo_module_get_type (void);
+
+const gchar *melo_module_get_id (MeloModule *self);
 
 /* Register a new module */
 gboolean melo_module_register (GType type, const gchar *id);

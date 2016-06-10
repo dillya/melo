@@ -29,13 +29,43 @@ static GList *melo_modules_list = NULL;
 G_DEFINE_ABSTRACT_TYPE (MeloModule, melo_module, G_TYPE_OBJECT)
 
 static void
+melo_module_finalize (GObject *gobject)
+{
+  MeloModule *self = MELO_MODULE (gobject);
+
+  if (self->id);
+    g_free (self->id);
+
+  /* Chain up to the parent class */
+  G_OBJECT_CLASS (melo_module_parent_class)->finalize (gobject);
+}
+
+static void
 melo_module_class_init (MeloModuleClass *klass)
 {
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  /* Add custom finalize() function */
+  object_class->finalize = melo_module_finalize;
 }
 
 static void
 melo_module_init (MeloModule *self)
 {
+}
+
+static void
+melo_module_set_id (MeloModule *self, const gchar *id)
+{
+  if (self->id)
+    g_free (self->id);
+  self->id = g_strdup (id);
+}
+
+const gchar *
+melo_module_get_id (MeloModule *self)
+{
+  return self->id;
 }
 
 /* Register a new module */
@@ -62,6 +92,9 @@ melo_module_register (GType type, const gchar *id)
   mod = g_object_new (type, NULL);
   if (!mod)
     goto failed;
+
+  /* Set ID to module */
+  melo_module_set_id (mod, id);
 
   /* Add module instance to modules list */
   g_hash_table_insert (melo_modules_hash, g_strdup (id), mod);
