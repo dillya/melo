@@ -7,6 +7,12 @@
 
 set -e
 
+# Check presence of autoreconf
+if ! which autoreconf >/dev/null; then
+    echo "ERROR: Please install Autotools before running $0!"
+    exit 1
+fi
+
 # Launch autoreconf to generate configure
 autoreconf --force --install --verbose
 
