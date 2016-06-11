@@ -7,6 +7,9 @@ AC_INIT([Melo], [0.0.1], [http://www.sparod.com/aircat/], [melo])
 dnl Initialize Automake
 AM_INIT_AUTOMAKE()
 
+dnl Set up macro directory
+AC_CONFIG_MACRO_DIR([m4])
+
 dnl Set source directory
 AC_CONFIG_SRCDIR([src/melo.c])
 
@@ -16,6 +19,10 @@ AC_CONFIG_HEADERS([config.h])
 dnl Check for programs
 AC_PROG_CC
 AM_PROG_CC_C_O
+
+dnl Check and init libtool
+LT_PREREQ([2.2.6])
+LT_INIT([disable-static])
 
 dnl Check for header files
 AC_HEADER_STDC

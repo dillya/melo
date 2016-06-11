@@ -1,35 +1,60 @@
+AM_CFLAGS = \
+	$(GLIB_CFLAGS) \
+	$(LIBJSON_GLIB_CFLAGS) \
+	-Wall
+
+AM_LDFLAGS = \
+	$(GLIB_LIBS) \
+	$(LIBJSON_GLIB_LIBS)
+
+# Libraries
+melolibdir = $(libdir)/melo
+melolib_LTLIBRARIES = \
+	libmelo_file.la \
+	libmelo.la
+
+# Main library
+libmelo_la_SOURCES = \
+	melo_module.c \
+	melo_module_jsonrpc.c \
+	melo_jsonrpc.c
+
+meloincludedir = $(includedir)/melo
+meloinclude_HEADERS = \
+	melo_jsonrpc.h \
+	melo_module.h
+
+# File module library
+libmelo_file_la_DEPENDENCIES = \
+	libmelo.la
+
+libmelo_file_la_SOURCES = \
+	melo_file.c
+
+# Main program
 bin_PROGRAMS = melo
 
 melo_SOURCES = \
-	melo_module.c \
-	melo_module_jsonrpc.c \
-	melo_file.c \
-	melo_jsonrpc.c \
 	melo_httpd.c \
 	melo_httpd_file.c \
 	melo_httpd_jsonrpc.c \
 	melo.c
 
 melo_CFLAGS = \
-	$(GLIB_CFLAGS) \
+	$(AM_CFLAGS) \
 	$(LIBSOUP_CFLAGS) \
-	$(LIBJSON_GLIB_CFLAGS) \
-	-DMELO_DATA_DIR=\"$(pkgdatadir)\" \
-	-Wall
+	-DMELO_DATA_DIR=\"$(pkgdatadir)\"
 
 melo_LDFLAGS = \
-	$(GLIB_LIBS) \
-	$(LIBSOUP_LIBS) \
-	$(LIBJSON_GLIB_LIBS)
+	$(AM_LDFLAGS) \
+	$(LIBSOUP_LIBS)
 
-meloincludedir = $(includedir)/melo
-
-meloinclude_HEADERS = \
-	melo_module.h
+melo_LDADD = \
+	libmelo_file.la \
+	libmelo.la
 
 noinst_HEADERS = \
 	melo_file.h \
-	melo_jsonrpc.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
 	melo_httpd_jsonrpc.h
