@@ -35,12 +35,13 @@ G_BEGIN_DECLS
 
 typedef struct _MeloModule MeloModule;
 typedef struct _MeloModuleClass MeloModuleClass;
+typedef struct _MeloModulePrivate MeloModulePrivate;
 
 struct _MeloModule {
   GObject parent_instance;
 
   /*< private >*/
-  gchar *id;
+  MeloModulePrivate *priv;
 };
 
 struct _MeloModuleClass {
@@ -49,7 +50,7 @@ struct _MeloModuleClass {
 
 GType melo_module_get_type (void);
 
-const gchar *melo_module_get_id (MeloModule *self);
+const gchar *melo_module_get_id (MeloModule *module);
 
 /* Register a new module */
 gboolean melo_module_register (GType type, const gchar *id);

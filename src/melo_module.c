@@ -26,15 +26,20 @@ G_LOCK_DEFINE_STATIC (melo_module_mutex);
 static GHashTable *melo_modules_hash = NULL;
 static GList *melo_modules_list = NULL;
 
-G_DEFINE_ABSTRACT_TYPE (MeloModule, melo_module, G_TYPE_OBJECT)
+struct _MeloModulePrivate {
+  gchar *id;
+};
+
+G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloModule, melo_module, G_TYPE_OBJECT)
 
 static void
 melo_module_finalize (GObject *gobject)
 {
-  MeloModule *self = MELO_MODULE (gobject);
+  MeloModulePrivate *priv = melo_module_get_instance_private (
+                                                         MELO_MODULE (gobject));
 
-  if (self->id);
-    g_free (self->id);
+  if (priv->id);
+    g_free (priv->id);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_module_parent_class)->finalize (gobject);
@@ -52,20 +57,24 @@ melo_module_class_init (MeloModuleClass *klass)
 static void
 melo_module_init (MeloModule *self)
 {
+  MeloModulePrivate *priv = melo_module_get_instance_private (self);
+
+  self->priv = priv;
+  priv->id = NULL;
 }
 
 static void
 melo_module_set_id (MeloModule *self, const gchar *id)
 {
-  if (self->id)
-    g_free (self->id);
-  self->id = g_strdup (id);
+  if (self->priv->id)
+    g_free (self->priv->id);
+  self->priv->id = g_strdup (id);
 }
 
 const gchar *
-melo_module_get_id (MeloModule *self)
+melo_module_get_id (MeloModule *module)
 {
-  return self->id;
+  return module->priv->id;
 }
 
 /* Register a new module */
