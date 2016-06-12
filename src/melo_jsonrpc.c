@@ -561,7 +561,8 @@ melo_jsonrpc_add_node (JsonNode *node, JsonObject *schema,
 
 static gboolean
 melo_jsonrpc_get_json_node (JsonArray *schema_params, JsonNode *params,
-                            JsonObject *obj, JsonArray *array)
+                            JsonObject *obj, JsonArray *array,
+                            JsonNode **error)
 {
   JsonObject *schema;
   JsonNodeType type;
@@ -569,8 +570,17 @@ melo_jsonrpc_get_json_node (JsonArray *schema_params, JsonNode *params,
   guint count, i;
 
   /* Check schema */
-  if (!schema_params || !params)
+  if (!schema_params)
     return FALSE;
+
+  /* No params to check */
+  if (!params) {
+    if (error && *error == NULL)
+      *error = melo_jsonrpc_build_error_node (
+                                             MELO_JSONRPC_ERROR_INVALID_REQUEST,
+                                             "Invalid request");
+    return FALSE;
+  }
 
   /* Get element count from schema */
   count = json_array_get_length (schema_params);
@@ -659,17 +669,22 @@ melo_jsonrpc_get_json_node (JsonArray *schema_params, JsonNode *params,
   return TRUE;
 
 failed:
+  if (error && *error == NULL)
+    *error = melo_jsonrpc_build_error_node (MELO_JSONRPC_ERROR_INVALID_PARAMS,
+                                            "Invalid params");
   return FALSE;
 }
 
 gboolean
-melo_jsonrpc_check_params (JsonArray *schema_params, JsonNode *params)
+melo_jsonrpc_check_params (JsonArray *schema_params, JsonNode *params,
+                           JsonNode **error)
 {
-  return melo_jsonrpc_get_json_node (schema_params, params, NULL, NULL);
+  return melo_jsonrpc_get_json_node (schema_params, params, NULL, NULL, error);
 }
 
 JsonObject *
-melo_jsonrpc_get_object (JsonArray *schema_params, JsonNode *params)
+melo_jsonrpc_get_object (JsonArray *schema_params, JsonNode *params,
+                         JsonNode **error)
 {
   JsonObject *obj;
 
@@ -677,7 +692,7 @@ melo_jsonrpc_get_object (JsonArray *schema_params, JsonNode *params)
   obj = json_object_new ();
 
   /* Get node */
-  if (!melo_jsonrpc_get_json_node (schema_params, params, obj, NULL)) {
+  if (!melo_jsonrpc_get_json_node (schema_params, params, obj, NULL, error)) {
     json_object_unref (obj);
     return NULL;
   }
@@ -686,7 +701,8 @@ melo_jsonrpc_get_object (JsonArray *schema_params, JsonNode *params)
 }
 
 JsonArray *
-melo_jsonrpc_get_array (JsonArray *schema_params, JsonNode *params)
+melo_jsonrpc_get_array (JsonArray *schema_params, JsonNode *params,
+                        JsonNode **error)
 {
   JsonArray *array;
   guint count;
@@ -698,7 +714,7 @@ melo_jsonrpc_get_array (JsonArray *schema_params, JsonNode *params)
   array = json_array_sized_new (count);
 
   /* Get array */
-  if (!melo_jsonrpc_get_json_node (schema_params, params, NULL, array)) {
+  if (!melo_jsonrpc_get_json_node (schema_params, params, NULL, array, error)) {
     json_array_unref (array);
     return NULL;
   }

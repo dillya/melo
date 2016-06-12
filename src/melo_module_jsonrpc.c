@@ -118,11 +118,12 @@ melo_module_jsonrpc_get_list (const gchar *method,
   GList *l;
 
   /* Get fields */
-  obj = melo_jsonrpc_get_object (s_params, params);
-  if (obj) {
-    fields = melo_module_jsonrpc_get_fields (obj);
-    json_object_unref (obj);
-  }
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  fields = melo_module_jsonrpc_get_fields (obj);
+  json_object_unref (obj);
 
   /* Get module list */
   list = melo_module_get_module_list ();
@@ -158,12 +159,9 @@ melo_module_jsonrpc_get_info (const gchar *method,
   JsonObject *obj;
 
   /* Get module from id */
-  obj = melo_jsonrpc_get_object (s_params, params);
-  if (!obj) {
-    *error = melo_jsonrpc_build_error_node (MELO_JSONRPC_ERROR_INVALID_PARAMS,
-                                            "Invalid params");
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
     return;
-  }
 
   mod = melo_module_jsonrpc_get_module (obj, error);
   if (!mod) {

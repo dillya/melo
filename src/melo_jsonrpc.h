@@ -71,10 +71,12 @@ gchar *melo_jsonrpc_parse_request (const gchar *request, gsize length,
                                    GError **eror);
 
 /* Parameters utils */
-gboolean melo_jsonrpc_check_params (JsonArray *schema_params, JsonNode *params);
-JsonArray *melo_jsonrpc_get_array (JsonArray *schema_params, JsonNode *params);
+gboolean melo_jsonrpc_check_params (JsonArray *schema_params, JsonNode *params,
+                                    JsonNode **error);
+JsonArray *melo_jsonrpc_get_array (JsonArray *schema_params, JsonNode *params,
+                                   JsonNode **error);
 JsonObject *melo_jsonrpc_get_object (JsonArray *schema_params,
-                                     JsonNode *params);
+                                     JsonNode *params, JsonNode **error);
 
 /* Utils */
 JsonNode *melo_jsonrpc_build_error_node (MeloJSONRPCError error_code,
