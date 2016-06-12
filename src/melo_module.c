@@ -77,6 +77,17 @@ melo_module_get_id (MeloModule *module)
   return module->priv->id;
 }
 
+const MeloModuleInfo *
+melo_module_get_info (MeloModule *module)
+{
+  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
+
+  if (!mclass->get_info)
+    return NULL;
+
+  return mclass->get_info (module);
+}
+
 /* Register a new module */
 gboolean
 melo_module_register (GType type, const gchar *id)
