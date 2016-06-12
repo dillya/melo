@@ -600,22 +600,33 @@ melo_jsonrpc_get_json_node (JsonArray *schema_params, JsonNode *params,
 
       /* Get node */
       node = json_object_get_member (o, name);
-      if (!node)
-        goto failed;
+      if (!node) {
+        /* Get required flag: failed if not defined or TRUE */
+        node = json_object_get_member (schema, "required");
+        if (!node || (node && json_node_get_boolean (node)))
+          goto failed;
+
+        /* When not required:
+         *  - skip when converting to an object,
+         *  - stop when converting to an array.
+         */
+        if (obj)
+            continue;
+        if (array)
+        return TRUE;
+      }
 
       /* Check node type */
       if (!melo_jsonrpc_add_node (node, schema, obj, array))
         goto failed;
     }
   } else if (type == JSON_NODE_ARRAY) {
+    guint params_count;
     JsonArray *a;
 
     /* Get array */
     a = json_node_get_array (params);
-
-    /* Check array count */
-    if (count != json_array_get_length (a))
-      goto failed;
+    params_count = json_array_get_length (a);
 
     /* Parse object */
     for (i = 0; i < count; i++) {
@@ -623,6 +634,17 @@ melo_jsonrpc_get_json_node (JsonArray *schema_params, JsonNode *params,
       schema = json_array_get_object_element (schema_params, i);
       if (!schema)
         goto failed;
+
+      /* No more parameters available */
+      if (i >= params_count) {
+        /* Get required flag: failed if not defined or TRUE */
+        node = json_object_get_member (schema, "required");
+        if (!node || (node && json_node_get_boolean (node)))
+          goto failed;
+
+        /* If this parameter was not required: stop conversion */
+        return TRUE;
+      }
 
       /* Get node */
       node = json_array_get_element (a, i);
