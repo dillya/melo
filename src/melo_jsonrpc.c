@@ -569,7 +569,7 @@ melo_jsonrpc_get_json_node (JsonArray *schema_params, JsonNode *params,
   guint count, i;
 
   /* Check schema */
-  if (!schema_params)
+  if (!schema_params || !params)
     return FALSE;
 
   /* Get element count from schema */
