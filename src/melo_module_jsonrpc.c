@@ -29,6 +29,24 @@ typedef enum {
   MELO_MODULE_JSONRPC_FIELDS_FULL = 255,
 } MeloModuleJSONRPCFields;
 
+static MeloModule *
+melo_module_jsonrpc_get_module (JsonObject *obj, JsonNode **error)
+{
+  MeloModule *mod;
+  const gchar *id;
+
+  /* Get module by id */
+  id = json_object_get_string_member (obj, "id");
+  mod = melo_module_get_module_by_id (id);
+  if (mod)
+    return mod;
+
+  /* No module found */
+  *error = melo_jsonrpc_build_error_node (MELO_JSONRPC_ERROR_INVALID_PARAMS,
+                                          "No module found!");
+  return NULL;
+}
+
 static MeloModuleJSONRPCFields
 melo_module_jsonrpc_get_fields (JsonObject *obj)
 {
@@ -124,6 +142,45 @@ melo_module_jsonrpc_get_list (const gchar *method,
   json_node_take_array (*result, array);
 }
 
+static void
+melo_module_jsonrpc_get_info (const gchar *method,
+                              JsonArray *s_params, JsonNode *params,
+                              JsonNode **result, JsonNode **error,
+                              gpointer user_data)
+{
+  MeloModuleJSONRPCFields fields = MELO_MODULE_JSONRPC_FIELDS_NONE;
+  const MeloModuleInfo *info = NULL;
+  MeloModule *mod;
+  JsonObject *obj;
+
+  /* Get module from id */
+  obj = melo_jsonrpc_get_object (s_params, params);
+  if (!obj) {
+    *error = melo_jsonrpc_build_error_node (MELO_JSONRPC_ERROR_INVALID_PARAMS,
+                                            "Invalid params");
+    return;
+  }
+
+  mod = melo_module_jsonrpc_get_module (obj, error);
+  if (!mod) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get fields */
+  fields = melo_module_jsonrpc_get_fields (obj);
+  json_object_unref (obj);
+
+  /* Generate list */
+  info = melo_module_get_info (mod);
+  obj = melo_module_jsonrpc_info_to_object (NULL, info, fields);
+  g_object_unref (mod);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
 /* List of methods */
 static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
   {
@@ -136,6 +193,19 @@ static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"array\"}",
     .callback = melo_module_jsonrpc_get_list,
+    .user_data = NULL,
+  },
+  {
+    .method = "get_info",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_module_jsonrpc_get_info,
     .user_data = NULL,
   },
 };
