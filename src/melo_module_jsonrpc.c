@@ -55,6 +55,10 @@ melo_module_jsonrpc_get_fields (JsonObject *obj)
   JsonArray *array;
   guint count, i;
 
+  /* Check if fields is available */
+  if (!json_object_has_member (obj, "fields"))
+    return MELO_MODULE_JSONRPC_FIELDS_NONE;
+
   /* Get fields array */
   array = json_object_get_array_member (obj, "fields");
   if (!array)
