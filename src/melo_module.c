@@ -42,7 +42,7 @@ melo_module_finalize (GObject *gobject)
   MeloModulePrivate *priv = melo_module_get_instance_private (
                                                          MELO_MODULE (gobject));
 
-  if (priv->id);
+  if (priv->id)
     g_free (priv->id);
 
   /* Free browser list */
