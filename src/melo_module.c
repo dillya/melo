@@ -28,6 +28,10 @@ static GList *melo_modules_list = NULL;
 
 struct _MeloModulePrivate {
   gchar *id;
+
+  GMutex browser_mutex;
+  GList *browser_list;
+  GHashTable *browser_hash;
 };
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloModule, melo_module, G_TYPE_OBJECT)
@@ -40,6 +44,12 @@ melo_module_finalize (GObject *gobject)
 
   if (priv->id);
     g_free (priv->id);
+
+  /* Free browser list */
+  g_list_free (priv->browser_list);
+  g_hash_table_remove_all (priv->browser_hash);
+  g_hash_table_unref (priv->browser_hash);
+  g_mutex_clear (&priv->browser_mutex);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_module_parent_class)->finalize (gobject);
@@ -61,6 +71,12 @@ melo_module_init (MeloModule *self)
 
   self->priv = priv;
   priv->id = NULL;
+
+  /* Init browser list */
+  g_mutex_init (&priv->browser_mutex);
+  priv->browser_list = NULL;
+  priv->browser_hash = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                              g_free, g_object_unref);
 }
 
 static void
@@ -86,6 +102,103 @@ melo_module_get_info (MeloModule *module)
     return NULL;
 
   return mclass->get_info (module);
+}
+
+/* Register a browser into module */
+gboolean
+melo_module_register_browser (MeloModule *module, MeloBrowser *browser)
+{
+  MeloModulePrivate *priv = module->priv;
+  const gchar *id;
+
+  /* Lock browser list */
+  g_mutex_lock (&priv->browser_mutex);
+
+  /* Get ID from browser */
+  id = melo_browser_get_id (browser);
+  if (!id)
+    goto failed;
+
+  /* Check if browser is already registered */
+  if (g_hash_table_lookup (priv->browser_hash, id))
+    goto failed;
+
+  /* Add to browser list */
+  g_hash_table_insert (priv->browser_hash, g_strdup(id), browser);
+  priv->browser_list = g_list_append (priv->browser_list, browser);
+  g_object_ref (browser);
+
+  /* Unlock browser list */
+  g_mutex_unlock (&priv->browser_mutex);
+
+  return TRUE;
+
+failed:
+  g_mutex_unlock (&priv->browser_mutex);
+  return FALSE;
+}
+
+void
+melo_module_unregister_browser (MeloModule *module, const char *id)
+{
+  MeloModulePrivate *priv = module->priv;
+  MeloBrowser *bro;
+
+  /* Lock browser list */
+  g_mutex_lock (&priv->browser_mutex);
+
+  /* Find module in hash table */
+  bro = g_hash_table_lookup (priv->browser_hash, id);
+  if (!bro)
+    goto unlock;
+
+  /* Remove browser from list */
+  priv->browser_list = g_list_remove (priv->browser_list, bro);
+  g_hash_table_remove (priv->browser_hash, id);
+
+unlock:
+  /* Unlock browser list */
+  g_mutex_unlock (&priv->browser_mutex);
+}
+
+GList *
+melo_module_get_browser_list (MeloModule *module)
+{
+  MeloModulePrivate *priv = module->priv;
+  GList *list;
+
+  /* Lock browser list */
+  g_mutex_lock (&priv->browser_mutex);
+
+  /* Copy list */
+  list = g_list_copy_deep (priv->browser_list, (GCopyFunc) g_object_ref, NULL);
+
+  /* Unlock browser list */
+  g_mutex_unlock (&priv->browser_mutex);
+
+  return list;
+}
+
+MeloBrowser *
+melo_module_get_browser_by_id (MeloModule *module, const gchar *id)
+{
+  MeloModulePrivate *priv = module->priv;
+  MeloBrowser *bro;
+
+  /* Lock browser list */
+  g_mutex_lock (&priv->browser_mutex);
+
+  /* Get browser by id */
+  bro = g_hash_table_lookup (priv->browser_hash, id);
+
+  /* Increment ref count */
+  if (bro)
+    g_object_ref (bro);
+
+  /* Unlock browser list */
+  g_mutex_unlock (&priv->browser_mutex);
+
+  return bro;
 }
 
 /* Register a new module */

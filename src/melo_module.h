@@ -24,6 +24,8 @@
 
 #include <glib-object.h>
 
+#include "melo_browser.h"
+
 G_BEGIN_DECLS
 
 #define MELO_TYPE_MODULE             (melo_module_get_type ())
@@ -61,6 +63,14 @@ GType melo_module_get_type (void);
 
 const gchar *melo_module_get_id (MeloModule *module);
 const MeloModuleInfo *melo_module_get_info (MeloModule *module);
+
+/* Register a browser */
+gboolean melo_module_register_browser (MeloModule *module,
+                                       MeloBrowser *browser);
+void melo_module_unregister_browser (MeloModule *module, const char *id);
+GList *melo_module_get_browser_list (MeloModule *module);
+MeloBrowser *melo_module_get_browser_by_id (MeloModule *module,
+                                            const gchar *id);
 
 /* Register a new module */
 gboolean melo_module_register (GType type, const gchar *id);

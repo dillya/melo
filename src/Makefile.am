@@ -16,13 +16,15 @@ melolib_LTLIBRARIES = \
 # Main library
 libmelo_la_SOURCES = \
 	melo_module.c \
+	melo_browser.c \
 	melo_module_jsonrpc.c \
 	melo_jsonrpc.c
 
 meloincludedir = $(includedir)/melo
 meloinclude_HEADERS = \
-	melo_jsonrpc.h \
-	melo_module.h
+	melo_module.h \
+	melo_browser.h \
+	melo_jsonrpc.h
 
 # File module library
 libmelo_file_la_DEPENDENCIES = \
