@@ -17,8 +17,10 @@ function melo_update_list() {
     $("#module_list").html("");
     for (var i = 0; i < response.result.length; i++) {
       var mod = $('<li>' + response.result[i].id + ' -> ' +
-                           response.result[i].name +  '</li>');
-      mod.click(response.result[i].id, function(e) {
+                           response.result[i].name + ' (' +
+                           '<a class="info" href="#">info</a>' +
+                  ')</li>');
+      mod.children("a.info").click(response.result[i].id, function(e) {
         melo_get_info(e.data);
         return false;
       });
