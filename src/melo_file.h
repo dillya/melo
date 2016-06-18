@@ -35,9 +35,13 @@ G_BEGIN_DECLS
 
 typedef struct _MeloFile MeloFile;
 typedef struct _MeloFileClass MeloFileClass;
+typedef struct _MeloFilePrivate MeloFilePrivate;
 
 struct _MeloFile {
   MeloModule parent_instance;
+
+  /*< private >*/
+  MeloFilePrivate *priv;
 };
 
 struct _MeloFileClass {

@@ -20,6 +20,7 @@
  */
 
 #include "melo_file.h"
+#include "melo_browser_file.h"
 
 /* Module file info */
 MeloModuleInfo melo_file_info = {
@@ -29,19 +30,49 @@ MeloModuleInfo melo_file_info = {
 
 static const MeloModuleInfo *melo_file_get_info (MeloModule *module);
 
-G_DEFINE_TYPE (MeloFile, melo_file, MELO_TYPE_MODULE)
+struct _MeloFilePrivate {
+  MeloBrowser *files;
+};
+
+G_DEFINE_TYPE_WITH_PRIVATE (MeloFile, melo_file, MELO_TYPE_MODULE)
+
+static void
+melo_file_finalize (GObject *gobject)
+{
+  MeloFilePrivate *priv = melo_file_get_instance_private (MELO_FILE (gobject));
+
+  if (priv->files) {
+    melo_module_unregister_browser (MELO_MODULE (gobject), "files");
+    g_object_unref (priv->files);
+  }
+
+  /* Chain up to the parent class */
+  G_OBJECT_CLASS (melo_file_parent_class)->finalize (gobject);
+}
+
 
 static void
 melo_file_class_init (MeloFileClass *klass)
 {
   MeloModuleClass *mclass = (MeloModuleClass *) klass;
+  GObjectClass *oclass = G_OBJECT_CLASS (klass);
 
   mclass->get_info = melo_file_get_info;
+
+  /* Add custom finalize() function */
+  oclass->finalize = melo_file_finalize;
 }
 
 static void
 melo_file_init (MeloFile *self)
 {
+  MeloFilePrivate *priv = melo_file_get_instance_private (self);
+
+  self->priv = priv;
+  priv->files = melo_browser_new (MELO_TYPE_BROWSER_FILE, "files");
+
+  if (priv->files)
+    melo_module_register_browser (MELO_MODULE (self), priv->files);
 }
 
 static const MeloModuleInfo *
