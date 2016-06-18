@@ -144,7 +144,7 @@ melo_module_unregister (const gchar *id)
     goto unlock;
 
   /* Remove module from list */
-  melo_modules_list = g_list_remove (melo_modules_list, id);
+  melo_modules_list = g_list_remove (melo_modules_list, mod);
   g_hash_table_remove (melo_modules_hash, id);
 
   /* Module list is empty */
