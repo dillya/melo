@@ -183,6 +183,54 @@ melo_module_jsonrpc_get_info (const gchar *method,
   json_node_take_object (*result, obj);
 }
 
+static void
+melo_module_jsonrpc_get_browser_list (const gchar *method,
+                                      JsonArray *s_params, JsonNode *params,
+                                      JsonNode **result, JsonNode **error,
+                                      gpointer user_data)
+{
+  MeloBrowser *bro;
+  MeloModule *mod;
+  JsonArray *array;
+  JsonObject *obj;
+  const gchar *id;
+  GList *list;
+  GList *l;
+
+  /* Get module from id */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  mod = melo_module_jsonrpc_get_module (obj, error);
+  if (!mod) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get browser list */
+  list = melo_module_get_browser_list (mod);
+  json_object_unref (obj);
+  g_object_unref (mod);
+
+  /* Generate list */
+  array = json_array_new ();
+  for (l = list; l != NULL; l = l->next) {
+    bro = (MeloBrowser *) l->data;
+    id = melo_browser_get_id (bro);
+    json_array_add_string_element (array, id);
+  }
+
+  /* Free module list */
+  g_list_free_full (list, g_object_unref);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_ARRAY);
+  json_node_take_array (*result, array);
+}
+
+
+
 /* List of methods */
 static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
   {
@@ -208,6 +256,15 @@ static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_module_jsonrpc_get_info,
+    .user_data = NULL,
+  },
+  {
+    .method = "get_browser_list",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"array\"}",
+    .callback = melo_module_jsonrpc_get_browser_list,
     .user_data = NULL,
   },
 };
