@@ -42,7 +42,7 @@ melo_file_finalize (GObject *gobject)
   MeloFilePrivate *priv = melo_file_get_instance_private (MELO_FILE (gobject));
 
   if (priv->files) {
-    melo_module_unregister_browser (MELO_MODULE (gobject), "files");
+    melo_module_unregister_browser (MELO_MODULE (gobject), "file_files");
     g_object_unref (priv->files);
   }
 
@@ -69,7 +69,7 @@ melo_file_init (MeloFile *self)
   MeloFilePrivate *priv = melo_file_get_instance_private (self);
 
   self->priv = priv;
-  priv->files = melo_browser_new (MELO_TYPE_BROWSER_FILE, "files");
+  priv->files = melo_browser_new (MELO_TYPE_BROWSER_FILE, "file_files");
 
   if (priv->files)
     melo_module_register_browser (MELO_MODULE (self), priv->files);
