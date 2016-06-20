@@ -54,7 +54,7 @@ melo_file_finalize (GObject *gobject)
 static void
 melo_file_class_init (MeloFileClass *klass)
 {
-  MeloModuleClass *mclass = (MeloModuleClass *) klass;
+  MeloModuleClass *mclass = MELO_MODULE_CLASS (klass);
   GObjectClass *oclass = G_OBJECT_CLASS (klass);
 
   mclass->get_info = melo_file_get_info;
