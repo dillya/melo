@@ -37,6 +37,8 @@ typedef struct _MeloBrowser MeloBrowser;
 typedef struct _MeloBrowserClass MeloBrowserClass;
 typedef struct _MeloBrowserPrivate MeloBrowserPrivate;
 
+typedef struct _MeloBrowserItem MeloBrowserItem;
+
 struct _MeloBrowser {
   GObject parent_instance;
 
@@ -46,6 +48,13 @@ struct _MeloBrowser {
 
 struct _MeloBrowserClass {
   GObjectClass parent_class;
+
+  GList *(*get_list) (MeloBrowser *browser, const gchar *path);
+};
+
+struct _MeloBrowserItem {
+  gchar *name;
+  gchar *type;
 };
 
 GType melo_browser_get_type (void);
@@ -53,6 +62,12 @@ GType melo_browser_get_type (void);
 MeloBrowser *melo_browser_new (GType type, const gchar *id);
 const gchar *melo_browser_get_id (MeloBrowser *browser);
 MeloBrowser *melo_browser_get_browser_by_id (const gchar *id);
+
+GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path);
+
+MeloBrowserItem *melo_browser_item_new (const gchar *name, const gchar *type);
+gint melo_browser_item_cmp (const MeloBrowserItem *a, const MeloBrowserItem *b);
+void melo_browser_item_free (MeloBrowserItem *item);
 
 G_END_DECLS
 

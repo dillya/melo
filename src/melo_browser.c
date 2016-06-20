@@ -48,7 +48,7 @@ melo_browser_finalize (GObject *gobject)
   /* Unlock browser list */
   G_UNLOCK (melo_browser_mutex);
 
-  if (priv->id);
+  if (priv->id)
     g_free (priv->id);
 
   /* Chain up to the parent class */
@@ -150,4 +150,47 @@ melo_browser_new (GType type, const gchar *id)
 failed:
   G_UNLOCK (melo_browser_mutex);
   return NULL;
+}
+
+GList *
+melo_browser_get_list (MeloBrowser *browser, const gchar *path)
+{
+  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
+
+  g_return_val_if_fail (bclass->get_list, NULL);
+
+  return bclass->get_list (browser, path);
+}
+
+MeloBrowserItem *
+melo_browser_item_new (const gchar *name, const gchar *type)
+{
+  MeloBrowserItem *item;
+
+  /* Allocate new item */
+  item = g_slice_new (MeloBrowserItem);
+  if (!item)
+    return NULL;
+
+  /* Set name and type */
+  item->name = g_strdup (name);
+  item->type = g_strdup (type);
+
+  return item;
+}
+
+gint
+melo_browser_item_cmp (const MeloBrowserItem *a, const MeloBrowserItem *b)
+{
+  return g_strcmp0 (a->name, b->name);
+}
+
+void
+melo_browser_item_free (MeloBrowserItem *item)
+{
+  if (item->name)
+    g_free (item->name);
+  if (item->type)
+    g_free (item->type);
+  g_slice_free (MeloBrowserItem, item);
 }
