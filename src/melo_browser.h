@@ -52,6 +52,7 @@ GType melo_browser_get_type (void);
 
 MeloBrowser *melo_browser_new (GType type, const gchar *id);
 const gchar *melo_browser_get_id (MeloBrowser *browser);
+MeloBrowser *melo_browser_get_browser_by_id (const gchar *id);
 
 G_END_DECLS
 

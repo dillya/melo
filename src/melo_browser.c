@@ -21,6 +21,11 @@
 
 #include "melo_browser.h"
 
+/* Internal browser list */
+G_LOCK_DEFINE_STATIC (melo_browser_mutex);
+static GHashTable *melo_browser_hash = NULL;
+static GList *melo_browser_list = NULL;
+
 struct _MeloBrowserPrivate {
   gchar *id;
 };
@@ -30,8 +35,18 @@ G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloBrowser, melo_browser, G_TYPE_OBJECT)
 static void
 melo_browser_finalize (GObject *gobject)
 {
-  MeloBrowserPrivate *priv = melo_browser_get_instance_private (
-                                                        MELO_BROWSER (gobject));
+  MeloBrowser *browser = MELO_BROWSER (gobject);
+  MeloBrowserPrivate *priv = melo_browser_get_instance_private (browser);
+
+  /* Lock browser list */
+  G_LOCK (melo_browser_mutex);
+
+  /* Remove object from browser list */
+  melo_browser_list = g_list_remove (melo_browser_list, browser);
+  g_hash_table_remove (melo_browser_hash, priv->id);
+
+  /* Unlock browser list */
+  G_UNLOCK (melo_browser_mutex);
 
   if (priv->id);
     g_free (priv->id);
@@ -75,6 +90,27 @@ melo_browser_get_id (MeloBrowser *browser)
 }
 
 MeloBrowser *
+melo_browser_get_browser_by_id (const gchar *id)
+{
+  MeloBrowser *bro;
+
+  /* Lock browser list */
+  G_LOCK (melo_browser_mutex);
+
+  /* Find browser by id */
+  bro = g_hash_table_lookup (melo_browser_hash, id);
+
+  /* Increment reference count */
+  if (bro)
+    g_object_ref (bro);
+
+  /* Unlock browser list */
+  G_UNLOCK (melo_browser_mutex);
+
+  return bro;
+}
+
+MeloBrowser *
 melo_browser_new (GType type, const gchar *id)
 {
   MeloBrowser *bro;
@@ -82,13 +118,36 @@ melo_browser_new (GType type, const gchar *id)
   g_return_val_if_fail (id, NULL);
   g_return_val_if_fail (g_type_is_a (type, MELO_TYPE_BROWSER), NULL);
 
+  /* Lock browser list */
+  G_LOCK (melo_browser_mutex);
+
+  /* Create browser list */
+  if (!melo_browser_hash)
+    melo_browser_hash = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                               g_free, NULL);
+
+  /* Check if ID is already used */
+  if (g_hash_table_lookup (melo_browser_hash, id))
+    goto failed;
+
   /* Create a new instance of browser */
   bro = g_object_new (type, NULL);
   if (!bro)
-    return NULL;
+    goto failed;
 
   /* Set ID */
   melo_browser_set_id (bro, id);
 
+  /* Add new browser instance to browser list */
+  g_hash_table_insert (melo_browser_hash, g_strdup (id), bro);
+  melo_browser_list = g_list_append (melo_browser_list, bro);
+
+  /* Unlock browser list */
+  G_UNLOCK (melo_browser_mutex);
+
   return bro;
+
+failed:
+  G_UNLOCK (melo_browser_mutex);
+  return NULL;
 }
