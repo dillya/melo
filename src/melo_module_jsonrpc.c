@@ -221,7 +221,7 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
     json_array_add_string_element (array, id);
   }
 
-  /* Free module list */
+  /* Free browser list */
   g_list_free_full (list, g_object_unref);
 
   /* Return result */
