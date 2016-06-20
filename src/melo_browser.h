@@ -69,6 +69,10 @@ MeloBrowserItem *melo_browser_item_new (const gchar *name, const gchar *type);
 gint melo_browser_item_cmp (const MeloBrowserItem *a, const MeloBrowserItem *b);
 void melo_browser_item_free (MeloBrowserItem *item);
 
+/* JSON-RPC methods */
+void melo_browser_register_methods (void);
+void melo_browser_unregister_methods (void);
+
 G_END_DECLS
 
 #endif /* __MELO_BROWSER_H__ */

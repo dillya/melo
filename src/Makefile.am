@@ -18,6 +18,7 @@ libmelo_la_SOURCES = \
 	melo_module.c \
 	melo_browser.c \
 	melo_browser_file.c \
+	melo_browser_jsonrpc.c \
 	melo_module_jsonrpc.c \
 	melo_jsonrpc.c
 
