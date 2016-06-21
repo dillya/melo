@@ -24,12 +24,28 @@
 #include <string.h>
 
 #include <glib.h>
+#ifdef G_OS_UNIX
+#include <glib-unix.h>
+#endif
 
 #include "melo_file.h"
 #include "melo_httpd.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
+
+#ifdef G_OS_UNIX
+gboolean
+melo_sigint_handler (gpointer user_data)
+{
+  GMainLoop *loop = (GMainLoop *) user_data;
+
+  /* SIGINT capture: stop program */
+  g_main_loop_quit (loop);
+
+  return G_SOURCE_REMOVE;
+}
 #endif
 
 int
@@ -77,6 +93,11 @@ main (int argc, char *argv[])
 
   /* Start main loop */
   loop = g_main_loop_new (NULL, FALSE);
+
+#ifdef G_OS_UNIX
+  /* Install a signal handler on SIGINT */
+  g_unix_signal_add (SIGINT, melo_sigint_handler, loop);
+#endif
 
   /* Run main loop */
   g_main_loop_run (loop);
