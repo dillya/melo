@@ -16,8 +16,8 @@ function melo_update_list() {
 
     $("#module_list").html("");
     for (var i = 0; i < response.result.length; i++) {
-      var mod = $('<li>' + response.result[i].id + ' -> ' +
-                           response.result[i].name + ' (' +
+      var mod = $('<li>' + response.result[i].name + ' [' +
+                           response.result[i].id + '] (' +
                            '<a class="info" href="#">info</a>' +
                            ' | <a class="browsers" href="#">browsers</a>' +
                   ')<ul class=browser_list></ul></li>');
@@ -49,15 +49,51 @@ function melo_get_info(id) {
 
 function melo_get_browsers(id, ul) {
   jsonrpc_call("module.get_browser_list",
-               JSON.parse('["' + id + '",["full"]]'),
+               JSON.parse('["' + id + '",["name"]]'),
                function(response) {
     if (response.error || !response.result)
       return;
 
     ul.html("");
     for (var i = 0; i < response.result.length; i++) {
-      var bro = $('<li>' + response.result[i]  + '</li>');
+      var bro = $('<li>' + response.result[i].name + ' [' +
+                           response.result[i].id +'] (' +
+                           '<a class="info" href="#">info</a> | ' +
+                           '<a class="open" href="#">open</a>)</li>');
+      bro.children("a.info").click(response.result[i].id, function(e) {
+        melo_get_browser_info(e.data);
+        return false;
+      });
+      bro.children("a.open").click(response.result[i].id, function(e) {
+        melo_get_browser_list(e.data);
+        return false;
+      });
       ul.append(bro);
+    }
+  });
+}
+
+function melo_get_browser_info(id) {
+  jsonrpc_call("browser.get_info", JSON.parse('["' + id + '",["full"]]'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
+
+    $("#browser_info_name").html(response.result.name);
+    $("#browser_info_descr").html(response.result.description);
+  });
+}
+
+function melo_get_browser_list(id) {
+  jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","file:/"]'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
+
+    $('#browser_list').html("");
+    for (var i = 0; i < response.result.length; i++) {
+      var item = $('<li>' + response.result[i].name + '</li>');
+      $('#browser_list').append(item);
     }
   });
 }
