@@ -19,15 +19,7 @@
  * Boston, MA  02110-1301, USA.
  */
 
-#include "melo_browser.h"
-#include "melo_jsonrpc.h"
-
-typedef enum {
-  MELO_BROWSER_JSONRPC_FIELDS_NONE = 0,
-  MELO_BROWSER_JSONRPC_FIELDS_NAME = 1,
-  MELO_BROWSER_JSONRPC_FIELDS_DESCRIPTION = 2,
-  MELO_BROWSER_JSONRPC_FIELDS_FULL = 255,
-} MeloBrowserJSONRPCFields;
+#include "melo_browser_jsonrpc.h"
 
 static MeloBrowser *
 melo_browser_jsonrpc_get_browser (JsonObject *obj, JsonNode **error)
@@ -47,7 +39,7 @@ melo_browser_jsonrpc_get_browser (JsonObject *obj, JsonNode **error)
   return NULL;
 }
 
-static MeloBrowserJSONRPCFields
+MeloBrowserJSONRPCFields
 melo_browser_jsonrpc_get_fields (JsonObject *obj)
 {
   MeloBrowserJSONRPCFields fields = MELO_BROWSER_JSONRPC_FIELDS_NONE;
@@ -85,7 +77,7 @@ melo_browser_jsonrpc_get_fields (JsonObject *obj)
   return fields;
 }
 
-static JsonObject *
+JsonObject *
 melo_browser_jsonrpc_info_to_object (const gchar *id,
                                      const MeloBrowserInfo *info,
                                      MeloBrowserJSONRPCFields fields)

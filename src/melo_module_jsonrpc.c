@@ -21,6 +21,7 @@
 
 #include "melo_module.h"
 #include "melo_jsonrpc.h"
+#include "melo_browser_jsonrpc.h"
 
 typedef enum {
   MELO_MODULE_JSONRPC_FIELDS_NONE = 0,
@@ -189,6 +190,8 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
                                       JsonNode **result, JsonNode **error,
                                       gpointer user_data)
 {
+  MeloBrowserJSONRPCFields fields = MELO_BROWSER_JSONRPC_FIELDS_NONE;
+  const MeloBrowserInfo *info = NULL;
   MeloBrowser *bro;
   MeloModule *mod;
   JsonArray *array;
@@ -208,6 +211,9 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
     return;
   }
 
+  /* Get fields */
+  fields = melo_browser_jsonrpc_get_fields (obj);
+
   /* Get browser list */
   list = melo_module_get_browser_list (mod);
   json_object_unref (obj);
@@ -218,7 +224,10 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
   for (l = list; l != NULL; l = l->next) {
     bro = (MeloBrowser *) l->data;
     id = melo_browser_get_id (bro);
-    json_array_add_string_element (array, id);
+    if (fields != MELO_BROWSER_JSONRPC_FIELDS_NONE)
+      info = melo_browser_get_info (bro);
+    obj = melo_browser_jsonrpc_info_to_object (id, info, fields);
+    json_array_add_object_element (array, obj);
   }
 
   /* Free browser list */
@@ -228,8 +237,6 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
   *result = json_node_new (JSON_NODE_ARRAY);
   json_node_take_array (*result, array);
 }
-
-
 
 /* List of methods */
 static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
@@ -261,7 +268,11 @@ static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
   {
     .method = "get_browser_list",
     .params = "["
-              "  {\"name\": \"id\", \"type\": \"string\"}"
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
               "]",
     .result = "{\"type\":\"array\"}",
     .callback = melo_module_jsonrpc_get_browser_list,
