@@ -23,7 +23,7 @@
 #include "melo_browser_file.h"
 
 /* Module file info */
-MeloModuleInfo melo_file_info = {
+static MeloModuleInfo melo_file_info = {
   .name = "Files",
   .description = "Navigate and play any of your music files",
 };
