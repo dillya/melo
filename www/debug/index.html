@@ -9,12 +9,24 @@
     .center {
       text-align: center;
     }
+    .col-l {
+      float: left;
+      width: 30%;
+      box-sizing: border-box;
+    }
+    .col-r {
+      float: left;
+      width: 70%;
+      padding-left: 10px;
+      box-sizing: border-box;
+    }
     .block {
       text-align: left;
-      width: 600px;
       border: 1px solid black;
+      width: 100%;
       margin-bottom: 10px;
       padding: 0px 10px;
+      box-sizing: border-box;
     }
     .title {
       font-weight: bold;
@@ -28,29 +40,36 @@
 <body>
   <div class="center">
     <h1>Melo: debug page</h1>
-    <div class="block">
-      <h2>Module</h2>
-      <p><span class="title">Module list:</span> [ <a id="module_refresh" href="#">refresh</a> ]</p>
-      <ul id="module_list"></ul>
-      <p><span class="title">Module info:</span></p>
-      <div id="module_info">
-        <p>
-          Name: <span id="module_info_name"></span><br>
-          Description: <span id="module_info_descr"></span>
-        </p>
+    <div class="col-l">
+      <div class="block">
+        <h2>Module</h2>
+        <p><span class="title">Module list:</span> [ <a id="module_refresh" href="#">refresh</a> ]</p>
+        <ul id="module_list"></ul>
+        <p><span class="title">Module info:</span></p>
+        <div id="module_info">
+          <p>
+            Name: <span id="module_info_name"></span><br>
+            Description: <span id="module_info_descr"></span>
+          </p>
+        </div>
+      </div>
+      <div class="block">
+        <h2>Player</h2>
       </div>
     </div>
-    <div class="block">
-      <h2>Browser</h2>
-      <p><span class="title">Browser info:</span></p>
-      <div id="browser_info">
-        <p>
-          Name: <span id="browser_info_name"></span><br>
-          Description: <span id="browser_info_descr"></span>
-        </p>
+    <div class="col-r">
+      <div class="block">
+        <h2>Browser</h2>
+        <p><span class="title">Browser info:</span></p>
+        <div id="browser_info">
+          <p>
+            Name: <span id="browser_info_name"></span><br>
+            Description: <span id="browser_info_descr"></span>
+          </p>
+        </div>
+        <p><span class="title">Browser list:</span></p>
+        <ul id="browser_list"></ul>
       </div>
-      <p><span class="title">Browser list:</span></p>
-      <ul id="browser_list"></ul>
     </div>
   </div>
 </body>
