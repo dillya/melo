@@ -89,6 +89,17 @@ melo_browser_get_id (MeloBrowser *browser)
   return browser->priv->id;
 }
 
+const MeloBrowserInfo *
+melo_browser_get_info (MeloBrowser *browser)
+{
+  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
+
+  if (!bclass->get_info)
+    return NULL;
+
+  return bclass->get_info (browser);
+}
+
 MeloBrowser *
 melo_browser_get_browser_by_id (const gchar *id)
 {

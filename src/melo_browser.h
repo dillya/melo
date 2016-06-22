@@ -37,6 +37,7 @@ typedef struct _MeloBrowser MeloBrowser;
 typedef struct _MeloBrowserClass MeloBrowserClass;
 typedef struct _MeloBrowserPrivate MeloBrowserPrivate;
 
+typedef struct _MeloBrowserInfo MeloBrowserInfo;
 typedef struct _MeloBrowserItem MeloBrowserItem;
 
 struct _MeloBrowser {
@@ -49,7 +50,13 @@ struct _MeloBrowser {
 struct _MeloBrowserClass {
   GObjectClass parent_class;
 
+  const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
   GList *(*get_list) (MeloBrowser *browser, const gchar *path);
+};
+
+struct _MeloBrowserInfo {
+  const gchar *name;
+  const gchar *description;
 };
 
 struct _MeloBrowserItem {
@@ -61,6 +68,7 @@ GType melo_browser_get_type (void);
 
 MeloBrowser *melo_browser_new (GType type, const gchar *id);
 const gchar *melo_browser_get_id (MeloBrowser *browser);
+const MeloBrowserInfo *melo_browser_get_info (MeloBrowser *browser);
 MeloBrowser *melo_browser_get_browser_by_id (const gchar *id);
 
 GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path);
