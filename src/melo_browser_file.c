@@ -23,6 +23,13 @@
 
 #include "melo_browser_file.h"
 
+/* File browser info */
+static MeloBrowserInfo melo_browser_file_info = {
+  .name = "Browse files",
+  .description = "Navigate though local and remote filesystems",
+};
+
+static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static GList *melo_browser_file_get_list (MeloBrowser *browser,
                                           const gchar *path);
 
@@ -33,12 +40,19 @@ melo_browser_file_class_init (MeloBrowserFileClass *klass)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_CLASS (klass);
 
+  bclass->get_info = melo_browser_file_get_info;
   bclass->get_list = melo_browser_file_get_list;
 }
 
 static void
 melo_browser_file_init (MeloBrowserFile *self)
 {
+}
+
+static const MeloBrowserInfo *
+melo_browser_file_get_info (MeloBrowser *browser)
+{
+  return &melo_browser_file_info;
 }
 
 static GList *
