@@ -65,7 +65,7 @@ function melo_get_browsers(id, ul) {
         return false;
       });
       bro.children("a.open").click(response.result[i].id, function(e) {
-        melo_get_browser_list(e.data);
+        melo_get_browser_list(e.data, "file:/");
         return false;
       });
       ul.append(bro);
@@ -84,18 +84,46 @@ function melo_get_browser_info(id) {
   });
 }
 
-function melo_get_browser_list(id) {
-  jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","file:/"]'),
+var melo_browser_current_id = "";
+var melo_browser_current_path = "";
+
+function melo_get_browser_list(id, path) {
+  jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","' + path + '"]'),
                function(response) {
     if (response.error || !response.result)
       return;
 
+    melo_browser_current_id = id;
+    melo_browser_current_path = path;
+
     $('#browser_list').html("");
     for (var i = 0; i < response.result.length; i++) {
-      var item = $('<li>' + response.result[i].name + '</li>');
+      var item = $('<li><a href="#">' + response.result[i].name + '</a> [' +
+                                        response.result[i].type + ']</li>');
+      if (response.result[i].type = "directory") {
+        var npath = path + response.result[i].name + "/";
+        item.children("a").click([id, npath], function(e) {
+          melo_get_browser_list(e.data[0], e.data[1]);
+          return false;
+        });
+      } else {
+        item.children("a").click(response, function(e) {
+          return false;
+        });
+      }
       $('#browser_list').append(item);
     }
   });
+}
+
+function melo_browser_previous() {
+  var path = melo_browser_current_path;
+  var n = path.lastIndexOf('/', path.length - 2);
+  console.log (path + "..." + n);
+  if (n == -1)
+    return;
+  path = path.substring(0, n + 1);
+  melo_get_browser_list(melo_browser_current_id, path);
 }
 
 $(document).ready(function() {
@@ -104,4 +132,5 @@ $(document).ready(function() {
 
   /* Add click events */
   $("#module_refresh").click(function() {melo_update_list(); return false;});
+  $("#browser_prev").click(function() {melo_browser_previous(); return false;});
 });
