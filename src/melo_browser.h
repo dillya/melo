@@ -61,6 +61,7 @@ struct _MeloBrowserInfo {
 
 struct _MeloBrowserItem {
   gchar *name;
+  gchar *full_name;
   gchar *type;
 };
 

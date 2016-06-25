@@ -179,7 +179,7 @@ melo_browser_item_new (const gchar *name, const gchar *type)
   MeloBrowserItem *item;
 
   /* Allocate new item */
-  item = g_slice_new (MeloBrowserItem);
+  item = g_slice_new0 (MeloBrowserItem);
   if (!item)
     return NULL;
 
@@ -201,6 +201,8 @@ melo_browser_item_free (MeloBrowserItem *item)
 {
   if (item->name)
     g_free (item->name);
+  if (item->full_name)
+    g_free (item->full_name);
   if (item->type)
     g_free (item->type);
   g_slice_free (MeloBrowserItem, item);
