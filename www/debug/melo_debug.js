@@ -65,7 +65,7 @@ function melo_get_browsers(id, ul) {
         return false;
       });
       bro.children("a.open").click(response.result[i].id, function(e) {
-        melo_get_browser_list(e.data, "file:/");
+        melo_get_browser_list(e.data, "/");
         return false;
       });
       ul.append(bro);
