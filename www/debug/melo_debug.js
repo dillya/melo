@@ -98,7 +98,10 @@ function melo_get_browser_list(id, path) {
 
     $('#browser_list').html("");
     for (var i = 0; i < response.result.length; i++) {
-      var item = $('<li><a href="#">' + response.result[i].name + '</a> [' +
+      var name = response.result[i].name;
+      if (response.result[i].full_name != null)
+        name = response.result[i].full_name + ' (' + name + ')';
+      var item = $('<li><a href="#">' + name + '</a> [' +
                                         response.result[i].type + ']</li>');
       if (response.result[i].type = "directory") {
         var npath = path + response.result[i].name + "/";
