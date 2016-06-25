@@ -35,9 +35,13 @@ G_BEGIN_DECLS
 
 typedef struct _MeloBrowserFile MeloBrowserFile;
 typedef struct _MeloBrowserFileClass MeloBrowserFileClass;
+typedef struct _MeloBrowserFilePrivate MeloBrowserFilePrivate;
 
 struct _MeloBrowserFile {
   MeloBrowser parent_instance;
+
+  /*< private >*/
+  MeloBrowserFilePrivate *priv;
 };
 
 struct _MeloBrowserFileClass {
