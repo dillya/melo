@@ -56,7 +56,7 @@ melo_browser_file_get_info (MeloBrowser *browser)
 }
 
 static GList *
-melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
+melo_browser_file_get_local_list (MeloBrowser *browser, const gchar *uri)
 {
   GFileEnumerator *dir_enum;
   GFileInfo *info;
@@ -64,7 +64,7 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
   GList *list = NULL;
 
   /* Open directory */
-  dir = g_file_new_for_uri (path);
+  dir = g_file_new_for_uri (uri);
   if (!dir)
     return NULL;
 
@@ -106,6 +106,46 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
   }
   g_object_unref (dir_enum);
   g_object_unref (dir);
+
+  return list;
+
+}
+
+static const gchar *
+melo_brower_file_fix_path (const gchar *path)
+{
+  while (*path != '\0' && *path == '/')
+    path++;
+  return path;
+}
+
+static GList *
+melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
+{
+  GList *list = NULL;
+  gchar *uri;
+
+  /* Check path */
+  if (!path || *path != '/')
+    return NULL;
+  path++;
+
+  /* Parse path and select list action */
+  if (*path == '\0') {
+    MeloBrowserItem *item;
+
+    /* Root path: "/" */
+    item = melo_browser_item_new ("local", "category");
+    list = g_list_append(list, item);
+  } else if (g_str_has_prefix (path, "local")) {
+    /* Local path: "/local/" */
+    path = melo_brower_file_fix_path (path + 5);
+    uri = g_strdup_printf ("file:/%s", path);
+    list = melo_browser_file_get_local_list (browser, uri);
+    g_free (uri);
+  }
+  else
+    return NULL;
 
   return list;
 }
