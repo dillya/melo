@@ -60,7 +60,7 @@ main (int argc, char *argv[])
   GOptionContext *ctx;
   GError *err = NULL;
   /* HTTP server */
-  SoupServer *server;
+  MeloHTTPD *server;
   /* Main loop */
   GMainLoop *loop;
 
@@ -89,7 +89,9 @@ main (int argc, char *argv[])
   melo_module_register (MELO_TYPE_FILE, "file");
 
   /* Create and start HTTP server */
-  server = melo_httpd_new (8080);
+  server = melo_httpd_new ();
+  if (!melo_httpd_start (server, 8080))
+    goto end;
 
   /* Start main loop */
   loop = g_main_loop_new (NULL, FALSE);
@@ -105,8 +107,10 @@ main (int argc, char *argv[])
   /* End of loop: free main loop */
   g_main_loop_unref (loop);
 
+end:
   /* Stop and Free HTTP server */
-  melo_httpd_free (server);
+  melo_httpd_stop (server);
+  g_object_unref (server);
 
   /* Unregister built-in modules */
   melo_module_unregister ("file");

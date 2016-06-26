@@ -33,22 +33,57 @@
 #include "config.h"
 #endif
 
-SoupServer *
-melo_httpd_new (guint port)
-{
+struct _MeloHTTPDPrivate {
   SoupServer *server;
-  GError *err = NULL;
-  gboolean res;
+};
+
+G_DEFINE_TYPE_WITH_PRIVATE (MeloHTTPD, melo_httpd, G_TYPE_OBJECT)
+
+static void
+melo_httpd_finalize (GObject *gobject)
+{
+  MeloHTTPDPrivate *priv =
+                         melo_httpd_get_instance_private (MELO_HTTPD (gobject));
+
+  /* Free HTTP server */
+  g_object_unref (priv->server);
+
+  /* Chain up to the parent class */
+  G_OBJECT_CLASS (melo_httpd_parent_class)->finalize (gobject);
+}
+
+static void
+melo_httpd_class_init (MeloHTTPDClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  /* Add custom finalize() function */
+  object_class->finalize = melo_httpd_finalize;
+}
+
+static void
+melo_httpd_init (MeloHTTPD *self)
+{
+  MeloHTTPDPrivate *priv = melo_httpd_get_instance_private (self);
+
+  self->priv = priv;
 
   /* Create a new HTTP server */
-  server = soup_server_new (0, NULL);
+  priv->server = soup_server_new (0, NULL);
+}
+
+gboolean
+melo_httpd_start (MeloHTTPD *httpd, guint port)
+{
+  SoupServer *server = httpd->priv->server;
+  GError *err = NULL;
+  gboolean res;
 
   /* Start listening */
   res = soup_server_listen_all (server, port, 0, &err);
   if (res == FALSE) {
     g_clear_error (&err);
-    g_object_unref(&server);
-    return NULL;
+    return FALSE;
   }
 
   /* Add a default handler */
@@ -59,15 +94,18 @@ melo_httpd_new (guint port)
   soup_server_add_handler (server, "/rpc", melo_httpd_jsonrpc_handler, NULL,
                            NULL);
 
-  return server;
+  return TRUE;
 }
 
 void
-melo_httpd_free (SoupServer *server)
+melo_httpd_stop (MeloHTTPD *httpd)
 {
   /* Disconnect all remaining clients */
-  soup_server_disconnect (server);
+  soup_server_disconnect (httpd->priv->server);
+}
 
-  /* Free HTTP server */
-  g_object_unref (server);
+MeloHTTPD *
+melo_httpd_new (void)
+{
+  return g_object_new (MELO_TYPE_HTTPD, NULL);
 }

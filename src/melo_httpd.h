@@ -24,7 +24,35 @@
 
 #include <libsoup/soup.h>
 
-SoupServer *melo_httpd_new (guint port);
-void melo_httpd_free (SoupServer *server);
+G_BEGIN_DECLS
+
+#define MELO_TYPE_HTTPD             (melo_httpd_get_type ())
+#define MELO_HTTPD(obj)             (G_TYPE_CHECK_INSTANCE_CAST ((obj), MELO_TYPE_HTTPD, MeloHTTPD))
+#define MELO_IS_HTTPD(obj)          (G_TYPE_CHECK_INSTANCE_TYPE ((obj), MELO_TYPE_HTTPD))
+#define MELO_HTTPD_CLASS(klass)     (G_TYPE_CHECK_CLASS_CAST ((klass), MELO_TYPE_HTTPD, MeloHTTPDClass))
+#define MELO_IS_HTTPD_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE ((klass), MELO_TYPE_HTTPD))
+#define MELO_HTTPD_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), MELO_TYPE_HTTPD, MeloHTTPDClass))
+
+typedef struct _MeloHTTPD MeloHTTPD;
+typedef struct _MeloHTTPDClass MeloHTTPDClass;
+typedef struct _MeloHTTPDPrivate MeloHTTPDPrivate;
+
+struct _MeloHTTPD {
+  GObject parent_instance;
+
+  /*< private >*/
+  MeloHTTPDPrivate *priv;
+};
+
+struct _MeloHTTPDClass {
+  GObjectClass parent_class;
+};
+
+MeloHTTPD *melo_httpd_new (void);
+
+gboolean melo_httpd_start (MeloHTTPD *httpd, guint port);
+void melo_httpd_stop (MeloHTTPD *httpd);
+
+G_END_DECLS
 
 #endif /* __MELO_HTTPD_H__ */
