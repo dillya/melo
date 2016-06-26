@@ -95,7 +95,11 @@ melo_browser_file_list (GFile *dir)
     return NULL;
 
   /* Get list of directory */
-  dir_enum = g_file_enumerate_children (dir, NULL, 0, NULL, NULL);
+  dir_enum = g_file_enumerate_children (dir,
+                                    G_FILE_ATTRIBUTE_STANDARD_TYPE ","
+                                    G_FILE_ATTRIBUTE_STANDARD_DISPLAY_NAME ","
+                                    G_FILE_ATTRIBUTE_STANDARD_NAME,
+                                    0, NULL, NULL);
   if (!dir_enum)
     return NULL;
 
@@ -118,6 +122,7 @@ melo_browser_file_list (GFile *dir)
 
     /* Create a new browser item and insert in list */
     item = melo_browser_item_new (g_file_info_get_name (info), itype);
+    item->full_name = g_strdup (g_file_info_get_display_name (info));
     list = g_list_insert_sorted (list, item,
                                  (GCompareFunc) melo_browser_item_cmp);
     g_object_unref (info);
