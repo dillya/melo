@@ -31,25 +31,14 @@
 #include "config.h"
 #endif
 
+
 void
-melo_httpd_jsonrpc_handler (SoupServer *server, SoupMessage *msg,
-                            const char *path, GHashTable *query,
-                            SoupClientContext *client, gpointer user_data)
+melo_httpd_jsonrpc_thread_handler (gpointer data, gpointer user_data)
 {
+  SoupServer *server = SOUP_SERVER (user_data);
+  SoupMessage *msg = SOUP_MESSAGE (data);
   GError *err = NULL;
   char *res;
-
-  /* We only support POST method */
-  if (msg->method != SOUP_METHOD_POST) {
-    soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
-    return;
-  }
-
-  /* We only accept "/rpc" path */
-  if (path[4] != '\0') {
-    soup_message_set_status (msg, SOUP_STATUS_BAD_REQUEST);
-    return;
-  }
 
   /* Parse request */
   res = melo_jsonrpc_parse_request (msg->request_body->data,
@@ -64,4 +53,29 @@ melo_httpd_jsonrpc_handler (SoupServer *server, SoupMessage *msg,
   /* Set response */
   soup_message_set_response (msg, "application/json", SOUP_MEMORY_TAKE,
                              res, strlen (res));
+  soup_server_unpause_message (server, msg);
+}
+
+void
+melo_httpd_jsonrpc_handler (SoupServer *server, SoupMessage *msg,
+                            const char *path, GHashTable *query,
+                            SoupClientContext *client, gpointer user_data)
+{
+  GThreadPool *pool = (GThreadPool *) user_data;
+
+  /* We only support POST method */
+  if (msg->method != SOUP_METHOD_POST) {
+    soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
+    return;
+  }
+
+  /* We only accept "/rpc" path */
+  if (path[4] != '\0') {
+    soup_message_set_status (msg, SOUP_STATUS_BAD_REQUEST);
+    return;
+  }
+
+  /* Push request to thread pool */
+  soup_server_pause_message (server, msg);
+  g_thread_pool_push (pool, msg, NULL);
 }

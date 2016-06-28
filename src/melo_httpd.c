@@ -35,6 +35,9 @@
 
 struct _MeloHTTPDPrivate {
   SoupServer *server;
+
+  /* Thread pools */
+  GThreadPool *jsonrpc_pool;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloHTTPD, melo_httpd, G_TYPE_OBJECT)
@@ -47,6 +50,9 @@ melo_httpd_finalize (GObject *gobject)
 
   /* Free HTTP server */
   g_object_unref (priv->server);
+
+  /* Free thread pools */
+  g_thread_pool_free (priv->jsonrpc_pool, TRUE, FALSE);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_httpd_parent_class)->finalize (gobject);
@@ -70,12 +76,17 @@ melo_httpd_init (MeloHTTPD *self)
 
   /* Create a new HTTP server */
   priv->server = soup_server_new (0, NULL);
+
+  /* Init thread pools */
+  priv->jsonrpc_pool = g_thread_pool_new (melo_httpd_jsonrpc_thread_handler,
+                                          priv->server, 10, FALSE, NULL);
 }
 
 gboolean
 melo_httpd_start (MeloHTTPD *httpd, guint port)
 {
-  SoupServer *server = httpd->priv->server;
+  MeloHTTPDPrivate *priv = httpd->priv;
+  SoupServer *server = priv->server;
   GError *err = NULL;
   gboolean res;
 
@@ -91,8 +102,8 @@ melo_httpd_start (MeloHTTPD *httpd, guint port)
                            NULL);
 
   /* Add an handler for JSON-RPC */
-  soup_server_add_handler (server, "/rpc", melo_httpd_jsonrpc_handler, NULL,
-                           NULL);
+  soup_server_add_handler (server, "/rpc", melo_httpd_jsonrpc_handler,
+                           priv->jsonrpc_pool, NULL);
 
   return TRUE;
 }

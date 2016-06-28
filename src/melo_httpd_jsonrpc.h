@@ -25,6 +25,7 @@
 #include <glib.h>
 #include <libsoup/soup.h>
 
+void melo_httpd_jsonrpc_thread_handler (gpointer data, gpointer user_data);
 void melo_httpd_jsonrpc_handler (SoupServer *server, SoupMessage *msg,
                                  const char *path, GHashTable *query,
                                  SoupClientContext *client, gpointer user_data);
