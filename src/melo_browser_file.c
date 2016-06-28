@@ -23,20 +23,21 @@
 
 #include "melo_browser_file.h"
 
+#define MELO_BROWSER_FILE_ID "melo_browser_file_id"
+
 /* File browser info */
 static MeloBrowserInfo melo_browser_file_info = {
   .name = "Browse files",
   .description = "Navigate though local and remote filesystems",
 };
 
-static void volume_added(GVolumeMonitor *monitor, GVolume *vol,
-                         gpointer user_data);
-static void volume_removed(GVolumeMonitor *monitor, GVolume *vol,
-                           gpointer user_data);
-static void mount_added(GVolumeMonitor *monitor, GMount *mnt,
-                        gpointer user_data);
-static void mount_removed(GVolumeMonitor *monitor, GMount *mnt,
-                          gpointer user_data);
+static gint vms_cmp (GObject *a, GObject *b);
+static void vms_added(GVolumeMonitor *monitor, GObject *obj,
+                      MeloBrowserFilePrivate *priv);
+static void vms_removed(GVolumeMonitor *monitor, GObject *obj,
+                        MeloBrowserFilePrivate *priv);
+static void melo_browser_file_set_id (GObject *obj,
+                                      MeloBrowserFilePrivate *priv);
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static GList *melo_browser_file_get_list (MeloBrowser *browser,
                                           const gchar *path);
@@ -44,8 +45,8 @@ static GList *melo_browser_file_get_list (MeloBrowser *browser,
 struct _MeloBrowserFilePrivate {
   GVolumeMonitor *monitor;
   GMutex mutex;
-  GList *volumes;
-  GList *mounts;
+  GList *vms;
+  GHashTable *ids;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloBrowserFile, melo_browser_file, MELO_TYPE_BROWSER)
@@ -63,9 +64,12 @@ melo_browser_file_finalize (GObject *gobject)
   /* Clear mutex */
   g_mutex_clear (&priv->mutex);
 
+  /* Free hash table */
+  g_hash_table_remove_all (priv->ids);
+  g_hash_table_unref (priv->ids);
+
   /* Free volume and mount list */
-  g_list_free_full (priv->mounts, g_object_unref);
-  g_list_free_full (priv->volumes, g_object_unref);
+  g_list_free_full (priv->vms, g_object_unref);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_browser_file_parent_class)->finalize (gobject);
@@ -97,19 +101,26 @@ melo_browser_file_init (MeloBrowserFile *self)
   /* Init mutex */
   g_mutex_init (&priv->mutex);
 
-  /* Get list of volumes and mounts */
-  priv->volumes = g_volume_monitor_get_volumes (priv->monitor);
-  priv->mounts = g_volume_monitor_get_mounts (priv->monitor);
+  /* Get list of volumes and mounts and sort by name */
+  priv->vms = g_list_concat (g_volume_monitor_get_volumes (priv->monitor),
+                             g_volume_monitor_get_mounts (priv->monitor));
+  priv->vms = g_list_sort (priv->vms, (GCompareFunc) vms_cmp);
+
+  /* Init Hash table for IDs */
+  priv->ids = g_hash_table_new (g_str_hash, g_str_equal);
+
+  /* Generate id for each volumes and mounts */
+  g_list_foreach (priv->vms, (GFunc) melo_browser_file_set_id, priv);
 
   /* Subscribe to volume and mount events of volume monitor */
   g_signal_connect (priv->monitor, "volume-added",
-                    (GCallback) volume_added, priv);
+                    (GCallback) vms_added, priv);
   g_signal_connect (priv->monitor, "volume-removed",
-                    (GCallback) volume_removed, priv);
+                    (GCallback) vms_removed, priv);
   g_signal_connect (priv->monitor, "mount_added",
-                    (GCallback) mount_added, priv);
+                    (GCallback) vms_added, priv);
   g_signal_connect (priv->monitor, "mount_removed",
-                    (GCallback) mount_removed, priv);
+                    (GCallback) vms_removed, priv);
 }
 
 static const MeloBrowserInfo *
@@ -119,56 +130,79 @@ melo_browser_file_get_info (MeloBrowser *browser)
 }
 
 static void
-volume_added(GVolumeMonitor *monitor, GVolume *vol, gpointer user_data)
+melo_browser_file_set_id (GObject *obj, MeloBrowserFilePrivate *priv)
 {
-  MeloBrowserFilePrivate *priv = (MeloBrowserFilePrivate *) user_data;
+  gchar *sha1, *id;
 
+  /* Calculate sha1 from GVolume or GMount instance pointer */
+  sha1 = g_compute_checksum_for_data (G_CHECKSUM_SHA1,
+                                      (const guchar *) &obj, sizeof (obj));
+
+  /* Keep only 8 first characters to create ID */
+  id = g_strndup (sha1, 8);
+  g_free (sha1);
+
+  /* Add to object and internal hash table */
+  g_object_set_data_full (obj, MELO_BROWSER_FILE_ID, id, g_free);
+  g_hash_table_insert (priv->ids, id, obj);
+}
+
+static gint
+vms_cmp (GObject *a, GObject *b)
+{
+  gchar *na, *nb;
+  gint ret;
+
+  /* Get name for object a */
+  if (G_IS_VOLUME (a))
+    na = g_volume_get_name (G_VOLUME (a));
+  else
+    na = g_mount_get_name (G_MOUNT (a));
+
+  /* Get name for object b */
+  if (G_IS_VOLUME (b))
+    nb = g_volume_get_name (G_VOLUME (b));
+  else
+    nb = g_mount_get_name (G_MOUNT (b));
+
+  /* Compare names */
+  ret = g_strcmp0 (na, nb);
+  g_free (na);
+  g_free (nb);
+
+  return ret;
+}
+
+static void
+vms_added(GVolumeMonitor *monitor, GObject *obj, MeloBrowserFilePrivate *priv)
+{
   /* Lock volume/mount list */
   g_mutex_lock (&priv->mutex);
 
-  priv->volumes = g_list_append (priv->volumes, vol);
+  /* Add to volume / mount list and set id to object */
+  priv->vms = g_list_insert_sorted (priv->vms, g_object_ref (obj),
+                                    (GCompareFunc) vms_cmp);
+  melo_browser_file_set_id (obj, priv);
 
   /* Unlock volume/mount list */
   g_mutex_unlock (&priv->mutex);
 }
 
 static void
-volume_removed(GVolumeMonitor *monitor, GVolume *vol, gpointer user_data)
+vms_removed(GVolumeMonitor *monitor, GObject *obj, MeloBrowserFilePrivate *priv)
 {
-  MeloBrowserFilePrivate *priv = (MeloBrowserFilePrivate *) user_data;
+  const gchar *id;
 
   /* Lock volume/mount list */
   g_mutex_lock (&priv->mutex);
 
-  priv->volumes = g_list_remove (priv->volumes, vol);
+  /* Remove from hash table */
+  id = g_object_get_data (obj, MELO_BROWSER_FILE_ID);
+  g_hash_table_remove (priv->ids, id);
 
-  /* Unlock volume/mount list */
-  g_mutex_unlock (&priv->mutex);
-}
-
-static void
-mount_added(GVolumeMonitor *monitor, GMount *mnt, gpointer user_data)
-{
-  MeloBrowserFilePrivate *priv = (MeloBrowserFilePrivate *) user_data;
-
-  /* Lock volume/mount list */
-  g_mutex_lock (&priv->mutex);
-
-  priv->mounts = g_list_append (priv->mounts, mnt);
-
-  /* Unlock volume/mount list */
-  g_mutex_unlock (&priv->mutex);
-}
-
-static void
-mount_removed(GVolumeMonitor *monitor, GMount *mnt, gpointer user_data)
-{
-  MeloBrowserFilePrivate *priv = (MeloBrowserFilePrivate *) user_data;
-
-  /* Lock volume/mount list */
-  g_mutex_lock (&priv->mutex);
-
-  priv->mounts = g_list_remove (priv->mounts, mnt);
+  /* Remove from volume / mount list */
+  priv->vms = g_list_remove (priv->vms, obj);
+  g_object_unref (obj);
 
   /* Unlock volume/mount list */
   g_mutex_unlock (&priv->mutex);
@@ -256,91 +290,52 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
   GMount *mount = NULL;
   GFile *root, *dir;
   GList *list;
-  gchar *name;
 
-  /* Extract volume name from path */
-  name = g_strstr_len (path, -1, "/");
-  if (name) {
-    gsize len = name - path;
-    name = g_strndup (path, len);
+  GObject *obj;
+  gchar *id;
+
+  /* Extract volume / mount id from path */
+  id = g_strstr_len (path, -1, "/");
+  if (id) {
+    gsize len = id - path;
+    id = g_strndup (path, len);
     path += len + 1;
   } else {
-    name = g_strdup (path);
+    id = g_strdup (path);
     path = "";
   }
 
-  /* Get mount from volume monitor, through its UUID */
-  if (!mount) {
-    mount = g_volume_monitor_get_mount_for_uuid (priv->monitor, name);
-  }
+  /* Lock volume/mount list */
+  g_mutex_lock (&priv->mutex);
 
-  /* Get mount from its volume, through its UUID */
-  if (!mount) {
-    GVolume *vol = g_volume_monitor_get_volume_for_uuid (priv->monitor, name);
-    if (vol) {
-      g_volume_mount (vol, 0, NULL, NULL, NULL, NULL);
-      mount = g_volume_get_mount (vol);
-      g_object_unref (vol);
-    }
-  }
+  /* Get volume / mount from hash table */
+  obj = g_hash_table_lookup (priv->ids, id);
+  g_free (id);
 
-  /* Get mount from mount list */
-  if (!mount) {
-    GList *l = NULL;
-
-    /* Lock volume/mount list */
-    g_mutex_lock (&priv->mutex);
-
-    /* Find mount in list */
-    for (l = priv->mounts; l != NULL; l = l->next) {
-      GMount *mnt = (GMount *) l->data;
-      gchar *mnt_name = g_mount_get_name (mnt);
-      if (!g_strcmp0 (mnt_name, name)) {
-        mount = g_object_ref (mnt);
-        g_free (mnt_name);
-        break;
-      }
-      g_free (mnt_name);
-    }
-
-    /* Unlock volume/mount list */
+  /* Volume / mount id not found */
+  if (!obj) {
     g_mutex_unlock (&priv->mutex);
+    return NULL;
   }
+  g_object_ref (obj);
 
-  /* Get mount from volume list */
-  if (!mount) {
-    GVolume *vol = NULL;
-    GList *l = NULL;
-    gchar *vol_name;
+  /* Unlock volume/mount list */
+  g_mutex_unlock (&priv->mutex);
 
-    /* Lock volume/mount list */
-    g_mutex_lock (&priv->mutex);
+  /* Extract mount from object */
+  if (G_IS_VOLUME (obj)) {
+    GVolume *vol = G_VOLUME (obj);
 
-    /* Find in volume list */
-    for (l = priv->volumes; l != NULL; l = l->next) {
-      vol = (GVolume *) l->data;
-      vol_name = g_volume_get_name (vol);
-      if (!g_strcmp0 (vol_name, name)) {
-          g_object_ref (vol);
-          g_free (vol_name);
-          break;
-      }
-      g_free (vol_name);
-    }
+    /* Mount volume */
+    g_volume_mount (vol, 0, NULL, NULL, NULL, NULL);
 
-    /* Unlock volume/mount list */
-    g_mutex_unlock (&priv->mutex);
-
-    /* volume found */
-    if (l && vol) {
-      g_volume_mount (vol, 0, NULL, NULL, NULL, NULL);
-      mount = g_volume_get_mount (vol);
-      g_object_unref (vol);
-    }
-  }
+    /* Get mount */
+    mount = g_volume_get_mount (vol);
+    g_object_unref (vol);
+  } else
+    mount = G_MOUNT (obj);
 
   /* Volume doesn't exist */
-  g_free (name);
   if (!mount)
     return NULL;
 
@@ -371,61 +366,53 @@ static GList *
 melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
 {
   MeloBrowserFilePrivate *priv = bfile->priv;
-  MeloBrowserItem *item;
-  GVolume *vol;
-  GMount *mnt;
   GList *l;
-  gchar *full_name, *name;
-  gchar *uuid;
 
   /* Lock volume/mount list */
   g_mutex_lock (&priv->mutex);
 
-  /* Get volume list */
-  for (l = priv->volumes; l != NULL; l = l->next) {
-    /* Get volume */
-    vol = (GVolume *) l->data;
+  /* Get volume / mount list */
+  for (l = priv->vms; l != NULL; l = l->next) {
+    GObject *obj = G_OBJECT (l->data);
+    MeloBrowserItem *item;
+    gchar *full_name, *id;
+    GVolume *vol;
+    GMount *mnt;
 
-    /* Get name and UUID */
-    full_name = g_volume_get_name (vol);
-    uuid = g_volume_get_uuid (vol);
-    if (uuid) {
-      name = g_strdup_printf ("_%s", uuid);
-      g_free (uuid);
-    } else
-      name = g_strdup_printf ("_%s", full_name);
+    /* Get mount if possible or volume */
+    if (G_IS_VOLUME (obj)) {
+      vol = G_VOLUME (obj);
 
-    /* Create item */
-    item = melo_browser_item_new (NULL, "category");
-    item->name = name;
-    item->full_name = full_name;
-    list = g_list_append(list, item);
-  }
+      /* Get mount */
+      mnt = g_volume_get_mount (vol);
+      if (!mnt)
+        g_object_ref (vol);
+    } else {
+      mnt = G_MOUNT (obj);
 
-  /* Complete with mount list */
-  for (l = priv->mounts; l != NULL; l = l->next) {
-    /* Get mount */
-    mnt = (GMount *) l->data;
-
-    /* Skip if mount has a volume */
-    vol = g_mount_get_volume (mnt);
-    if (vol) {
-      g_object_unref (vol);
-      continue;
+      /* Skip if mount has a volume */
+      vol = g_mount_get_volume (mnt);
+      if (vol) {
+        g_object_unref (vol);
+        continue;
+      } else
+        g_object_ref (mnt);
     }
 
-    /* Get name */
-    full_name = g_mount_get_name (mnt);
-    uuid = g_mount_get_uuid (mnt);
-    if (uuid) {
-      name = g_strdup_printf ("_%s", uuid);
-      g_free (uuid);
-    } else
-      name = g_strdup_printf ("_%s", full_name);
+    /* Get id and full name */
+    if (mnt) {
+      full_name = g_mount_get_name (mnt);
+      id = g_strdup (g_object_get_data (G_OBJECT (mnt), MELO_BROWSER_FILE_ID));
+      g_object_unref (mnt);
+    } else {
+      full_name = g_volume_get_name (vol);
+      id = g_strdup (g_object_get_data (G_OBJECT (vol), MELO_BROWSER_FILE_ID));
+      g_object_unref (vol);
+    }
 
     /* Create item */
     item = melo_browser_item_new (NULL, "category");
-    item->name = name;
+    item->name = id;
     item->full_name = full_name;
     list = g_list_append(list, item);
   }
@@ -460,18 +447,16 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
 
     /* Add local volumes to list */
     list = melo_browser_file_list_volumes (bfile, list);
-  } else if (*path == '_') {
-    /* Volume path: "/_VOLUME_NAME/" */
-    list = melo_browser_file_get_volume_list (bfile, path + 1);
   } else if (g_str_has_prefix (path, "local")) {
     /* Local path: "/local/" */
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:/%s", path);
     list = melo_browser_file_get_local_list (uri);
     g_free (uri);
+  } else {
+    /* Volume path: "/VOLUME_ID/" */
+    list = melo_browser_file_get_volume_list (bfile, path);
   }
-  else
-    return NULL;
 
   return list;
 }
