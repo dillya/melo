@@ -208,6 +208,15 @@ vms_removed(GVolumeMonitor *monitor, GObject *obj, MeloBrowserFilePrivate *priv)
   g_mutex_unlock (&priv->mutex);
 }
 
+static void
+mount_ready (GObject *obj, GAsyncResult *res, gpointer user_data)
+{
+  GMutex *mutex = user_data;
+
+  /* Signal end of mount task */
+  g_mutex_unlock (mutex);
+}
+
 static const gchar *
 melo_brower_file_fix_path (const gchar *path)
 {
@@ -326,11 +335,23 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
   if (G_IS_VOLUME (obj)) {
     GVolume *vol = G_VOLUME (obj);
 
-    /* Mount volume */
-    g_volume_mount (vol, 0, NULL, NULL, NULL, NULL);
-
     /* Get mount */
     mount = g_volume_get_mount (vol);
+    if (!mount) {
+      GMutex mutex;
+
+      /* Mount volume */
+      g_mutex_init (&mutex);
+      g_mutex_lock (&mutex);
+      g_volume_mount (vol, 0, NULL, NULL, mount_ready, &mutex);
+
+      /* Wait for end of mount operation and get GMount */
+      g_mutex_lock (&mutex);
+      mount = g_volume_get_mount (vol);
+      g_mutex_unlock (&mutex);
+      g_mutex_clear (&mutex);
+    }
+
     g_object_unref (vol);
   } else
     mount = G_MOUNT (obj);
