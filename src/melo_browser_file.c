@@ -41,6 +41,8 @@ static void melo_browser_file_set_id (GObject *obj,
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static GList *melo_browser_file_get_list (MeloBrowser *browser,
                                           const gchar *path);
+static gboolean melo_browser_file_remove (MeloBrowser *browser,
+                                          const gchar *path);
 
 struct _MeloBrowserFilePrivate {
   GVolumeMonitor *monitor;
@@ -83,6 +85,7 @@ melo_browser_file_class_init (MeloBrowserFileClass *klass)
 
   bclass->get_info = melo_browser_file_get_info;
   bclass->get_list = melo_browser_file_get_list;
+  bclass->remove = melo_browser_file_remove;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_browser_file_finalize;
@@ -209,7 +212,7 @@ vms_removed(GVolumeMonitor *monitor, GObject *obj, MeloBrowserFilePrivate *priv)
 }
 
 static void
-mount_ready (GObject *obj, GAsyncResult *res, gpointer user_data)
+async_done (GObject *obj, GAsyncResult *res, gpointer user_data)
 {
   GMutex *mutex = user_data;
 
@@ -343,7 +346,7 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
       /* Mount volume */
       g_mutex_init (&mutex);
       g_mutex_lock (&mutex);
-      g_volume_mount (vol, 0, NULL, NULL, mount_ready, &mutex);
+      g_volume_mount (vol, 0, NULL, NULL, async_done, &mutex);
 
       /* Wait for end of mount operation and get GMount */
       g_mutex_lock (&mutex);
@@ -397,6 +400,7 @@ melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
     GObject *obj = G_OBJECT (l->data);
     MeloBrowserItem *item;
     gchar *full_name, *id;
+    gchar *remove = NULL;
     GVolume *vol;
     GMount *mnt;
 
@@ -424,10 +428,14 @@ melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
     if (mnt) {
       full_name = g_mount_get_name (mnt);
       id = g_strdup (g_object_get_data (G_OBJECT (mnt), MELO_BROWSER_FILE_ID));
+      if (g_mount_can_unmount (mnt))
+        remove = g_strdup ("eject");
       g_object_unref (mnt);
     } else {
       full_name = g_volume_get_name (vol);
       id = g_strdup (g_object_get_data (G_OBJECT (vol), MELO_BROWSER_FILE_ID));
+      if (g_volume_can_eject (vol))
+        remove = g_strdup ("eject");
       g_object_unref (vol);
     }
 
@@ -435,6 +443,7 @@ melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
     item = melo_browser_item_new (NULL, "category");
     item->name = id;
     item->full_name = full_name;
+    item->remove = remove;
     list = g_list_append(list, item);
   }
 
@@ -480,4 +489,85 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
   }
 
   return list;
+}
+
+static gboolean
+melo_browser_file_remove (MeloBrowser *browser, const gchar *path)
+{
+  MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
+  MeloBrowserFilePrivate *priv = bfile->priv;
+  GMutex mutex;
+  GObject *obj;
+  GVolume *vol;
+  GMount *mnt;
+  gchar *id;
+
+  /* Not valid */
+  if (*path != '/')
+    return FALSE;
+  path++;
+
+  /* Get id */
+  id = g_strstr_len (path, -1, "/");
+  if (id) {
+    gsize len = id - path;
+    if (path[len + 1] != '\0')
+      return FALSE;
+    id = g_strndup (path, len);
+  } else
+    id = g_strdup (path);
+
+  /* Lock volume / mount list */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get GObject from hash table */
+  obj = g_hash_table_lookup (priv->ids, id);
+  g_free (id);
+
+  /* Not found */
+  if (!obj) {
+    g_mutex_unlock (&priv->mutex);
+    return FALSE;
+  }
+  g_object_ref (obj);
+
+  /* Unlock volume / mount list */
+  g_mutex_unlock (&priv->mutex);
+
+  /* Eject */
+  if (G_IS_MOUNT (obj)) {
+    mnt = G_MOUNT (obj);
+
+    /* Try to get volume */
+    vol = g_mount_get_volume (mnt);
+  } else {
+    vol = G_VOLUME (obj);
+    mnt = NULL;
+  }
+
+  /* Unmount or eject */
+  g_mutex_init (&mutex);
+  g_mutex_lock (&mutex);
+  if (vol) {
+    /* Eject */
+    g_volume_eject_with_operation (vol, 0, NULL, NULL, async_done, &mutex);
+
+    /* Wait end of operation */
+    g_mutex_lock (&mutex);
+    vms_removed(priv->monitor, G_OBJECT (vol), priv);
+    if (mnt)
+      vms_removed(priv->monitor, G_OBJECT (mnt), priv);
+    g_mutex_unlock (&mutex);
+  } else {
+    /* Unmount */
+    g_mount_unmount_with_operation (mnt, 0, NULL, NULL, async_done, &mutex);
+
+    /* Wait end of operation */
+    g_mutex_lock (&mutex);
+    vms_removed(priv->monitor, G_OBJECT (mnt), priv);
+    g_mutex_unlock (&mutex);
+  }
+  g_mutex_clear (&mutex);
+
+  return TRUE;
 }
