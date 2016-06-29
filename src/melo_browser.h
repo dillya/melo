@@ -52,6 +52,7 @@ struct _MeloBrowserClass {
 
   const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
   GList *(*get_list) (MeloBrowser *browser, const gchar *path);
+  gboolean (*remove) (MeloBrowser *browser, const gchar *path);
 };
 
 struct _MeloBrowserInfo {
@@ -74,6 +75,7 @@ const MeloBrowserInfo *melo_browser_get_info (MeloBrowser *browser);
 MeloBrowser *melo_browser_get_browser_by_id (const gchar *id);
 
 GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path);
+gboolean melo_browser_remove (MeloBrowser *browser, const gchar *path);
 
 MeloBrowserItem *melo_browser_item_new (const gchar *name, const gchar *type);
 gint melo_browser_item_cmp (const MeloBrowserItem *a, const MeloBrowserItem *b);

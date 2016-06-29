@@ -184,6 +184,46 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   json_node_take_array (*result, array);
 }
 
+static void
+melo_browser_jsonrpc_remove (const gchar *method,
+                             JsonArray *s_params, JsonNode *params,
+                             JsonNode **result, JsonNode **error,
+                             gpointer user_data)
+{
+  const gchar *path;
+  MeloBrowser *bro;
+  JsonObject *obj;
+  gboolean ret;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get browser from ID */
+  bro = melo_browser_jsonrpc_get_browser (obj, error);
+  if (!bro) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get path */
+  path = json_object_get_string_member (obj, "path");
+
+  /* Remove item */
+  ret = melo_browser_remove (bro, path);
+  json_object_unref (obj);
+  g_object_unref (bro);
+
+  /* Create result object */
+  obj = json_object_new ();
+  json_object_set_boolean_member (obj, "done", ret);
+
+  /* Return array */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
 /* List of methods */
 static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
   {
@@ -215,6 +255,16 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"array\"}",
     .callback = melo_browser_jsonrpc_get_list,
+    .user_data = NULL,
+  },
+  {
+    .method = "remove",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"path\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"array\"}",
+    .callback = melo_browser_jsonrpc_remove,
     .user_data = NULL,
   },
 };
