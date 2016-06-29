@@ -63,6 +63,7 @@ struct _MeloBrowserItem {
   gchar *name;
   gchar *full_name;
   gchar *type;
+  gchar *remove;
 };
 
 GType melo_browser_get_type (void);

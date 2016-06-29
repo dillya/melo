@@ -205,5 +205,7 @@ melo_browser_item_free (MeloBrowserItem *item)
     g_free (item->full_name);
   if (item->type)
     g_free (item->type);
+  if (item->remove)
+    g_free (item->remove);
   g_slice_free (MeloBrowserItem, item);
 }

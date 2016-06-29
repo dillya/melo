@@ -172,6 +172,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
     json_object_set_string_member (obj, "name", item->name);
     json_object_set_string_member (obj, "full_name", item->full_name);
     json_object_set_string_member (obj, "type", item->type);
+    json_object_set_string_member (obj, "remove", item->remove);
     json_array_add_object_element (array, obj);
   }
 
