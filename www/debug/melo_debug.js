@@ -16,6 +16,7 @@ function melo_update_list() {
 
     /* Generate module list */
     $("#module_list").html("");
+    $("#player_list").html("");
     for (var i = 0; i < response.result.length; i++) {
       /* Generate module item */
       var mod = $('<li>' + response.result[i].name + ' [' +
@@ -40,6 +41,9 @@ function melo_update_list() {
 
       /* Add item to list */
       $("#module_list").append(mod);
+
+      /* Add players of module */
+      melo_add_players(response.result[i].id, response.result[i].name);
     }
   });
 }
@@ -184,6 +188,22 @@ function melo_browser_previous() {
   /* Get parent and update list */
   path = path.substring(0, n + 1);
   melo_get_browser_list(melo_browser_current_id, path);
+}
+
+function melo_add_players(id, name) {
+  jsonrpc_call("module.get_player_list", JSON.parse('["' + id + '"]'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
+
+    /* Add players */
+    $("#player_list").append('<p><span class="title">' + name + ':</span></p>');
+    for (var i = 0; i < response.result.length; i++) {
+      /* Add player to list */
+      $("#player_list").append('<p> + <span class="title">' +
+                                response.result[i] + '</span></p>');
+    }
+  });
 }
 
 $(document).ready(function() {
