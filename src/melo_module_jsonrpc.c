@@ -238,6 +238,52 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
   json_node_take_array (*result, array);
 }
 
+static void
+melo_module_jsonrpc_get_player_list (const gchar *method,
+                                     JsonArray *s_params, JsonNode *params,
+                                     JsonNode **result, JsonNode **error,
+                                     gpointer user_data)
+{
+  MeloPlayer *play;
+  MeloModule *mod;
+  JsonArray *array;
+  JsonObject *obj;
+  const gchar *id;
+  GList *list;
+  GList *l;
+
+  /* Get module from id */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  mod = melo_module_jsonrpc_get_module (obj, error);
+  if (!mod) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get player list */
+  list = melo_module_get_player_list (mod);
+  json_object_unref (obj);
+  g_object_unref (mod);
+
+  /* Generate list */
+  array = json_array_new ();
+  for (l = list; l != NULL; l = l->next) {
+    play = MELO_PLAYER (l->data);
+    id = melo_player_get_id (play);
+    json_array_add_string_element (array, id);
+  }
+
+  /* Free player list */
+  g_list_free_full (list, g_object_unref);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_ARRAY);
+  json_node_take_array (*result, array);
+}
+
 /* List of methods */
 static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
   {
@@ -276,6 +322,15 @@ static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"array\"}",
     .callback = melo_module_jsonrpc_get_browser_list,
+    .user_data = NULL,
+  },
+  {
+    .method = "get_player_list",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"array\"}",
+    .callback = melo_module_jsonrpc_get_player_list,
     .user_data = NULL,
   },
 };
