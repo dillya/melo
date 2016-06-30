@@ -25,6 +25,7 @@
 #include <glib-object.h>
 
 #include "melo_browser.h"
+#include "melo_player.h"
 
 G_BEGIN_DECLS
 
@@ -69,6 +70,11 @@ gboolean melo_module_register_browser (MeloModule *module,
                                        MeloBrowser *browser);
 void melo_module_unregister_browser (MeloModule *module, const char *id);
 GList *melo_module_get_browser_list (MeloModule *module);
+
+/* Register a player */
+gboolean melo_module_register_player (MeloModule *module, MeloPlayer *player);
+void melo_module_unregister_player (MeloModule *module, const char *id);
+GList *melo_module_get_player_list (MeloModule *module);
 
 /* Register a new module */
 gboolean melo_module_register (GType type, const gchar *id);

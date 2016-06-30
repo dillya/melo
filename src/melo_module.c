@@ -29,8 +29,13 @@ static GList *melo_modules_list = NULL;
 struct _MeloModulePrivate {
   gchar *id;
 
+  /* Browser list */
   GMutex browser_mutex;
   GList *browser_list;
+
+  /* Player list */
+  GMutex player_mutex;
+  GList *player_list;
 };
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloModule, melo_module, G_TYPE_OBJECT)
@@ -43,6 +48,10 @@ melo_module_finalize (GObject *gobject)
 
   if (priv->id)
     g_free (priv->id);
+
+  /* Free player list */
+  g_list_free_full (priv->player_list, g_object_unref);
+  g_mutex_clear (&priv->player_mutex);
 
   /* Free browser list */
   g_list_free_full (priv->browser_list, g_object_unref);
@@ -72,6 +81,10 @@ melo_module_init (MeloModule *self)
   /* Init browser list */
   g_mutex_init (&priv->browser_mutex);
   priv->browser_list = NULL;
+
+  /* Init player list */
+  g_mutex_init (&priv->player_mutex);
+  priv->player_list = NULL;
 }
 
 static void
@@ -165,6 +178,75 @@ melo_module_get_browser_list (MeloModule *module)
   g_mutex_unlock (&priv->browser_mutex);
 
   return list;
+}
+
+/* Register a player into module */
+gboolean
+melo_module_register_player (MeloModule *module, MeloPlayer *player)
+{
+  MeloModulePrivate *priv = module->priv;
+
+  /* Lock player list */
+  g_mutex_lock (&priv->player_mutex);
+
+  /* Check if player is already registered */
+  if (g_list_find (priv->player_list, player))
+    goto failed;
+
+  /* Add to player list */
+  priv->player_list = g_list_append (priv->player_list,
+                                      g_object_ref (player));
+
+  /* Unlock player list */
+  g_mutex_unlock (&priv->player_mutex);
+
+  return TRUE;
+
+failed:
+  g_mutex_unlock (&priv->player_mutex);
+  return FALSE;
+}
+
+void
+melo_module_unregister_player (MeloModule *module, const char *id)
+{
+  MeloModulePrivate *priv = module->priv;
+  MeloPlayer *play;
+
+  /* Lock player list */
+  g_mutex_lock (&priv->player_mutex);
+
+  /* Find player with its id */
+  play = melo_player_get_player_by_id (id);
+  if (!play)
+    goto unlock;
+
+  /* Remove player from list */
+  priv->player_list = g_list_remove (priv->player_list, play);
+  g_object_unref (play);
+
+unlock:
+  /* Unlock player list */
+  g_mutex_unlock (&priv->player_mutex);
+}
+
+GList *
+melo_module_get_player_list (MeloModule *module)
+{
+  MeloModulePrivate *priv = module->priv;
+  GList *list;
+
+  /* Lock player list */
+  g_mutex_lock (&priv->player_mutex);
+
+  /* Copy list */
+  list = g_list_copy_deep (priv->player_list, (GCopyFunc) g_object_ref, NULL);
+
+  /* Unlock player list */
+  g_mutex_unlock (&priv->player_mutex);
+
+  return list;
+
 }
 
 /* Register a new module */
