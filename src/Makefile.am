@@ -17,14 +17,16 @@ melolib_LTLIBRARIES = \
 libmelo_la_SOURCES = \
 	melo_module.c \
 	melo_browser.c \
-	melo_browser_jsonrpc.c \
+	melo_player.c \
 	melo_module_jsonrpc.c \
+	melo_browser_jsonrpc.c \
 	melo_jsonrpc.c
 
 meloincludedir = $(includedir)/melo
 meloinclude_HEADERS = \
 	melo_module.h \
 	melo_browser.h \
+	melo_player.h \
 	melo_browser_jsonrpc.h \
 	melo_jsonrpc.h
 
