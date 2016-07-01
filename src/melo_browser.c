@@ -196,11 +196,21 @@ melo_browser_get_list (MeloBrowser *browser, const gchar *path)
 }
 
 gboolean
+melo_browser_play (MeloBrowser *browser, const gchar *path)
+{
+  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
+
+  g_return_val_if_fail (bclass->play, FALSE);
+
+  return bclass->play (browser, path);
+}
+
+gboolean
 melo_browser_remove (MeloBrowser *browser, const gchar *path)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
-  g_return_val_if_fail (bclass->remove, NULL);
+  g_return_val_if_fail (bclass->remove, FALSE);
 
   return bclass->remove (browser, path);
 }
