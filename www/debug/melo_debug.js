@@ -200,9 +200,37 @@ function melo_add_players(id, name) {
     $("#player_list").append('<p><span class="title">' + name + ':</span></p>');
     for (var i = 0; i < response.result.length; i++) {
       /* Add player to list */
-      $("#player_list").append('<p> + <span class="title">' +
-                                response.result[i] + '</span></p>');
+      var player = $('<p> + <span class="title">' + response.result[i] + '</span>' +
+                            ' [<a href="#">refresh</a>]</p>');
+      var stat = $('<p></p>');
+
+      /* Add a link for refresh */
+      player.children("a").click([response.result[i], stat], function(e) {
+        melo_update_player(e.data[0], e.data[1]);
+        return false;
+      });
+
+      /* Get status */
+      melo_update_player(response.result[i], stat);
+
+      /* Add player */
+      $("#player_list").append(player);
+      $("#player_list").append(stat);
     }
+  });
+}
+
+function melo_update_player(id, element) {
+  jsonrpc_call("player.get_status", JSON.parse('["' + id + '",["full"]]'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
+
+    /* Add players */
+    element.html("State: " + response.result.state + "<br>" +
+             "Name: " + response.result.name + "<br>" +
+             "Pos: " + response.result.pos + " / " +
+                       response.result.duration);
   });
 }
 
