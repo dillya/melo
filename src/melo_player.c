@@ -152,6 +152,16 @@ failed:
   return NULL;
 }
 
+gboolean
+melo_player_play (MeloPlayer *player, const gchar *path)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->play, FALSE);
+
+  return pclass->play (player, path);
+}
+
 MeloPlayerState
 melo_player_get_state (MeloPlayer *player)
 {

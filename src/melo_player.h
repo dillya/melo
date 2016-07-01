@@ -56,6 +56,10 @@ struct _MeloPlayer {
 struct _MeloPlayerClass {
   GObjectClass parent_class;
 
+  /* Control callbacks */
+  gboolean (*play) (MeloPlayer *player, const gchar *path);
+
+  /* Status callbacks */
   MeloPlayerState (*get_state) (MeloPlayer *player);
   gchar *(*get_name) (MeloPlayer *player);
   gint (*get_pos) (MeloPlayer *player, gint *duration);
@@ -74,6 +78,8 @@ GType melo_player_get_type (void);
 MeloPlayer *melo_player_new (GType type, const gchar *id);
 const gchar *melo_player_get_id (MeloPlayer *player);
 MeloPlayer *melo_player_get_player_by_id (const gchar *id);
+
+gboolean melo_player_play (MeloPlayer *player, const gchar *path);
 
 MeloPlayerState melo_player_get_state (MeloPlayer *player);
 gchar *melo_player_get_name (MeloPlayer *player);
