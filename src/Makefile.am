@@ -20,6 +20,7 @@ libmelo_la_SOURCES = \
 	melo_player.c \
 	melo_module_jsonrpc.c \
 	melo_browser_jsonrpc.c \
+	melo_player_jsonrpc.c \
 	melo_jsonrpc.c
 
 meloincludedir = $(includedir)/melo
@@ -28,6 +29,7 @@ meloinclude_HEADERS = \
 	melo_browser.h \
 	melo_player.h \
 	melo_browser_jsonrpc.h \
+	melo_player_jsonrpc.h \
 	melo_jsonrpc.h
 
 # File module library

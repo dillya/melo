@@ -30,6 +30,7 @@
 
 #include "melo_file.h"
 #include "melo_httpd.h"
+#include "melo_player_jsonrpc.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -84,6 +85,7 @@ main (int argc, char *argv[])
   /* Register standard JSON-RPC methods */
   melo_module_register_methods ();
   melo_browser_register_methods ();
+  melo_player_register_methods ();
 
   /* Register built-in modules */
   melo_module_register (MELO_TYPE_FILE, "file");
@@ -116,6 +118,7 @@ end:
   melo_module_unregister ("file");
 
   /* Unregister standard JSON-RPC methods */
+  melo_player_unregister_methods ();
   melo_browser_unregister_methods ();
   melo_module_unregister_methods ();
 
