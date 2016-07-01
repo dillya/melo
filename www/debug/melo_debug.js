@@ -124,6 +124,7 @@ function melo_get_browser_list(id, path) {
     for (var i = 0; i < response.result.length; i++) {
       var name = response.result[i].name;
       var npath = path + response.result[i].name + "/";
+      var fpath = path + response.result[i].name;
 
       /* Use full name when available */
       if (response.result[i].full_name != null)
@@ -143,7 +144,8 @@ function melo_get_browser_list(id, path) {
         });
       } else {
         /* Do action on file / item */
-        item.children("a").click(response, function(e) {
+        item.children("a").click([id, fpath], function(e) {
+          melo_browser_play(e.data[0], e.data[1]);
           return false;
         });
       }
@@ -163,6 +165,14 @@ function melo_get_browser_list(id, path) {
       /* Add item */
       $('#browser_list').append(item);
     }
+  });
+}
+
+function melo_browser_play(id, path) {
+  jsonrpc_call("browser.play", JSON.parse('["' + id + '","' + path + '"]'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
   });
 }
 
