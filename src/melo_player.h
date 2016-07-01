@@ -37,6 +37,15 @@ typedef struct _MeloPlayer MeloPlayer;
 typedef struct _MeloPlayerClass MeloPlayerClass;
 typedef struct _MeloPlayerPrivate MeloPlayerPrivate;
 
+typedef struct _MeloPlayerStatus MeloPlayerStatus;
+
+typedef enum {
+  MELO_PLAYER_STATE_NONE,
+  MELO_PLAYER_STATE_PLAYING,
+  MELO_PLAYER_STATE_PAUSED,
+  MELO_PLAYER_STATE_STOPPED
+} MeloPlayerState;
+
 struct _MeloPlayer {
   GObject parent_instance;
 
@@ -46,6 +55,18 @@ struct _MeloPlayer {
 
 struct _MeloPlayerClass {
   GObjectClass parent_class;
+
+  MeloPlayerState (*get_state) (MeloPlayer *player);
+  gchar *(*get_name) (MeloPlayer *player);
+  gint (*get_pos) (MeloPlayer *player, gint *duration);
+  MeloPlayerStatus *(*get_status) (MeloPlayer *player);
+};
+
+struct _MeloPlayerStatus {
+  MeloPlayerState state;
+  gchar *name;
+  gint pos;
+  gint duration;
 };
 
 GType melo_player_get_type (void);
@@ -53,6 +74,15 @@ GType melo_player_get_type (void);
 MeloPlayer *melo_player_new (GType type, const gchar *id);
 const gchar *melo_player_get_id (MeloPlayer *player);
 MeloPlayer *melo_player_get_player_by_id (const gchar *id);
+
+MeloPlayerState melo_player_get_state (MeloPlayer *player);
+gchar *melo_player_get_name (MeloPlayer *player);
+gint melo_player_get_pos (MeloPlayer *player, gint *duration);
+MeloPlayerStatus *melo_player_get_status (MeloPlayer *player);
+
+MeloPlayerStatus *melo_player_status_new (MeloPlayerState state,
+                                          const gchar *name);
+void melo_player_status_free (MeloPlayerStatus *status);
 
 G_END_DECLS
 

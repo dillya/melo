@@ -151,3 +151,72 @@ failed:
   G_UNLOCK (melo_player_mutex);
   return NULL;
 }
+
+MeloPlayerState
+melo_player_get_state (MeloPlayer *player)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->get_state, MELO_PLAYER_STATE_NONE);
+
+  return pclass->get_state (player);
+}
+
+gchar *
+melo_player_get_name (MeloPlayer *player)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->get_name, NULL);
+
+  return pclass->get_name (player);
+}
+
+gint
+melo_player_get_pos (MeloPlayer *player, gint *duration)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  if (!pclass->get_pos) {
+    if (duration)
+      *duration = 0;
+    return 0;
+  }
+
+  return pclass->get_pos (player, duration);
+}
+
+MeloPlayerStatus *
+melo_player_get_status (MeloPlayer *player)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->get_status, NULL);
+
+  return pclass->get_status (player);
+}
+
+MeloPlayerStatus *
+melo_player_status_new (MeloPlayerState state, const gchar *name)
+{
+  MeloPlayerStatus *status;
+
+  /* Allocate new status */
+  status = g_slice_new0 (MeloPlayerStatus);
+  if (!status)
+    return NULL;
+
+  /* Set state and name */
+  status->state = state;
+  status->name = g_strdup (name);
+
+  return status;
+}
+
+void
+melo_player_status_free (MeloPlayerStatus *status)
+{
+  if (status->name)
+    g_free (status->name);
+  g_slice_free (MeloPlayerStatus, status);
+}
