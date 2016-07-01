@@ -21,14 +21,51 @@
 
 #include "melo_player_file.h"
 
+static MeloPlayerState melo_player_file_get_state (MeloPlayer *player);
+static gchar *melo_player_file_get_name (MeloPlayer *player);
+static gint melo_player_file_get_pos (MeloPlayer *player, gint *duration);
+static MeloPlayerStatus *melo_player_file_get_status (MeloPlayer *player);
+
 G_DEFINE_TYPE (MeloPlayerFile, melo_player_file, MELO_TYPE_PLAYER)
 
 static void
 melo_player_file_class_init (MeloPlayerFileClass *klass)
 {
+  MeloPlayerClass *pclass = MELO_PLAYER_CLASS (klass);
+
+  pclass->get_state = melo_player_file_get_state;
+  pclass->get_name = melo_player_file_get_name;
+  pclass->get_pos = melo_player_file_get_pos;
+  pclass->get_status = melo_player_file_get_status;
 }
 
 static void
 melo_player_file_init (MeloPlayerFile *self)
 {
+}
+
+static MeloPlayerState
+melo_player_file_get_state (MeloPlayer *player)
+{
+  return MELO_PLAYER_STATE_NONE;
+}
+
+static gchar *
+melo_player_file_get_name (MeloPlayer *player)
+{
+  return NULL;
+}
+
+static gint
+melo_player_file_get_pos (MeloPlayer *player, gint *duration)
+{
+  if (duration)
+    *duration = 0;
+  return 0;
+}
+
+static MeloPlayerStatus *
+melo_player_file_get_status (MeloPlayer *player)
+{
+  return melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
 }
