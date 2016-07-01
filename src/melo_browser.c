@@ -51,6 +51,10 @@ melo_browser_finalize (GObject *gobject)
   if (priv->id)
     g_free (priv->id);
 
+  /* Unref attached player */
+  if (browser->player)
+    g_object_unref (browser->player);
+
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_browser_parent_class)->finalize (gobject);
 }
@@ -161,6 +165,24 @@ melo_browser_new (GType type, const gchar *id)
 failed:
   G_UNLOCK (melo_browser_mutex);
   return NULL;
+}
+
+
+void
+melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player)
+{
+  if (browser->player)
+    g_object_unref (browser->player);
+
+  browser->player = g_object_ref (player);
+}
+
+MeloPlayer *
+melo_browser_get_player (MeloBrowser *browser)
+{
+  g_return_val_if_fail (browser->player, NULL);
+
+  return g_object_ref (browser->player);
 }
 
 GList *

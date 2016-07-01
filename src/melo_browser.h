@@ -24,6 +24,8 @@
 
 #include <glib-object.h>
 
+#include "melo_player.h"
+
 G_BEGIN_DECLS
 
 #define MELO_TYPE_BROWSER             (melo_browser_get_type ())
@@ -42,6 +44,9 @@ typedef struct _MeloBrowserItem MeloBrowserItem;
 
 struct _MeloBrowser {
   GObject parent_instance;
+
+  /*< protected */
+  MeloPlayer *player;
 
   /*< private >*/
   MeloBrowserPrivate *priv;
@@ -73,6 +78,9 @@ MeloBrowser *melo_browser_new (GType type, const gchar *id);
 const gchar *melo_browser_get_id (MeloBrowser *browser);
 const MeloBrowserInfo *melo_browser_get_info (MeloBrowser *browser);
 MeloBrowser *melo_browser_get_browser_by_id (const gchar *id);
+
+void melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player);
+MeloPlayer *melo_browser_get_player (MeloBrowser *browser);
 
 GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_remove (MeloBrowser *browser, const gchar *path);
