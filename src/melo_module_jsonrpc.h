@@ -1,5 +1,5 @@
 /*
- * melo_browser_jsonrpc.h: Browser base JSON-RPC interface
+ * melo_module_jsonrpc.h: Module base JSON-RPC interface
  *
  * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
  *
@@ -19,27 +19,15 @@
  * Boston, MA  02110-1301, USA.
  */
 
-#ifndef __MELO_BROWSER_JSONRPC_H__
-#define __MELO_BROWSER_JSONRPC_H__
+#ifndef __MELO_MODULE_JSONRPC_H__
+#define __MELO_MODULE_JSONRPC_H__
 
-#include "melo_browser.h"
+#include "melo_module.h"
 #include "melo_jsonrpc.h"
 
-typedef enum {
-  MELO_BROWSER_JSONRPC_FIELDS_NONE = 0,
-  MELO_BROWSER_JSONRPC_FIELDS_NAME = 1,
-  MELO_BROWSER_JSONRPC_FIELDS_DESCRIPTION = 2,
-  MELO_BROWSER_JSONRPC_FIELDS_FULL = 255,
-} MeloBrowserJSONRPCFields;
-
-MeloBrowserJSONRPCFields melo_browser_jsonrpc_get_fields (JsonObject *obj);
-JsonObject *melo_browser_jsonrpc_info_to_object (
-                                               const gchar *id,
-                                               const MeloBrowserInfo *info,
-                                               MeloBrowserJSONRPCFields fields);
-
 /* JSON-RPC methods */
-void melo_browser_register_methods (void);
-void melo_browser_unregister_methods (void);
+void melo_module_register_methods (void);
+void melo_module_unregister_methods (void);
 
-#endif /* __MELO_BROWSER_JSONRPC_H__ */
+
+#endif /* __MELO_MODULE_JSONRPC_H__ */

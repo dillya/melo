@@ -30,6 +30,9 @@
 
 #include "melo_file.h"
 #include "melo_httpd.h"
+
+#include "melo_module_jsonrpc.h"
+#include "melo_browser_jsonrpc.h"
 #include "melo_player_jsonrpc.h"
 
 #ifdef HAVE_CONFIG_H

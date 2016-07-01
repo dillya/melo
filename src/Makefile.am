@@ -28,6 +28,7 @@ meloinclude_HEADERS = \
 	melo_module.h \
 	melo_browser.h \
 	melo_player.h \
+	melo_module_jsonrpc.h \
 	melo_browser_jsonrpc.h \
 	melo_player_jsonrpc.h \
 	melo_jsonrpc.h

@@ -85,10 +85,6 @@ GList *melo_module_get_module_list (void);
 /* Get MeloModule by id */
 MeloModule *melo_module_get_module_by_id (const gchar *id);
 
-/* JSON-RPC methods */
-void melo_module_register_methods (void);
-void melo_module_unregister_methods (void);
-
 G_END_DECLS
 
 #endif /* __MELO_MODULE_H__ */

@@ -19,8 +19,7 @@
  * Boston, MA  02110-1301, USA.
  */
 
-#include "melo_module.h"
-#include "melo_jsonrpc.h"
+#include "melo_module_jsonrpc.h"
 #include "melo_browser_jsonrpc.h"
 
 typedef enum {
