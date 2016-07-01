@@ -185,15 +185,15 @@ melo_browser_jsonrpc_get_list (const gchar *method,
 }
 
 static void
-melo_browser_jsonrpc_remove (const gchar *method,
-                             JsonArray *s_params, JsonNode *params,
-                             JsonNode **result, JsonNode **error,
-                             gpointer user_data)
+melo_browser_jsonrpc_item_action (const gchar *method,
+                                  JsonArray *s_params, JsonNode *params,
+                                  JsonNode **result, JsonNode **error,
+                                  gpointer user_data)
 {
   const gchar *path;
   MeloBrowser *bro;
   JsonObject *obj;
-  gboolean ret;
+  gboolean ret = FALSE;
 
   /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
@@ -210,8 +210,11 @@ melo_browser_jsonrpc_remove (const gchar *method,
   /* Get path */
   path = json_object_get_string_member (obj, "path");
 
-  /* Remove item */
-  ret = melo_browser_remove (bro, path);
+  /* Do action on item */
+  if (!g_strcmp0 (method, "browser.play"))
+    ret = melo_browser_play (bro, path);
+  else if (!g_strcmp0 (method, "browser.remove"))
+    ret = melo_browser_remove (bro, path);
   json_object_unref (obj);
   g_object_unref (bro);
 
@@ -258,13 +261,23 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
     .user_data = NULL,
   },
   {
+    .method = "play",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"path\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_browser_jsonrpc_item_action,
+    .user_data = NULL,
+  },
+  {
     .method = "remove",
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
               "  {\"name\": \"path\", \"type\": \"string\"}"
               "]",
-    .result = "{\"type\":\"array\"}",
-    .callback = melo_browser_jsonrpc_remove,
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_browser_jsonrpc_item_action,
     .user_data = NULL,
   },
 };
