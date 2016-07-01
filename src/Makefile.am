@@ -66,6 +66,8 @@ melo_LDADD = \
 
 noinst_HEADERS = \
 	melo_file.h \
+	melo_browser_file.h \
+	melo_player_file.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
 	melo_httpd_jsonrpc.h
