@@ -53,6 +53,7 @@ struct _MeloBrowserFilePrivate {
   GMutex mutex;
   GList *vms;
   GHashTable *ids;
+  GHashTable *shortcuts;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloBrowserFile, melo_browser_file, MELO_TYPE_BROWSER)
@@ -71,7 +72,9 @@ melo_browser_file_finalize (GObject *gobject)
   g_mutex_clear (&priv->mutex);
 
   /* Free hash table */
+  g_hash_table_remove_all (priv->shortcuts);
   g_hash_table_remove_all (priv->ids);
+  g_hash_table_unref (priv->shortcuts);
   g_hash_table_unref (priv->ids);
 
   /* Free volume and mount list */
@@ -129,6 +132,10 @@ melo_browser_file_init (MeloBrowserFile *self)
                     (GCallback) vms_added, priv);
   g_signal_connect (priv->monitor, "mount_removed",
                     (GCallback) vms_removed, priv);
+
+  /* Init Hash table for shortcuts */
+  priv->shortcuts = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                           g_free, g_free);
 }
 
 static const MeloBrowserInfo *
@@ -234,8 +241,9 @@ melo_brower_file_fix_path (const gchar *path)
 }
 
 static GList *
-melo_browser_file_list (GFile *dir)
+melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
 {
+  MeloBrowserFilePrivate *priv = bfile->priv;
   GFileEnumerator *dir_enum;
   GFileInfo *info;
   GList *list = NULL;
@@ -248,6 +256,7 @@ melo_browser_file_list (GFile *dir)
   dir_enum = g_file_enumerate_children (dir,
                                     G_FILE_ATTRIBUTE_STANDARD_TYPE ","
                                     G_FILE_ATTRIBUTE_STANDARD_DISPLAY_NAME ","
+                                    G_FILE_ATTRIBUTE_STANDARD_TARGET_URI ","
                                     G_FILE_ATTRIBUTE_STANDARD_NAME,
                                     0, NULL, NULL);
   if (!dir_enum)
@@ -257,21 +266,44 @@ melo_browser_file_list (GFile *dir)
   while ((info = g_file_enumerator_next_file (dir_enum, NULL, NULL))) {
     MeloBrowserItem *item;
     const gchar *itype;
+    gchar *name;
     GFileType type;
 
     /* Get item type */
     type = g_file_info_get_file_type (info);
-    if (type == G_FILE_TYPE_REGULAR)
+    if (type == G_FILE_TYPE_REGULAR) {
       itype = "file";
-    else if (type == G_FILE_TYPE_DIRECTORY)
+      name = g_strdup (g_file_info_get_name (info));
+    } else if (type == G_FILE_TYPE_DIRECTORY) {
       itype = "directory";
-    else {
+      name = g_strdup (g_file_info_get_name (info));
+    } else if (type == G_FILE_TYPE_SHORTCUT ||
+               type == G_FILE_TYPE_MOUNTABLE) {
+      const gchar *uri;
+      gchar *sha1;
+      itype = "directory";
+      uri = g_file_info_get_attribute_string (info,
+                                          G_FILE_ATTRIBUTE_STANDARD_TARGET_URI);
+
+      /* Calculate sha1 from target URI */
+      sha1 = g_compute_checksum_for_data (G_CHECKSUM_SHA1,
+                                          (const guchar *) uri, strlen (uri));
+
+      /* Keep only MELO_BROWSER_FILE_ID_LENGTH first characters to create ID */
+      name = g_strndup (sha1, MELO_BROWSER_FILE_ID_LENGTH);
+      g_free (sha1);
+
+      /* Add shortcut to hash table */
+      if (!g_hash_table_lookup (priv->shortcuts, name))
+        g_hash_table_insert (priv->shortcuts, g_strdup (name), g_strdup (uri));
+    } else {
       g_object_unref (info);
       continue;
     }
 
     /* Create a new browser item and insert in list */
-    item = melo_browser_item_new (g_file_info_get_name (info), itype);
+    item = melo_browser_item_new (NULL, itype);
+    item->name = name;
     item->full_name = g_strdup (g_file_info_get_display_name (info));
     list = g_list_insert_sorted (list, item,
                                  (GCompareFunc) melo_browser_item_cmp);
@@ -283,7 +315,7 @@ melo_browser_file_list (GFile *dir)
 }
 
 static GList *
-melo_browser_file_get_local_list (const gchar *uri)
+melo_browser_file_get_local_list (MeloBrowserFile *bfile, const gchar *uri)
 {
   GFile *dir;
   GList *list;
@@ -294,7 +326,7 @@ melo_browser_file_get_local_list (const gchar *uri)
     return NULL;
 
   /* Get list from GFile */
-  list = melo_browser_file_list (dir);
+  list = melo_browser_file_list (bfile, dir);
   g_object_unref (dir);
 
   return list;
@@ -386,7 +418,7 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
   g_object_unref (root);
 
   /* List files from our GFile  */
-  list = melo_browser_file_list (dir);
+  list = melo_browser_file_list (bfile, dir);
   g_object_unref (dir);
 
   return list;
@@ -459,6 +491,100 @@ melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
   return list;
 }
 
+static gchar *
+melo_browser_file_get_network_uri (MeloBrowserFile *bfile, const gchar *path)
+{
+  MeloBrowserFilePrivate *priv = bfile->priv;
+  const gchar *shortcut = NULL;
+  gint len;
+
+  /* Convert all shortcuts to final URI */
+  len = strlen (path);
+  while (len >= MELO_BROWSER_FILE_ID_LENGTH &&
+         path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
+    const gchar *s;
+    gchar *id;
+
+    /* Get ID */
+    id = g_strndup (path, MELO_BROWSER_FILE_ID_LENGTH);
+
+    /* Find in shortcuts list */
+    s = g_hash_table_lookup (priv->shortcuts, id);
+    g_free (id);
+    if (!s)
+      break;
+
+    /* Save shortcut and look for next */
+    shortcut = s;
+    path += MELO_BROWSER_FILE_ID_LENGTH + 1;
+    len -= MELO_BROWSER_FILE_ID_LENGTH + 1;
+  }
+
+  /* Path contains a shortcut */
+  if (shortcut) {
+    GError *error = NULL;
+    GFileInfo *info;
+    GFile *dir;
+
+    /* Get file from shortcut */
+    dir = g_file_new_for_uri (shortcut);
+    if (!dir)
+      return NULL;
+
+    /* Get file details */
+    info = g_file_query_info (dir, G_FILE_ATTRIBUTE_STANDARD_TYPE,
+                              0, NULL, &error);
+    if (!info && error->code != G_IO_ERROR_NOT_FOUND) {
+      GMutex mutex;
+
+      /* Mount */
+      g_mutex_init (&mutex);
+      g_mutex_lock (&mutex);
+      g_file_mount_enclosing_volume (dir, 0, NULL, NULL, async_done, &mutex);
+
+      /* Wait end of operation */
+      g_mutex_lock (&mutex);
+      g_clear_error (&error);
+      g_mutex_unlock (&mutex);
+      g_mutex_clear (&mutex);
+    } else {
+      g_object_unref (info);
+    }
+    g_object_unref (dir);
+
+    /* Generate final URI */
+     return g_strdup_printf ("%s/%s", shortcut, path);
+  }
+
+  /* Generate default URI */
+  return g_strdup_printf ("network://%s", path);
+}
+
+static GList *
+melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path)
+{
+  GList *list = NULL;
+  GFile *dir;
+  gchar *uri;
+
+  /* Generate URI from path */
+  uri = melo_browser_file_get_network_uri (bfile, path);
+  if (!uri)
+    return NULL;
+
+  /* Get list from URI */
+  dir = g_file_new_for_uri (uri);
+  g_free (uri);
+  if (!dir)
+    return NULL;
+
+  /* Get list from GFile */
+  list = melo_browser_file_list (bfile, dir);
+  g_object_unref (dir);
+
+  return list;
+}
+
 static GList *
 melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
 {
@@ -480,6 +606,11 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
     item->full_name = g_strdup ("Local");
     list = g_list_append(list, item);
 
+    /* Add Network entry for scanning network */
+    item = melo_browser_item_new ("network", "category");
+    item->full_name = g_strdup ("Network");
+    list = g_list_append(list, item);
+
     /* Add local volumes to list */
     list = melo_browser_file_list_volumes (bfile, list);
   } else if (g_str_has_prefix (path, "local")) {
@@ -488,8 +619,11 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
     /* Get file path: "/local/" */
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:/%s", path);
-    list = melo_browser_file_get_local_list (uri);
+    list = melo_browser_file_get_local_list (bfile, uri);
     g_free (uri);
+  } else if (g_str_has_prefix (path, "network")) {
+    /* Get file path: "/network/" */
+    list = melo_browser_file_get_network_list (bfile, path + 8);
   } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
              path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
     /* Volume path: "/VOLUME_ID/" */
@@ -502,6 +636,7 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
 static gboolean
 melo_browser_file_play (MeloBrowser *browser, const gchar *path)
 {
+  MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   gchar *uri;
   gboolean ret;
 
@@ -513,6 +648,8 @@ melo_browser_file_play (MeloBrowser *browser, const gchar *path)
   if (g_str_has_prefix (path, "local/")) {
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:/%s", path);
+  } else if (g_str_has_prefix (path, "network/")) {
+    uri = melo_browser_file_get_network_uri (bfile, path + 8);
   } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
              path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
     GMount *mount;
