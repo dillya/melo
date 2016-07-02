@@ -19,11 +19,13 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <string.h>
 #include <gio/gio.h>
 
 #include "melo_browser_file.h"
 
 #define MELO_BROWSER_FILE_ID "melo_browser_file_id"
+#define MELO_BROWSER_FILE_ID_LENGTH 8
 
 /* File browser info */
 static MeloBrowserInfo melo_browser_file_info = {
@@ -41,6 +43,8 @@ static void melo_browser_file_set_id (GObject *obj,
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static GList *melo_browser_file_get_list (MeloBrowser *browser,
                                           const gchar *path);
+static gboolean melo_browser_file_play (MeloBrowser *browser,
+                                        const gchar *path);
 static gboolean melo_browser_file_remove (MeloBrowser *browser,
                                           const gchar *path);
 
@@ -85,6 +89,7 @@ melo_browser_file_class_init (MeloBrowserFileClass *klass)
 
   bclass->get_info = melo_browser_file_get_info;
   bclass->get_list = melo_browser_file_get_list;
+  bclass->play = melo_browser_file_play;
   bclass->remove = melo_browser_file_remove;
 
   /* Add custom finalize() function */
@@ -141,8 +146,8 @@ melo_browser_file_set_id (GObject *obj, MeloBrowserFilePrivate *priv)
   sha1 = g_compute_checksum_for_data (G_CHECKSUM_SHA1,
                                       (const guchar *) &obj, sizeof (obj));
 
-  /* Keep only 8 first characters to create ID */
-  id = g_strndup (sha1, 8);
+  /* Keep only MELO_BROWSER_FILE_ID_LENGTH first characters to create ID */
+  id = g_strndup (sha1, MELO_BROWSER_FILE_ID_LENGTH);
   g_free (sha1);
 
   /* Add to object and internal hash table */
@@ -295,27 +300,16 @@ melo_browser_file_get_local_list (const gchar *uri)
   return list;
 }
 
-static GList *
-melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
+static GMount *
+melo_browser_file_get_mount (MeloBrowserFile *bfile, const gchar *path)
 {
   MeloBrowserFilePrivate *priv = bfile->priv;
-  GMount *mount = NULL;
-  GFile *root, *dir;
-  GList *list;
-
+  GMount *mount;
   GObject *obj;
   gchar *id;
 
-  /* Extract volume / mount id from path */
-  id = g_strstr_len (path, -1, "/");
-  if (id) {
-    gsize len = id - path;
-    id = g_strndup (path, len);
-    path += len + 1;
-  } else {
-    id = g_strdup (path);
-    path = "";
-  }
+  /* Get volume / mount ID */
+  id = g_strndup (path, MELO_BROWSER_FILE_ID_LENGTH);
 
   /* Lock volume/mount list */
   g_mutex_lock (&priv->mutex);
@@ -359,7 +353,18 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
   } else
     mount = G_MOUNT (obj);
 
-  /* Volume doesn't exist */
+  return mount;
+}
+
+static GList *
+melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
+{
+  GMount *mount;
+  GFile *root, *dir;
+  GList *list;
+
+  /* Get mount assocated to path */
+  mount = melo_browser_file_get_mount (bfile, path);
   if (!mount)
     return NULL;
 
@@ -372,6 +377,7 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
   g_object_unref (mount);
 
   /* Get final directory from our path */
+  path += MELO_BROWSER_FILE_ID_LENGTH;
   dir = g_file_resolve_relative_path (root, path);
   if (!dir) {
     g_object_unref (root);
@@ -458,7 +464,6 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   GList *list = NULL;
-  gchar *uri;
 
   /* Check path */
   if (!path || *path != '/')
@@ -478,17 +483,69 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
     /* Add local volumes to list */
     list = melo_browser_file_list_volumes (bfile, list);
   } else if (g_str_has_prefix (path, "local")) {
-    /* Local path: "/local/" */
+    gchar *uri;
+
+    /* Get file path: "/local/" */
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:/%s", path);
     list = melo_browser_file_get_local_list (uri);
     g_free (uri);
-  } else {
+  } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
+             path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
     /* Volume path: "/VOLUME_ID/" */
     list = melo_browser_file_get_volume_list (bfile, path);
   }
 
   return list;
+}
+
+static gboolean
+melo_browser_file_play (MeloBrowser *browser, const gchar *path)
+{
+  gchar *uri;
+  gboolean ret;
+
+  g_return_val_if_fail (browser->player, FALSE);
+  g_return_val_if_fail (*path && *path == '/', FALSE);
+  path++;
+
+  /* Generate URI from path */
+  if (g_str_has_prefix (path, "local/")) {
+    path = melo_brower_file_fix_path (path + 5);
+    uri = g_strdup_printf ("file:/%s", path);
+  } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
+             path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
+    GMount *mount;
+    GFile *root;
+    gchar *root_uri;
+
+    /* Get mount from volume / mount ID */
+    mount = melo_browser_file_get_mount (MELO_BROWSER_FILE (browser), path);
+    if (!mount)
+      return FALSE;
+
+    /* Get root */
+    root = g_mount_get_root (mount);
+    g_object_unref (mount);
+    if (!root)
+      return FALSE;
+
+    /* Get root URI */
+    path += MELO_BROWSER_FILE_ID_LENGTH + 1;
+    root_uri = g_file_get_uri (root);
+    g_object_unref (root);
+
+    /* Create complete URI */
+    uri = g_strconcat (root_uri, path, NULL);
+    g_free (root_uri);
+  } else
+    return FALSE;
+
+  /* Play with URI */
+  ret = melo_player_play (browser->player, uri);
+  g_free (uri);
+
+  return ret;
 }
 
 static gboolean
@@ -502,20 +559,11 @@ melo_browser_file_remove (MeloBrowser *browser, const gchar *path)
   GMount *mnt;
   gchar *id;
 
-  /* Not valid */
-  if (*path != '/')
-    return FALSE;
+  g_return_val_if_fail (*path && *path == '/', FALSE);
   path++;
 
-  /* Get id */
-  id = g_strstr_len (path, -1, "/");
-  if (id) {
-    gsize len = id - path;
-    if (path[len + 1] != '\0')
-      return FALSE;
-    id = g_strndup (path, len);
-  } else
-    id = g_strdup (path);
+  /* Get ID */
+  id = g_strndup (path, MELO_BROWSER_FILE_ID_LENGTH);
 
   /* Lock volume / mount list */
   g_mutex_lock (&priv->mutex);
