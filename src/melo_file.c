@@ -81,8 +81,11 @@ melo_file_init (MeloFile *self)
 
   if (priv->files)
     melo_module_register_browser (MELO_MODULE (self), priv->files);
-  if (priv->player)
+  if (priv->player) {
     melo_module_register_player (MELO_MODULE (self), priv->player);
+    if (priv->files)
+      melo_browser_set_player (MELO_BROWSER (priv->files), priv->player);
+  }
 }
 
 static const MeloModuleInfo *

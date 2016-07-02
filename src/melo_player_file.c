@@ -21,6 +21,7 @@
 
 #include "melo_player_file.h"
 
+static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path);
 static MeloPlayerState melo_player_file_get_state (MeloPlayer *player);
 static gchar *melo_player_file_get_name (MeloPlayer *player);
 static gint melo_player_file_get_pos (MeloPlayer *player, gint *duration);
@@ -33,6 +34,7 @@ melo_player_file_class_init (MeloPlayerFileClass *klass)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_CLASS (klass);
 
+  pclass->play = melo_player_file_play;
   pclass->get_state = melo_player_file_get_state;
   pclass->get_name = melo_player_file_get_name;
   pclass->get_pos = melo_player_file_get_pos;
@@ -42,6 +44,12 @@ melo_player_file_class_init (MeloPlayerFileClass *klass)
 static void
 melo_player_file_init (MeloPlayerFile *self)
 {
+}
+
+static gboolean
+melo_player_file_play (MeloPlayer *player, const gchar *path)
+{
+  return TRUE;
 }
 
 static MeloPlayerState
