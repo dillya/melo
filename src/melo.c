@@ -28,6 +28,8 @@
 #include <glib-unix.h>
 #endif
 
+#include <gst/gst.h>
+
 #include "melo_file.h"
 #include "melo_httpd.h"
 
@@ -73,6 +75,9 @@ main (int argc, char *argv[])
 
   /* Add main entries to context */
   g_option_context_add_main_entries (ctx, options, NULL);
+
+  /* Add gstreamer group to context */
+  g_option_context_add_group (ctx, gst_init_get_option_group ());
 
   /* Parse command line */
   if (!g_option_context_parse (ctx, &argc, &argv, &err)) {

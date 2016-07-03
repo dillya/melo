@@ -51,6 +51,14 @@ PKG_CHECK_MODULES([LIBJSON_GLIB],
     AC_MSG_ERROR(Libjson-glib $JSON_GLIB_REQ or later is required)
   ])
 
+dnl Check for Gstreamer
+GST_REQ=1.4.4
+PKG_CHECK_MODULES([GST],
+  gstreamer-1.0 >= $GST_REQ, [],
+  [
+    AC_MSG_ERROR(Gstreamer $GST_REQ or later is required)
+  ])
+
 AC_CONFIG_FILES(
 Makefile
 src/Makefile
