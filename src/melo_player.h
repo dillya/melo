@@ -43,7 +43,8 @@ typedef enum {
   MELO_PLAYER_STATE_NONE,
   MELO_PLAYER_STATE_PLAYING,
   MELO_PLAYER_STATE_PAUSED,
-  MELO_PLAYER_STATE_STOPPED
+  MELO_PLAYER_STATE_STOPPED,
+  MELO_PLAYER_STATE_ERROR,
 } MeloPlayerState;
 
 struct _MeloPlayer {
@@ -68,6 +69,7 @@ struct _MeloPlayerClass {
 
 struct _MeloPlayerStatus {
   MeloPlayerState state;
+  gchar *error;
   gchar *name;
   gint pos;
   gint duration;

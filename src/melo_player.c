@@ -48,8 +48,8 @@ melo_player_finalize (GObject *gobject)
   /* Unlock player list */
   G_UNLOCK (melo_player_mutex);
 
-  if (priv->id)
-    g_free (priv->id);
+  /* Free player ID */
+  g_free (priv->id);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_player_parent_class)->finalize (gobject);
@@ -78,8 +78,7 @@ melo_player_set_id (MeloPlayer *player, const gchar *id)
 {
   MeloPlayerPrivate *priv = player->priv;
 
-  if (priv->id)
-    g_free (priv->id);
+  g_free (priv->id);
   priv->id = g_strdup (id);
 }
 
@@ -226,7 +225,7 @@ melo_player_status_new (MeloPlayerState state, const gchar *name)
 void
 melo_player_status_free (MeloPlayerStatus *status)
 {
-  if (status->name)
-    g_free (status->name);
+  g_free (status->error);
+  g_free (status->name);
   g_slice_free (MeloPlayerStatus, status);
 }

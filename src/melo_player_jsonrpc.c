@@ -100,10 +100,14 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
     [MELO_PLAYER_STATE_PLAYING] = "playing",
     [MELO_PLAYER_STATE_PAUSED] = "paused",
     [MELO_PLAYER_STATE_STOPPED] = "stopped",
+    [MELO_PLAYER_STATE_ERROR] = "error",
   };
   JsonObject *obj = json_object_new ();
-  if (fields & MELO_PLAYER_JSONRPC_FIELDS_STATE)
+  if (fields & MELO_PLAYER_JSONRPC_FIELDS_STATE) {
     json_object_set_string_member (obj, "state", state_str[status->state]);
+    if (status->state == MELO_PLAYER_STATE_ERROR)
+      json_object_set_string_member (obj, "error", status->error);
+  }
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_NAME)
     json_object_set_string_member (obj, "name", status->name);
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_POS)
