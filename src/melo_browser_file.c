@@ -410,6 +410,8 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
 
   /* Get final directory from our path */
   path += MELO_BROWSER_FILE_ID_LENGTH;
+  if (*path != '\0')
+    path++;
   dir = g_file_resolve_relative_path (root, path);
   if (!dir) {
     g_object_unref (root);
@@ -668,7 +670,7 @@ melo_browser_file_play (MeloBrowser *browser, const gchar *path)
       return FALSE;
 
     /* Get root URI */
-    path += MELO_BROWSER_FILE_ID_LENGTH + 1;
+    path += MELO_BROWSER_FILE_ID_LENGTH;
     root_uri = g_file_get_uri (root);
     g_object_unref (root);
 
