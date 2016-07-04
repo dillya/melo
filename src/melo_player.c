@@ -219,7 +219,42 @@ melo_player_status_new (MeloPlayerState state, const gchar *name)
   status->state = state;
   status->name = g_strdup (name);
 
+  /* Allocate a new tags */
+  status->tags = melo_tags_new ();
+
   return status;
+}
+
+MeloPlayerStatus *
+melo_player_status_copy (MeloPlayerStatus *src)
+{
+  MeloPlayerStatus *dest;
+
+  /* Create a new status */
+  dest = melo_player_status_new (src->state, src->name);
+  if (!dest)
+    return NULL;
+
+  /* Copy status */
+  dest->error = g_strdup (src->error);
+  dest->pos = src->pos;
+  dest->duration = src->duration;
+
+  /* Copy tags */
+  dest->tags = melo_tags_copy (src->tags);
+
+  return dest;
+}
+
+void
+melo_player_status_clear (MeloPlayerStatus *status)
+{
+  status->state = MELO_PLAYER_STATE_NONE;
+  g_clear_pointer (&status->error, g_free);
+  g_clear_pointer (&status->name, g_free);
+  status->pos = 0;
+  status->duration = 0;
+  melo_tags_clear (status->tags);
 }
 
 void
@@ -227,5 +262,6 @@ melo_player_status_free (MeloPlayerStatus *status)
 {
   g_free (status->error);
   g_free (status->name);
+  melo_tags_free (status->tags);
   g_slice_free (MeloPlayerStatus, status);
 }

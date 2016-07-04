@@ -24,6 +24,8 @@
 
 #include <glib-object.h>
 
+#include "melo_tags.h"
+
 G_BEGIN_DECLS
 
 #define MELO_TYPE_PLAYER             (melo_player_get_type ())
@@ -73,6 +75,7 @@ struct _MeloPlayerStatus {
   gchar *name;
   gint pos;
   gint duration;
+  MeloTags *tags;
 };
 
 GType melo_player_get_type (void);
@@ -90,6 +93,8 @@ MeloPlayerStatus *melo_player_get_status (MeloPlayer *player);
 
 MeloPlayerStatus *melo_player_status_new (MeloPlayerState state,
                                           const gchar *name);
+MeloPlayerStatus *melo_player_status_copy (MeloPlayerStatus *src);
+void melo_player_status_clear (MeloPlayerStatus *status);
 void melo_player_status_free (MeloPlayerStatus *status);
 
 G_END_DECLS
