@@ -36,9 +36,8 @@ struct _MeloPlayerFilePrivate {
   GMutex mutex;
 
   /* Status */
-  MeloPlayerState state;
+  MeloPlayerStatus *status;
   gchar *uri;
-  gchar *error;
 
   /* Gstreamer pipeline */
   GstElement *pipeline;
@@ -56,7 +55,7 @@ melo_player_file_finalize (GObject *gobject)
 
   /* Stop pipeline */
   gst_element_set_state (priv->pipeline, GST_STATE_NULL);
-  g_free (priv->error);
+  melo_player_status_free (priv->status);
 
   /* Remove message handler */
   g_source_remove (priv->bus_watch_id);
@@ -98,12 +97,13 @@ melo_player_file_init (MeloPlayerFile *self)
   GstBus *bus;
 
   self->priv = priv;
-  priv->state = MELO_PLAYER_STATE_NONE;
   priv->uri = NULL;
-  priv->error = NULL;
 
   /* Init player mutex */
   g_mutex_init (&priv->mutex);
+
+  /* Create new status handler */
+  priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
 
   /* Create pipeline */
   priv->pipeline = gst_pipeline_new ("file_player_pipeline");
@@ -128,24 +128,49 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 {
   MeloPlayerFile *pfile = MELO_PLAYER_FILE (data);
   MeloPlayerFilePrivate *priv = pfile->priv;
+  GstTagList *tags;
   GError *error;
 
   /* Process bus message */
   switch (GST_MESSAGE_TYPE (msg)) {
+    case GST_MESSAGE_TAG:
+      /* Get tag list from message */
+      gst_message_parse_tag (msg, &tags);
+
+      /* Lock player mutex */
+      g_mutex_lock (&priv->mutex);
+
+      /* Fill MeloTags with GstTagList */
+      melo_tags_update_from_gst_tag_list (priv->status->tags, tags,
+                                          MELO_TAGS_FIELDS_FULL);
+
+      /* Unlock player mutex */
+      g_mutex_unlock (&priv->mutex);
+
+      /* Free tag list */
+      gst_tag_list_unref (tags);
+      break;
+
     case GST_MESSAGE_EOS:
       /* End of stream */
-      priv->state = MELO_PLAYER_STATE_STOPPED;
+      priv->status->state = MELO_PLAYER_STATE_STOPPED;
       break;
 
     case GST_MESSAGE_ERROR:
       /* End of stream */
-      priv->state = MELO_PLAYER_STATE_ERROR;
+      priv->status->state = MELO_PLAYER_STATE_ERROR;
+
+      /* Lock player mutex */
+      g_mutex_lock (&priv->mutex);
 
       /* Update error message */
-      g_free (priv->error);
+      g_free (priv->status->error);
       gst_message_parse_error (msg, &error, NULL);
-      priv->error = g_strdup (error->message);
+      priv->status->error = g_strdup (error->message);
       g_error_free (error);
+
+      /* Unlock player mutex */
+      g_mutex_unlock (&priv->mutex);
       break;
 
     default:
@@ -194,8 +219,7 @@ melo_player_file_play (MeloPlayer *player, const gchar *path)
 
   /* Stop pipeline */
   gst_element_set_state (priv->pipeline, GST_STATE_NULL);
-  g_free (priv->error);
-  priv->error = NULL;
+  melo_player_status_clear (priv->status);
 
   /* Set new location to src element */
   g_object_set (priv->src, "uri", path, NULL);
@@ -204,7 +228,10 @@ melo_player_file_play (MeloPlayer *player, const gchar *path)
   /* Replace URI */
   g_free (priv->uri);
   priv->uri = g_strdup (path);
-  priv->state = MELO_PLAYER_STATE_PLAYING;
+  priv->status->state = MELO_PLAYER_STATE_PLAYING;
+
+  /* Extract filename from URI */
+  priv->status->name = g_path_get_basename (priv->uri);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
@@ -215,7 +242,7 @@ melo_player_file_play (MeloPlayer *player, const gchar *path)
 static MeloPlayerState
 melo_player_file_get_state (MeloPlayer *player)
 {
-  return (MELO_PLAYER_FILE (player))->priv->state;
+  return (MELO_PLAYER_FILE (player))->priv->status->state;
 }
 
 static gchar *
@@ -227,9 +254,8 @@ melo_player_file_get_name (MeloPlayer *player)
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
-  /* Extract filename from URI */
-  if (priv->uri)
-    name = g_path_get_basename (priv->uri);
+  /* Copy name */
+  name = g_strdup (priv->status->name);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
@@ -251,10 +277,14 @@ melo_player_file_get_status (MeloPlayer *player)
   MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
   MeloPlayerStatus *status;
 
-  /* Allocate a new status item */
-  status = melo_player_status_new (priv->state, NULL);
-  status->error = g_strdup(priv->error);
-  status->name = melo_player_file_get_name (player);
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Copy status */
+  status = melo_player_status_copy (priv->status);
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
 
   return status;
 }
