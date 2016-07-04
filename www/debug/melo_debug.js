@@ -231,16 +231,26 @@ function melo_add_players(id, name) {
 }
 
 function melo_update_player(id, element) {
-  jsonrpc_call("player.get_status", JSON.parse('["' + id + '",["full"]]'),
+  jsonrpc_call("player.get_status", JSON.parse('["' + id + '",["full"],["full"]]'),
                function(response) {
     if (response.error || !response.result)
       return;
+    var s = response.result;
 
     /* Add players */
-    element.html("State: " + response.result.state + "<br>" +
-             "Name: " + response.result.name + "<br>" +
-             "Pos: " + response.result.pos + " / " +
-                       response.result.duration);
+    element.html("State: " + s.state + "<br>" +
+                 "Name: " + s.name + "<br>" +
+                 "Pos: " + s.pos + " / " + s.duration);
+
+    if (s.tags != null) {
+      element.append("<br>" +
+                     "Title: " + s.tags.title + "<br>" +
+                     "Artist: " + s.tags.artist + "<br>" +
+                     "Alnum: " + s.tags.album + "<br>" +
+                     "Genre: " + s.tags.genre + "<br>" +
+                     "Date: " + s.tags.date + "<br>" +
+                     "Track: " + s.tags.track + " / " + s.tags.track);
+    }
   });
 }
 
