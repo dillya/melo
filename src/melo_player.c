@@ -162,6 +162,26 @@ melo_player_play (MeloPlayer *player, const gchar *path)
 }
 
 MeloPlayerState
+melo_player_set_state (MeloPlayer *player, MeloPlayerState state)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->set_state, MELO_PLAYER_STATE_NONE);
+
+  return pclass->set_state (player, state);
+}
+
+gint
+melo_player_set_pos (MeloPlayer *player, gint pos)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->set_pos, 0);
+
+  return pclass->set_pos (player, pos);
+}
+
+MeloPlayerState
 melo_player_get_state (MeloPlayer *player)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
