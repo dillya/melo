@@ -27,6 +27,10 @@ static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data);
 static void pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink);
 
 static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path);
+static MeloPlayerState melo_player_file_set_state (MeloPlayer *player,
+                                                   MeloPlayerState state);
+static gint melo_player_file_set_pos (MeloPlayer *player, gint pos);
+
 static MeloPlayerState melo_player_file_get_state (MeloPlayer *player);
 static gchar *melo_player_file_get_name (MeloPlayer *player);
 static gint melo_player_file_get_pos (MeloPlayer *player, gint *duration);
@@ -79,7 +83,12 @@ melo_player_file_class_init (MeloPlayerFileClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   MeloPlayerClass *pclass = MELO_PLAYER_CLASS (klass);
 
+  /* Control */
   pclass->play = melo_player_file_play;
+  pclass->set_state = melo_player_file_set_state;
+  pclass->set_pos = melo_player_file_set_pos;
+
+  /* Status */
   pclass->get_state = melo_player_file_get_state;
   pclass->get_name = melo_player_file_get_name;
   pclass->get_pos = melo_player_file_get_pos;
@@ -128,12 +137,22 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 {
   MeloPlayerFile *pfile = MELO_PLAYER_FILE (data);
   MeloPlayerFilePrivate *priv = pfile->priv;
-  GstTagList *tags;
   GError *error;
 
   /* Process bus message */
   switch (GST_MESSAGE_TYPE (msg)) {
-    case GST_MESSAGE_TAG:
+    case GST_MESSAGE_DURATION_CHANGED:
+    case GST_MESSAGE_ASYNC_DONE: {
+      gint64 duration;
+
+      /* Get duration */
+      if (gst_element_query_duration (priv->src, GST_FORMAT_TIME, &duration)) {
+        priv->status->duration = duration / 1000000; }
+      break;
+    }
+    case GST_MESSAGE_TAG: {
+      GstTagList *tags;
+
       /* Get tag list from message */
       gst_message_parse_tag (msg, &tags);
 
@@ -150,7 +169,7 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       /* Free tag list */
       gst_tag_list_unref (tags);
       break;
-
+    }
     case GST_MESSAGE_EOS:
       /* End of stream */
       priv->status->state = MELO_PLAYER_STATE_STOPPED;
@@ -240,6 +259,39 @@ melo_player_file_play (MeloPlayer *player, const gchar *path)
 }
 
 static MeloPlayerState
+melo_player_file_set_state (MeloPlayer *player, MeloPlayerState state)
+{
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  if (state == MELO_PLAYER_STATE_NONE) {
+    gst_element_set_state (priv->pipeline, GST_STATE_NULL);
+    melo_player_status_clear (priv->status);
+  } else if (state == MELO_PLAYER_STATE_PLAYING)
+    gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
+  else if (state == MELO_PLAYER_STATE_PAUSED)
+    gst_element_set_state (priv->pipeline, GST_STATE_PAUSED);
+  else if (state == MELO_PLAYER_STATE_STOPPED)
+    gst_element_set_state (priv->pipeline, GST_STATE_NULL);
+  else
+    state = priv->status->state;
+  priv->status->state = state;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return state;
+}
+
+static gint
+melo_player_file_set_pos (MeloPlayer *player, gint pos)
+{
+  return melo_player_file_get_pos (player, NULL);
+}
+
+static MeloPlayerState
 melo_player_file_get_state (MeloPlayer *player)
 {
   return (MELO_PLAYER_FILE (player))->priv->status->state;
@@ -266,9 +318,18 @@ melo_player_file_get_name (MeloPlayer *player)
 static gint
 melo_player_file_get_pos (MeloPlayer *player, gint *duration)
 {
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gint64 pos;
+
+  /* Get duration */
   if (duration)
-    *duration = 0;
-  return 0;
+    *duration = priv->status->duration;
+
+  /* Get length */
+  if (!gst_element_query_position (priv->src, GST_FORMAT_TIME, &pos))
+    pos = 0;
+
+  return pos / 1000000;
 }
 
 static MeloPlayerStatus *
@@ -282,6 +343,7 @@ melo_player_file_get_status (MeloPlayer *player)
 
   /* Copy status */
   status = melo_player_status_copy (priv->status);
+  status->pos = melo_player_file_get_pos (player, NULL);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
