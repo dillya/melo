@@ -99,16 +99,10 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
                                       MeloPlayerJSONRPCFields fields,
                                       MeloTagsFields tags_fields)
 {
-  static gchar *state_str[] = {
-    [MELO_PLAYER_STATE_NONE] = "none",
-    [MELO_PLAYER_STATE_PLAYING] = "playing",
-    [MELO_PLAYER_STATE_PAUSED] = "paused",
-    [MELO_PLAYER_STATE_STOPPED] = "stopped",
-    [MELO_PLAYER_STATE_ERROR] = "error",
-  };
   JsonObject *obj = json_object_new ();
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_STATE) {
-    json_object_set_string_member (obj, "state", state_str[status->state]);
+    json_object_set_string_member (obj, "state",
+                                   melo_player_state_to_string (status->state));
     if (status->state == MELO_PLAYER_STATE_ERROR)
       json_object_set_string_member (obj, "error", status->error);
   }
@@ -126,6 +120,48 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
 }
 
 /* Method callbacks */
+static void
+melo_player_jsonrpc_set_state (const gchar *method,
+                               JsonArray *s_params, JsonNode *params,
+                               JsonNode **result, JsonNode **error,
+                               gpointer user_data)
+{
+  MeloPlayerState state = MELO_PLAYER_STATE_NONE;
+  const gchar *sstate;
+  MeloPlayer *play;
+  JsonObject *obj;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get player from id */
+  play = melo_player_jsonrpc_get_player (obj, error);
+  if (!play) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get requested state */
+  sstate = json_object_get_string_member (obj, "state");
+  state = melo_player_state_from_string (sstate);
+  json_object_unref (obj);
+
+  /* Set new state */
+  melo_player_set_state (play, state);
+  g_object_unref (play);
+
+  /* Create and fill object */
+  obj = json_object_new ();
+  json_object_set_string_member (obj, "state",
+                                 melo_player_state_to_string (state));
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
 static void
 melo_player_jsonrpc_get_status (const gchar *method,
                                 JsonArray *s_params, JsonNode *params,
@@ -180,6 +216,16 @@ melo_player_jsonrpc_get_status (const gchar *method,
 
 /* List of methods */
 static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
+  {
+    .method = "set_state",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"state\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_player_jsonrpc_set_state,
+    .user_data = NULL,
+  },
   {
     .method = "get_status",
     .params = "["

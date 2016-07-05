@@ -47,6 +47,8 @@ typedef enum {
   MELO_PLAYER_STATE_PAUSED,
   MELO_PLAYER_STATE_STOPPED,
   MELO_PLAYER_STATE_ERROR,
+
+  MELO_PLAYER_STATE_COUNT,
 } MeloPlayerState;
 
 struct _MeloPlayer {
@@ -104,6 +106,10 @@ MeloPlayerStatus *melo_player_status_new (MeloPlayerState state,
 MeloPlayerStatus *melo_player_status_copy (MeloPlayerStatus *src);
 void melo_player_status_clear (MeloPlayerStatus *status);
 void melo_player_status_free (MeloPlayerStatus *status);
+
+/* MeloPlayerState helpers */
+const gchar *melo_player_state_to_string (MeloPlayerState state);
+MeloPlayerState melo_player_state_from_string (const gchar *sstate);
 
 G_END_DECLS
 

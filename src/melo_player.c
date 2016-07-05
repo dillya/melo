@@ -285,3 +285,34 @@ melo_player_status_free (MeloPlayerStatus *status)
   melo_tags_free (status->tags);
   g_slice_free (MeloPlayerStatus, status);
 }
+
+static const gchar *melo_player_state_str[] = {
+  [MELO_PLAYER_STATE_NONE] = "none",
+  [MELO_PLAYER_STATE_PLAYING] = "playing",
+  [MELO_PLAYER_STATE_PAUSED] = "paused",
+  [MELO_PLAYER_STATE_STOPPED] = "stopped",
+  [MELO_PLAYER_STATE_ERROR] = "error",
+};
+
+const gchar *
+melo_player_state_to_string (MeloPlayerState state)
+{
+  if (state >= MELO_PLAYER_STATE_COUNT)
+    return NULL;
+  return melo_player_state_str[state];
+}
+
+MeloPlayerState
+melo_player_state_from_string (const gchar *sstate)
+{
+  int i;
+
+  if (!sstate)
+    return MELO_PLAYER_STATE_NONE;
+
+  for (i = 0; i < MELO_PLAYER_STATE_COUNT; i++)
+    if (!g_strcmp0 (sstate, melo_player_state_str[i]))
+      return i;
+
+  return MELO_PLAYER_STATE_NONE;
+}
