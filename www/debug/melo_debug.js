@@ -236,21 +236,52 @@ function melo_update_player(id, element) {
     if (response.error || !response.result)
       return;
     var s = response.result;
+    var l = (s.state == "playing") ? "Pause" : "Play";
+    var ns = (s.state == "playing") ? "paused" : "playing";
+
+    /* Generate player status */
+    var player = $('<div><a class="play_pause" href="#">' + l + '</a> | ' +
+                        '<a class="stop" href="#">Stop</a><br>' +
+                   'State: ' + s.state + '<br>' +
+                   'Name: ' + s.name + '<br>' +
+                   'Pos: ' + s.pos + ' / ' + s.duration + '</div>');
+
+    /* Add link to play / pause */
+    player.children("a.play_pause").click([id, element, ns], function(e) {
+      melo_set_player_state(e.data[0], e.data[1], e.data[2]);
+      return false;
+    });
+
+    /* Add link to stop */
+    player.children("a.stop").click([id, element, "stopped"], function(e) {
+      melo_set_player_state(e.data[0], e.data[1], e.data[2]);
+      return false;
+    });
+
+    /* Add tasg to player */
+    if (s.tags != null) {
+      player.append('<br>' +
+                    'Title: ' + s.tags.title + '<br>' +
+                    'Artist: ' + s.tags.artist + '<br>' +
+                    'Alnum: ' + s.tags.album + '<br>' +
+                    'Genre: ' + s.tags.genre + '<br>' +
+                    'Date: ' + s.tags.date + '<br>' +
+                    'Track: ' + s.tags.track + ' / ' + s.tags.track);
+    }
 
     /* Add players */
-    element.html("State: " + s.state + "<br>" +
-                 "Name: " + s.name + "<br>" +
-                 "Pos: " + s.pos + " / " + s.duration);
+    element.html(player);
+  });
+}
 
-    if (s.tags != null) {
-      element.append("<br>" +
-                     "Title: " + s.tags.title + "<br>" +
-                     "Artist: " + s.tags.artist + "<br>" +
-                     "Alnum: " + s.tags.album + "<br>" +
-                     "Genre: " + s.tags.genre + "<br>" +
-                     "Date: " + s.tags.date + "<br>" +
-                     "Track: " + s.tags.track + " / " + s.tags.track);
-    }
+function melo_set_player_state(id, element, state) {
+  jsonrpc_call("player.set_state", JSON.parse('["' + id + '","' + state + '"]'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
+
+    /* Update player status */
+    melo_update_player(id, element);
   });
 }
 
