@@ -172,6 +172,7 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
     }
     case GST_MESSAGE_EOS:
       /* End of stream */
+      gst_element_set_state (priv->pipeline, GST_STATE_NULL);
       priv->status->state = MELO_PLAYER_STATE_STOPPED;
       break;
 
@@ -288,6 +289,15 @@ melo_player_file_set_state (MeloPlayer *player, MeloPlayerState state)
 static gint
 melo_player_file_set_pos (MeloPlayer *player, gint pos)
 {
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gint64 time = (gint64) pos * 1000000;
+
+  /* Seek to new position */
+  if (!gst_element_seek (priv->pipeline, 1.0, GST_FORMAT_TIME,
+                         GST_SEEK_FLAG_FLUSH, GST_SEEK_TYPE_SET, time,
+                         GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
+    return -1;
+
   return melo_player_file_get_pos (player, NULL);
 }
 
