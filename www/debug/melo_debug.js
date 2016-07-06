@@ -200,7 +200,16 @@ function melo_browser_previous() {
   melo_get_browser_list(melo_browser_current_id, path);
 }
 
+var players = [];
+
 function melo_add_players(id, name) {
+  /* Remove all players and there timers */
+  for (var i = 0; i < players.length; i++) {
+    if (players[i].timer != null)
+      clearInterval(players[i].timer);
+  }
+  players = [];
+
   jsonrpc_call("module.get_player_list", JSON.parse('["' + id + '"]'),
                function(response) {
     if (response.error || !response.result)
@@ -209,19 +218,28 @@ function melo_add_players(id, name) {
     /* Add players */
     $("#player_list").append('<p><span class="title">' + name + ':</span></p>');
     for (var i = 0; i < response.result.length; i++) {
+      var id = response.result[i];
+
       /* Add player to list */
-      var player = $('<p> + <span class="title">' + response.result[i] + '</span>' +
+      var player = $('<p> + <span class="title">' + id + '</span>' +
                             ' [<a href="#">refresh</a>]</p>');
       var stat = $('<p></p>');
 
       /* Add a link for refresh */
-      player.children("a").click([response.result[i], stat], function(e) {
+      player.children("a").click([id, stat], function(e) {
         melo_update_player(e.data[0], e.data[1]);
         return false;
       });
 
       /* Get status */
-      melo_update_player(response.result[i], stat);
+      melo_update_player(id, stat);
+
+      /* Add player to list */
+      var play = {};
+      play.id = id;
+      play.element = stat;
+      play.timer = null;
+      players.push(play);
 
       /* Add player */
       $("#player_list").append(player);
@@ -274,6 +292,30 @@ function melo_update_player(id, element) {
   });
 }
 
+function melo_player_poll(state) {
+  /* Enable / Disable timer for player polling */
+  if (state) {
+    /* Enable */
+    for (var i = 0; i < players.length; i++) {
+      if (players[i].timer == null) {
+        var id = players[i].id;
+        var el = players[i].element;
+        players[i].timer = setInterval(function() {
+          melo_update_player(id, el);
+        }, 1000);
+      }
+    }
+  } else {
+    /* Disable */
+    for (var i = 0; i < players.length; i++) {
+      if (players[i].timer != null) {
+        clearInterval(players[i].timer);
+        players[i].timer = null;
+      }
+    }
+  }
+}
+
 function melo_set_player_state(id, element, state) {
   jsonrpc_call("player.set_state", JSON.parse('["' + id + '","' + state + '"]'),
                function(response) {
@@ -292,4 +334,5 @@ $(document).ready(function() {
   /* Add click events */
   $("#module_refresh").click(function() {melo_update_list(); return false;});
   $("#browser_prev").click(function() {melo_browser_previous(); return false;});
+  $("#player_poll").change(function() {melo_player_poll(this.checked); return false;});
 });
