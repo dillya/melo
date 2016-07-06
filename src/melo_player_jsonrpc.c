@@ -163,6 +163,45 @@ melo_player_jsonrpc_set_state (const gchar *method,
 }
 
 static void
+melo_player_jsonrpc_set_pos (const gchar *method,
+                             JsonArray *s_params, JsonNode *params,
+                             JsonNode **result, JsonNode **error,
+                             gpointer user_data)
+{
+  MeloPlayer *play;
+  JsonObject *obj;
+  gint pos;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get player from id */
+  play = melo_player_jsonrpc_get_player (obj, error);
+  if (!play) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get requested position */
+  pos = json_object_get_int_member (obj, "pos");
+  json_object_unref (obj);
+
+  /* Set new position */
+  pos = melo_player_set_pos (play, pos);
+  g_object_unref (play);
+
+  /* Create and fill object */
+  obj = json_object_new ();
+  json_object_set_int_member (obj, "pos", pos);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
+static void
 melo_player_jsonrpc_get_status (const gchar *method,
                                 JsonArray *s_params, JsonNode *params,
                                 JsonNode **result, JsonNode **error,
@@ -224,6 +263,16 @@ static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_player_jsonrpc_set_state,
+    .user_data = NULL,
+  },
+  {
+    .method = "set_pos",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"pos\", \"type\": \"int\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_player_jsonrpc_set_pos,
     .user_data = NULL,
   },
   {
