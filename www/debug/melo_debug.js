@@ -258,11 +258,26 @@ function melo_update_player(id, element) {
     var ns = (s.state == "playing") ? "paused" : "playing";
 
     /* Generate player status */
-    var player = $('<div><a class="play_pause" href="#">' + l + '</a> | ' +
+    var player = $('<div><div class="player_pos">' +
+                           '<div class="player_cursor"></div>' +
+                        '</div>' +
+                        '<a class="play_pause" href="#">' + l + '</a> | ' +
                         '<a class="stop" href="#">Stop</a><br>' +
                    'State: ' + s.state + '<br>' +
                    'Name: ' + s.name + '<br>' +
                    'Pos: ' + s.pos + ' / ' + s.duration + '</div>');
+
+    /* Set width of player cursor */
+    player.find("div.player_cursor").width((s.pos * 100 / s.duration) + "%");
+
+    /* Add action for seek */
+    player.children("div.player_pos").click([id, s.duration], function(e) {
+      var pos = e.data[1] * (e.pageX - $(this).offset().left) / $(this).width();
+      pos = parseInt(pos, 10);
+      melo_player_seek(e.data[0], pos);
+      $(this).children("div.player_cursor").width((pos * 100 / e.data[1]) + "%");
+      return false;
+    });
 
     /* Add link to play / pause */
     player.children("a.play_pause").click([id, element, ns], function(e) {
@@ -324,6 +339,14 @@ function melo_set_player_state(id, element, state) {
 
     /* Update player status */
     melo_update_player(id, element);
+  });
+}
+
+function melo_player_seek(id, pos) {
+  jsonrpc_call("player.set_pos", JSON.parse('["' + id + '",' + pos + ']'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
   });
 }
 
