@@ -258,7 +258,8 @@ function melo_update_player(id, element) {
     var ns = (s.state == "playing") ? "paused" : "playing";
 
     /* Generate player status */
-    var player = $('<div><div class="player_pos">' +
+    var player = $('<div><img class="player_cover" src="" alt="cover">' +
+                        '<div class="player_pos">' +
                            '<div class="player_cursor"></div>' +
                         '</div>' +
                         '<a class="play_pause" href="#">' + l + '</a> | ' +
@@ -266,6 +267,10 @@ function melo_update_player(id, element) {
                    'State: ' + s.state + '<br>' +
                    'Name: ' + s.name + '<br>' +
                    'Pos: ' + s.pos + ' / ' + s.duration + '</div>');
+
+    /* Update image src if available */
+    if (s.tags.cover != null)
+      player.children("img.player_cover").attr('src', 'data:;base64,' + s.tags.cover);
 
     /* Set width of player cursor */
     player.find("div.player_cursor").width((s.pos * 100 / s.duration) + "%");
