@@ -59,6 +59,13 @@ PKG_CHECK_MODULES([GST],
     AC_MSG_ERROR(Gstreamer $GST_REQ or later is required)
   ])
 
+dnl Check for Gstreamer tag
+PKG_CHECK_MODULES([GST_TAG],
+  gstreamer-tag-1.0 >= $GST_REQ, [],
+  [
+    AC_MSG_ERROR(Gstreamer-tag $GST_REQ or later is required)
+  ])
+
 AC_CONFIG_FILES(
 Makefile
 src/Makefile

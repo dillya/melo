@@ -1,12 +1,14 @@
 AM_CFLAGS = \
 	$(GLIB_CFLAGS) \
 	$(GST_CFLAGS) \
+	$(GST_TAG_CFLAGS) \
 	$(LIBJSON_GLIB_CFLAGS) \
 	-Wall
 
 AM_LDFLAGS = \
 	$(GLIB_LIBS) \
 	$(GST_LIBS) \
+	$(GST_TAG_LIBS) \
 	$(LIBJSON_GLIB_LIBS)
 
 # Libraries

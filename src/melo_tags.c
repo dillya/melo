@@ -21,6 +21,8 @@
 
 #include <string.h>
 
+#include <gst/tag/tag.h>
+
 #include "melo_tags.h"
 
 MeloTags *
@@ -47,6 +49,8 @@ melo_tags_copy (MeloTags *src)
   dest->date = src->date;
   dest->track = src->track;
   dest->tracks = src->tracks;
+  if (src->cover)
+    dest->cover = g_bytes_ref (src->cover);
 
   return dest;
 }
@@ -71,12 +75,72 @@ melo_tags_update_from_gst_tag_list (MeloTags *tags, GstTagList *tlist,
     gst_tag_list_get_string (tlist, GST_TAG_ALBUM, &tags->album);
   if (fields & MELO_TAGS_FIELDS_GENRE)
     gst_tag_list_get_string (tlist, GST_TAG_GENRE, &tags->genre);
-  if (fields & MELO_TAGS_FIELDS_DATE)
-    gst_tag_list_get_int (tlist, GST_TAG_DATE, &tags->date);
   if (fields & MELO_TAGS_FIELDS_TRACK)
     gst_tag_list_get_uint (tlist, GST_TAG_TRACK_NUMBER, &tags->track);
   if (fields & MELO_TAGS_FIELDS_TRACKS)
     gst_tag_list_get_uint (tlist, GST_TAG_TRACK_COUNT, &tags->tracks);
+
+  /* Get date */
+  if (fields & MELO_TAGS_FIELDS_DATE) {
+    GDate *date;
+
+    /* Get only year from GDate */
+    if (gst_tag_list_get_date (tlist, GST_TAG_DATE, &date)) {
+      tags->date = g_date_get_year (date);
+      g_date_free (date);
+    }
+  }
+
+  /* Get album / single cover */
+  if (fields & MELO_TAGS_FIELDS_COVER) {
+    GstBuffer *buffer = NULL;
+    gint count, i;
+
+    /* Find the best image (front cover if possible) */
+    count = gst_tag_list_get_tag_size(tlist, GST_TAG_IMAGE);
+    for (i = 0; i < count; i++) {
+      GstTagImageType type = GST_TAG_IMAGE_TYPE_NONE;
+      const GstStructure *info;
+      GstSample *sample;
+
+      /* Get next image */
+      if (!gst_tag_list_get_sample_index (tlist, GST_TAG_IMAGE, i, &sample))
+        continue;
+
+      /* Get infos about image */
+      info = gst_sample_get_info (sample);
+      if (!info) {
+        gst_sample_unref (sample);
+        continue;
+      }
+
+      /* Get image type */
+      gst_structure_get_enum (info, "image-type", GST_TYPE_TAG_IMAGE_TYPE,
+                              &type);
+      /* Select only front cover or first undefined image */
+      if (type == GST_TAG_IMAGE_TYPE_FRONT_COVER ||
+          (type == GST_TAG_IMAGE_TYPE_UNDEFINED && buffer == NULL)) {
+        if (buffer)
+          gst_buffer_unref (buffer);
+        buffer = gst_buffer_ref (gst_sample_get_buffer (sample));
+      }
+      gst_sample_unref (sample);
+    }
+
+    /* Copy found image */
+    if (buffer) {
+        gpointer data;
+        gsize size, dsize;
+
+        /* Extract data from buffer */
+        size = gst_buffer_get_size (buffer);
+        gst_buffer_extract_dup (buffer, 0, size, &data, &dsize);
+
+        /* Create a new GBytes with data */
+        tags->cover = g_bytes_new_take (data, dsize);
+        gst_buffer_unref (buffer);
+    }
+  }
 }
 
 MeloTagsFields
@@ -112,6 +176,8 @@ melo_tags_get_fields_from_json_array (JsonArray *array)
       fields |= MELO_TAGS_FIELDS_TRACK;
     else if (!g_strcmp0 (field, "tracks"))
       fields |= MELO_TAGS_FIELDS_TRACKS;
+    else if (!g_strcmp0 (field, "cover"))
+      fields |= MELO_TAGS_FIELDS_COVER;
   }
 
   return fields;
@@ -140,6 +206,21 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
     json_object_set_int_member (obj, "track", tags->track);
   if (fields & MELO_TAGS_FIELDS_TRACKS)
     json_object_set_int_member (obj, "tracks", tags->tracks);
+
+  /* Convert image to base64 */
+  if (fields & MELO_TAGS_FIELDS_COVER && tags->cover) {
+    const guchar *data;
+    gsize size;
+    gchar *cover;
+
+    /* Get data and encode */
+    data = g_bytes_get_data (tags->cover, &size);
+    cover = g_base64_encode (data, size);
+
+    /* Add to object */
+    json_object_set_string_member (obj, "cover", cover);
+    g_free (cover);
+  }
 }
 
 JsonObject *
@@ -165,6 +246,7 @@ melo_tags_clear (MeloTags *tags)
   g_clear_pointer (&tags->artist, g_free);
   g_clear_pointer (&tags->album, g_free);
   g_clear_pointer (&tags->genre, g_free);
+  g_clear_pointer (&tags->cover, g_bytes_unref);
   memset (tags, 0, sizeof (*tags));
 }
 
@@ -175,5 +257,6 @@ melo_tags_free (MeloTags *tags)
   g_free (tags->artist);
   g_free (tags->album);
   g_free (tags->genre);
+  g_bytes_unref (tags->cover);
   g_slice_free (MeloTags, tags);
 }

@@ -37,6 +37,7 @@ struct _MeloTags {
   gint date;
   guint track;
   guint tracks;
+  GBytes *cover;
 };
 
 enum _MeloTagsFields {
@@ -48,6 +49,7 @@ enum _MeloTagsFields {
   MELO_TAGS_FIELDS_DATE = 16,
   MELO_TAGS_FIELDS_TRACK = 32,
   MELO_TAGS_FIELDS_TRACKS = 64,
+  MELO_TAGS_FIELDS_COVER = 128,
 
   MELO_TAGS_FIELDS_FULL = ~0,
 };
