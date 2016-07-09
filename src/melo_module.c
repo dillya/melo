@@ -156,6 +156,7 @@ melo_module_unregister_browser (MeloModule *module, const char *id)
   /* Remove browser from list */
   priv->browser_list = g_list_remove (priv->browser_list, bro);
   g_object_unref (bro);
+  g_object_unref (bro);
 
 unlock:
   /* Unlock browser list */
@@ -223,6 +224,7 @@ melo_module_unregister_player (MeloModule *module, const char *id)
 
   /* Remove player from list */
   priv->player_list = g_list_remove (priv->player_list, play);
+  g_object_unref (play);
   g_object_unref (play);
 
 unlock:
