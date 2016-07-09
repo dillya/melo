@@ -210,7 +210,7 @@ function melo_add_players(id, name) {
   }
   players = [];
 
-  jsonrpc_call("module.get_player_list", JSON.parse('["' + id + '"]'),
+  jsonrpc_call("module.get_player_list", JSON.parse('["' + id + '",["full"]]'),
                function(response) {
     if (response.error || !response.result)
       return;
@@ -218,7 +218,7 @@ function melo_add_players(id, name) {
     /* Add players */
     $("#player_list").append('<p><span class="title">' + name + ':</span></p>');
     for (var i = 0; i < response.result.length; i++) {
-      var id = response.result[i];
+      var id = response.result[i].id;
 
       /* Add player to list */
       var player = $('<p> + <span class="title">' + id + '</span>' +
