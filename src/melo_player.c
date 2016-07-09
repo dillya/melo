@@ -203,13 +203,13 @@ melo_player_add (MeloPlayer *player, const gchar *name, const gchar *full_name,
 }
 
 gboolean
-melo_player_play (MeloPlayer *player, const gchar *path)
+melo_player_play (MeloPlayer *player, const gchar *path, gboolean insert)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 
   g_return_val_if_fail (pclass->play, FALSE);
 
-  return pclass->play (player, path);
+  return pclass->play (player, path, insert);
 }
 
 MeloPlayerState

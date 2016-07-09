@@ -187,7 +187,7 @@ melo_playlist_file_play (MeloPlaylist *playlist, const gchar *name)
 
   /* Play media if player is available */
   if (playlist->player)
-    melo_player_play (playlist->player, item->path);
+    melo_player_play (playlist->player, item->path, FALSE);
   melo_playlist_item_unref (item);
 
   return TRUE;

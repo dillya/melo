@@ -70,7 +70,7 @@ struct _MeloPlayerClass {
   const MeloPlayerInfo *(*get_info) (MeloPlayer *player);
 
   /* Control callbacks */
-  gboolean (*play) (MeloPlayer *player, const gchar *path);
+  gboolean (*play) (MeloPlayer *player, const gchar *path, gboolean insert);
   MeloPlayerState (*set_state) (MeloPlayer *player, MeloPlayerState state);
   gint (*set_pos) (MeloPlayer *player, gint pos);
 
@@ -111,7 +111,8 @@ gboolean melo_player_add (MeloPlayer *player, const gchar *name,
                           gboolean is_current);
 
 /* Player control */
-gboolean melo_player_play (MeloPlayer *player, const gchar *path);
+gboolean melo_player_play (MeloPlayer *player, const gchar *path,
+                           gboolean insert);
 MeloPlayerState melo_player_set_state (MeloPlayer *player,
                                        MeloPlayerState state);
 gint melo_player_set_pos (MeloPlayer *player, gint pos);

@@ -26,7 +26,8 @@
 static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data);
 static void pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink);
 
-static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path);
+static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path,
+                                       gboolean insert);
 static MeloPlayerState melo_player_file_set_state (MeloPlayer *player,
                                                    MeloPlayerState state);
 static gint melo_player_file_set_pos (MeloPlayer *player, gint pos);
@@ -244,7 +245,8 @@ pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink)
 }
 
 static gboolean
-melo_player_file_play (MeloPlayer *player, const gchar *path)
+melo_player_file_play (MeloPlayer *player, const gchar *path,
+                       gboolean insert)
 {
   MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
   gchar *name;
@@ -271,7 +273,8 @@ melo_player_file_play (MeloPlayer *player, const gchar *path)
   gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
 
   /* Add new file to playlist */
-  melo_player_add (player, name, name, path, TRUE);
+  if (insert)
+    melo_player_add (player, name, name, path, TRUE);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
