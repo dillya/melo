@@ -22,6 +22,7 @@
 #include "melo_file.h"
 #include "melo_browser_file.h"
 #include "melo_player_file.h"
+#include "melo_playlist_file.h"
 
 /* Module file info */
 static MeloModuleInfo melo_file_info = {
@@ -34,6 +35,7 @@ static const MeloModuleInfo *melo_file_get_info (MeloModule *module);
 struct _MeloFilePrivate {
   MeloBrowser *files;
   MeloPlayer *player;
+  MeloPlaylist *playlist;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloFile, melo_file, MELO_TYPE_MODULE)
@@ -42,6 +44,9 @@ static void
 melo_file_finalize (GObject *gobject)
 {
   MeloFilePrivate *priv = melo_file_get_instance_private (MELO_FILE (gobject));
+
+  if (priv->playlist)
+    g_object_unref (priv->playlist);
 
   if (priv->player) {
     melo_module_unregister_player (MELO_MODULE (gobject), "file_player");
@@ -78,14 +83,19 @@ melo_file_init (MeloFile *self)
   self->priv = priv;
   priv->files = melo_browser_new (MELO_TYPE_BROWSER_FILE, "file_files");
   priv->player = melo_player_new (MELO_TYPE_PLAYER_FILE, "file_player");
+  priv->playlist = melo_playlist_new (MELO_TYPE_PLAYLIST_FILE, "file_playlist");
 
-  if (priv->files)
-    melo_module_register_browser (MELO_MODULE (self), priv->files);
-  if (priv->player) {
-    melo_module_register_player (MELO_MODULE (self), priv->player);
-    if (priv->files)
-      melo_browser_set_player (MELO_BROWSER (priv->files), priv->player);
-  }
+  if (!priv->files || !priv->player || !priv->player)
+    return;
+
+  /* Register browser and player */
+  melo_module_register_browser (MELO_MODULE (self), priv->files);
+  melo_module_register_player (MELO_MODULE (self), priv->player);
+
+  /* Create links between browser, player and playlist */
+  melo_player_set_playlist (priv->player, priv->playlist);
+  melo_playlist_set_player (priv->playlist, priv->player);
+  melo_browser_set_player (priv->files, priv->player);
 }
 
 static const MeloModuleInfo *

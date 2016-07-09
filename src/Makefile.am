@@ -50,6 +50,7 @@ libmelo_file_la_DEPENDENCIES = \
 libmelo_file_la_SOURCES = \
 	melo_browser_file.c \
 	melo_player_file.c \
+	melo_playlist_file.c \
 	melo_file.c
 
 # Main program
@@ -78,6 +79,7 @@ noinst_HEADERS = \
 	melo_file.h \
 	melo_browser_file.h \
 	melo_player_file.h \
+	melo_playlist_file.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
 	melo_httpd_jsonrpc.h

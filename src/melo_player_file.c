@@ -247,6 +247,7 @@ static gboolean
 melo_player_file_play (MeloPlayer *player, const gchar *path)
 {
   MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gchar *name;
 
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
@@ -261,13 +262,16 @@ melo_player_file_play (MeloPlayer *player, const gchar *path)
   priv->uri = g_strdup (path);
 
   /* Create new status */
-  priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING,
-                                         g_path_get_basename (priv->uri));
+  name = g_path_get_basename (priv->uri);
+  priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
   priv->tag_list = gst_tag_list_new_empty ();
 
   /* Set new location to src element */
   g_object_set (priv->src, "uri", path, NULL);
   gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
+
+  /* Add new file to playlist */
+  melo_player_add (player, name, name, path, TRUE);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
