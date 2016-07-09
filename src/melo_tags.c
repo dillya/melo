@@ -89,7 +89,7 @@ melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
 
   /* Get album / single cover */
   if (fields & MELO_TAGS_FIELDS_COVER) {
-    GstBuffer *buffer = NULL;
+    GstSample *final_sample = NULL;
     gint count, i;
 
     /* Find the best image (front cover if possible) */
@@ -115,29 +115,34 @@ melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
                               &type);
       /* Select only front cover or first undefined image */
       if (type == GST_TAG_IMAGE_TYPE_FRONT_COVER ||
-          (type == GST_TAG_IMAGE_TYPE_UNDEFINED && buffer == NULL)) {
-        if (buffer)
-          gst_buffer_unref (buffer);
-        buffer = gst_buffer_ref (gst_sample_get_buffer (sample));
+          (type == GST_TAG_IMAGE_TYPE_UNDEFINED && final_sample == NULL)) {
+        if (final_sample)
+          gst_sample_unref (final_sample);
+        final_sample = sample;
+        continue;
       }
       gst_sample_unref (sample);
     }
 
     /* Get preview image if no image found */
-    if (!buffer) {
+    if (!final_sample) {
       GstSample *sample;
 
       /* Get preview */
-      if (gst_tag_list_get_sample (tlist, GST_TAG_PREVIEW_IMAGE, &sample)) {
-        buffer = gst_buffer_ref (gst_sample_get_buffer (sample));
-        gst_sample_unref (sample);
-      }
+      if (gst_tag_list_get_sample (tlist, GST_TAG_PREVIEW_IMAGE, &sample))
+        final_sample = sample;
     }
 
     /* Copy found image */
-    if (buffer) {
+    if (final_sample) {
+        GstBuffer *buffer;
+        GstCaps *caps;
         gpointer data;
         gsize size, dsize;
+
+        /* Get buffer and caps */
+        buffer = gst_sample_get_buffer (final_sample);
+        caps = gst_sample_get_caps (final_sample);
 
         /* Extract data from buffer */
         size = gst_buffer_get_size (buffer);
@@ -145,7 +150,10 @@ melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
 
         /* Create a new GBytes with data */
         tags->cover = g_bytes_new_take (data, dsize);
-        gst_buffer_unref (buffer);
+
+        /* Copy type string */
+        tags->cover_type = gst_caps_to_string (caps);
+        gst_sample_unref (final_sample);
     }
   }
 
@@ -228,6 +236,7 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
 
     /* Add to object */
     json_object_set_string_member (obj, "cover", cover);
+    json_object_set_string_member (obj, "cover-type", tags->cover_type);
     g_free (cover);
   }
 }
@@ -261,5 +270,6 @@ melo_tags_unref (MeloTags *tags)
   g_free (tags->album);
   g_free (tags->genre);
   g_bytes_unref (tags->cover);
+  g_free (tags->cover_type);
   g_slice_free (MeloTags, tags);
 }

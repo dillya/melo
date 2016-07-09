@@ -38,6 +38,7 @@ struct _MeloTags {
   guint track;
   guint tracks;
   GBytes *cover;
+  gchar *cover_type;
 
   gint ref_count;
 };
