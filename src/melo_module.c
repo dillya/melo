@@ -246,7 +246,6 @@ melo_module_get_player_list (MeloModule *module)
   g_mutex_unlock (&priv->player_mutex);
 
   return list;
-
 }
 
 /* Register a new module */

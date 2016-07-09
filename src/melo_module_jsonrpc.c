@@ -21,6 +21,7 @@
 
 #include "melo_module_jsonrpc.h"
 #include "melo_browser_jsonrpc.h"
+#include "melo_player_jsonrpc.h"
 
 typedef enum {
   MELO_MODULE_JSONRPC_FIELDS_NONE = 0,
@@ -243,6 +244,8 @@ melo_module_jsonrpc_get_player_list (const gchar *method,
                                      JsonNode **result, JsonNode **error,
                                      gpointer user_data)
 {
+  MeloPlayerJSONRPCInfoFields fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
+  const MeloPlayerInfo *info = NULL;
   MeloPlayer *play;
   MeloModule *mod;
   JsonArray *array;
@@ -262,6 +265,9 @@ melo_module_jsonrpc_get_player_list (const gchar *method,
     return;
   }
 
+  /* Get fields */
+  fields = melo_player_jsonrpc_get_info_fields (obj);
+
   /* Get player list */
   list = melo_module_get_player_list (mod);
   json_object_unref (obj);
@@ -272,7 +278,10 @@ melo_module_jsonrpc_get_player_list (const gchar *method,
   for (l = list; l != NULL; l = l->next) {
     play = MELO_PLAYER (l->data);
     id = melo_player_get_id (play);
-    json_array_add_string_element (array, id);
+    if (fields != MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE)
+      info = melo_player_get_info (play);
+    obj = melo_player_jsonrpc_info_to_object (id, info, fields);
+    json_array_add_object_element (array, obj);
   }
 
   /* Free player list */
@@ -326,7 +335,11 @@ static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
   {
     .method = "get_player_list",
     .params = "["
-              "  {\"name\": \"id\", \"type\": \"string\"}"
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
               "]",
     .result = "{\"type\":\"array\"}",
     .callback = melo_module_jsonrpc_get_player_list,
