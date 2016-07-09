@@ -24,6 +24,7 @@
 
 #include <glib-object.h>
 
+#include "melo_playlist.h"
 #include "melo_tags.h"
 
 G_BEGIN_DECLS
@@ -53,6 +54,9 @@ typedef enum {
 
 struct _MeloPlayer {
   GObject parent_instance;
+
+  /*< protected >*/
+  MeloPlaylist *playlist;
 
   /*< private >*/
   MeloPlayerPrivate *priv;
@@ -89,6 +93,13 @@ GType melo_player_get_type (void);
 MeloPlayer *melo_player_new (GType type, const gchar *id);
 const gchar *melo_player_get_id (MeloPlayer *player);
 MeloPlayer *melo_player_get_player_by_id (const gchar *id);
+
+/* Playlist */
+void melo_player_set_playlist (MeloPlayer *player, MeloPlaylist *playlist);
+MeloPlaylist *melo_player_get_playlist (MeloPlayer *player);
+gboolean melo_player_add (MeloPlayer *player, const gchar *name,
+                          const gchar *full_name, const gchar *path,
+                          gboolean is_current);
 
 /* Player control */
 gboolean melo_player_play (MeloPlayer *player, const gchar *path);

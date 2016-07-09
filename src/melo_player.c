@@ -51,6 +51,10 @@ melo_player_finalize (GObject *gobject)
   /* Free player ID */
   g_free (priv->id);
 
+  /* Unref attached playlist */
+  if (player->playlist)
+    g_object_unref (player->playlist);
+
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_player_parent_class)->finalize (gobject);
 }
@@ -149,6 +153,34 @@ melo_player_new (GType type, const gchar *id)
 failed:
   G_UNLOCK (melo_player_mutex);
   return NULL;
+}
+
+void
+melo_player_set_playlist (MeloPlayer *player, MeloPlaylist *playlist)
+{
+  if (player->playlist)
+    g_object_unref (player->playlist);
+
+  player->playlist = g_object_ref (playlist);
+}
+
+MeloPlaylist *
+melo_player_get_playlist (MeloPlayer *player)
+{
+  g_return_val_if_fail (player->playlist, NULL);
+
+  return g_object_ref (player->playlist);
+}
+
+gboolean
+melo_player_add (MeloPlayer *player, const gchar *name, const gchar *full_name,
+                 const gchar *path, gboolean is_current)
+{
+  if (!player->playlist)
+    return FALSE;
+
+  return melo_playlist_add (player->playlist, name, full_name, path,
+                            is_current);
 }
 
 gboolean
