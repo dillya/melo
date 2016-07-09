@@ -123,6 +123,17 @@ melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
       gst_sample_unref (sample);
     }
 
+    /* Get preview image if no image found */
+    if (!buffer) {
+      GstSample *sample;
+
+      /* Get preview */
+      if (gst_tag_list_get_sample (tlist, GST_TAG_PREVIEW_IMAGE, &sample)) {
+        buffer = gst_buffer_ref (gst_sample_get_buffer (sample));
+        gst_sample_unref (sample);
+      }
+    }
+
     /* Copy found image */
     if (buffer) {
         gpointer data;
