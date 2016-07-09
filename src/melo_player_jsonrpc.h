@@ -25,6 +25,20 @@
 #include "melo_player.h"
 #include "melo_jsonrpc.h"
 
+typedef enum {
+  MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE = 0,
+  MELO_PLAYER_JSONRPC_INFO_FIELDS_PLAYLIST = 1,
+
+  MELO_PLAYER_JSONRPC_INFO_FIELDS_FULL = 255,
+} MeloPlayerJSONRPCInfoFields;
+
+MeloPlayerJSONRPCInfoFields melo_player_jsonrpc_get_info_fields (
+                                                               JsonObject *obj);
+JsonObject *melo_player_jsonrpc_info_to_object (
+                                            const gchar *id,
+                                            const MeloPlayerInfo *info,
+                                            MeloPlayerJSONRPCInfoFields fields);
+
 /* JSON-RPC methods */
 void melo_player_register_methods (void);
 void melo_player_unregister_methods (void);

@@ -50,6 +50,57 @@ melo_player_jsonrpc_get_player (JsonObject *obj, JsonNode **error)
   return NULL;
 }
 
+MeloPlayerJSONRPCInfoFields
+melo_player_jsonrpc_get_info_fields (JsonObject *obj)
+{
+  MeloPlayerJSONRPCInfoFields fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
+  const gchar *field;
+  JsonArray *array;
+  guint count, i;
+
+  /* Check if fields is available */
+  if (!json_object_has_member (obj, "fields"))
+    return fields;
+
+  /* Get fields array */
+  array = json_object_get_array_member (obj, "fields");
+  if (!array)
+    return fields;
+
+  /* Parse array */
+  count = json_array_get_length (array);
+  for (i = 0; i < count; i++) {
+    field = json_array_get_string_element (array, i);
+    if (!field)
+      break;
+    if (!g_strcmp0 (field, "none")) {
+      fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
+      break;
+    } else if (!g_strcmp0 (field, "full")) {
+      fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_FULL;
+      break;
+    } else if (!g_strcmp0 (field, "playlist"))
+      fields |= MELO_PLAYER_JSONRPC_INFO_FIELDS_PLAYLIST;
+  }
+
+  return fields;
+}
+
+JsonObject *
+melo_player_jsonrpc_info_to_object (const gchar *id,
+                                    const MeloPlayerInfo *info,
+                                    MeloPlayerJSONRPCInfoFields fields)
+{
+  JsonObject *obj = json_object_new ();
+  if (id)
+    json_object_set_string_member (obj, "id", id);
+  if (info) {
+    if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_PLAYLIST)
+      json_object_set_string_member (obj, "playlist", info->playlist_id);
+  }
+  return obj;
+}
+
 static MeloPlayerJSONRPCFields
 melo_player_jsonrpc_get_fields (JsonObject *obj)
 {
@@ -120,6 +171,43 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
 }
 
 /* Method callbacks */
+static void
+melo_player_jsonrpc_get_info (const gchar *method,
+                              JsonArray *s_params, JsonNode *params,
+                              JsonNode **result, JsonNode **error,
+                              gpointer user_data)
+{
+  MeloPlayerJSONRPCInfoFields fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
+  const MeloPlayerInfo *info = NULL;
+  MeloPlayer *play;
+  JsonObject *obj;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get player from ID */
+  play = melo_player_jsonrpc_get_player (obj, error);
+  if (!play) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get info fields */
+  fields = melo_player_jsonrpc_get_info_fields (obj);
+  json_object_unref (obj);
+
+  /* Generate object */
+  info = melo_player_get_info (play);
+  obj = melo_player_jsonrpc_info_to_object (NULL, info, fields);
+  g_object_unref (play);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
 static void
 melo_player_jsonrpc_set_state (const gchar *method,
                                JsonArray *s_params, JsonNode *params,
@@ -255,6 +343,19 @@ melo_player_jsonrpc_get_status (const gchar *method,
 
 /* List of methods */
 static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
+  {
+    .method = "get_info",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_player_jsonrpc_get_info,
+    .user_data = NULL,
+  },
   {
     .method = "set_state",
     .params = "["
