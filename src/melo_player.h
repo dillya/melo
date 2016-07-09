@@ -80,6 +80,8 @@ struct _MeloPlayerStatus {
   gint pos;
   gint duration;
   MeloTags *tags;
+
+  gint ref_count;
 };
 
 GType melo_player_get_type (void);
@@ -103,9 +105,10 @@ MeloPlayerStatus *melo_player_get_status (MeloPlayer *player);
 /* MeloPlayerStatus helpers */
 MeloPlayerStatus *melo_player_status_new (MeloPlayerState state,
                                           const gchar *name);
-MeloPlayerStatus *melo_player_status_copy (MeloPlayerStatus *src);
-void melo_player_status_clear (MeloPlayerStatus *status);
-void melo_player_status_free (MeloPlayerStatus *status);
+MeloPlayerStatus *melo_player_status_ref (MeloPlayerStatus *status);
+void melo_player_status_unref (MeloPlayerStatus *status);
+void melo_player_status_set_tags (MeloPlayerStatus *status, MeloTags *tags);
+void melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags);
 
 /* MeloPlayerState helpers */
 const gchar *melo_player_state_to_string (MeloPlayerState state);

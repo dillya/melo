@@ -38,6 +38,8 @@ struct _MeloTags {
   guint track;
   guint tracks;
   GBytes *cover;
+
+  gint ref_count;
 };
 
 enum _MeloTagsFields {
@@ -54,14 +56,13 @@ enum _MeloTagsFields {
   MELO_TAGS_FIELDS_FULL = ~0,
 };
 
-MeloTags *melo_tags_new ();
-MeloTags *melo_tags_copy (MeloTags *src);
-void melo_tags_clear (MeloTags *tags);
-void melo_tags_free (MeloTags *tags);
+MeloTags *melo_tags_new (void);
+MeloTags *melo_tags_ref (MeloTags *src);
+void melo_tags_unref (MeloTags *tags);
 
 /* Gstreamer helper */
-void melo_tags_update_from_gst_tag_list (MeloTags *tags, GstTagList *tlist,
-                                         MeloTagsFields fields);
+MeloTags *melo_tags_new_from_gst_tag_list (GstTagList *tlist,
+                                           MeloTagsFields fields);
 
 /* JSON-RPC helper */
 MeloTagsFields melo_tags_get_fields_from_json_array (JsonArray *array);

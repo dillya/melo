@@ -59,7 +59,7 @@ melo_player_file_finalize (GObject *gobject)
 
   /* Stop pipeline */
   gst_element_set_state (priv->pipeline, GST_STATE_NULL);
-  melo_player_status_free (priv->status);
+  melo_player_status_unref (priv->status);
 
   /* Remove message handler */
   g_source_remove (priv->bus_watch_id);
@@ -152,6 +152,7 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
     }
     case GST_MESSAGE_TAG: {
       GstTagList *tags;
+      MeloTags *mtags;
 
       /* Get tag list from message */
       gst_message_parse_tag (msg, &tags);
@@ -160,8 +161,9 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       g_mutex_lock (&priv->mutex);
 
       /* Fill MeloTags with GstTagList */
-      melo_tags_update_from_gst_tag_list (priv->status->tags, tags,
-                                          MELO_TAGS_FIELDS_FULL);
+      mtags = melo_tags_new_from_gst_tag_list (tags,
+                                               MELO_TAGS_FIELDS_FULL);
+      melo_player_status_take_tags (priv->status, mtags);
 
       /* Unlock player mutex */
       g_mutex_unlock (&priv->mutex);
@@ -239,19 +241,19 @@ melo_player_file_play (MeloPlayer *player, const gchar *path)
 
   /* Stop pipeline */
   gst_element_set_state (priv->pipeline, GST_STATE_NULL);
-  melo_player_status_clear (priv->status);
-
-  /* Set new location to src element */
-  g_object_set (priv->src, "uri", path, NULL);
-  gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
+  melo_player_status_unref (priv->status);
 
   /* Replace URI */
   g_free (priv->uri);
   priv->uri = g_strdup (path);
-  priv->status->state = MELO_PLAYER_STATE_PLAYING;
 
-  /* Extract filename from URI */
-  priv->status->name = g_path_get_basename (priv->uri);
+  /* Create new status */
+  priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING,
+                                         g_path_get_basename (priv->uri));
+
+  /* Set new location to src element */
+  g_object_set (priv->src, "uri", path, NULL);
+  gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
@@ -269,7 +271,8 @@ melo_player_file_set_state (MeloPlayer *player, MeloPlayerState state)
 
   if (state == MELO_PLAYER_STATE_NONE) {
     gst_element_set_state (priv->pipeline, GST_STATE_NULL);
-    melo_player_status_clear (priv->status);
+    melo_player_status_unref (priv->status);
+    priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
   } else if (state == MELO_PLAYER_STATE_PLAYING)
     gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
   else if (state == MELO_PLAYER_STATE_PAUSED)
@@ -352,7 +355,7 @@ melo_player_file_get_status (MeloPlayer *player)
   g_mutex_lock (&priv->mutex);
 
   /* Copy status */
-  status = melo_player_status_copy (priv->status);
+  status = melo_player_status_ref (priv->status);
   status->pos = melo_player_file_get_pos (player, NULL);
 
   /* Unlock player mutex */

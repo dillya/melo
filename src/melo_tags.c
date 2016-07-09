@@ -28,43 +28,39 @@
 MeloTags *
 melo_tags_new (void)
 {
-  return g_slice_new0 (MeloTags);
+  MeloTags *tags;
+
+  /* Allocate new tags */
+  tags = g_slice_new0 (MeloTags);
+  if (!tags)
+    return NULL;
+
+  /* Set reference counter to 1 */
+  tags->ref_count = 1;
+
+  return tags;
 }
 
 MeloTags *
-melo_tags_copy (MeloTags *src)
+melo_tags_ref (MeloTags *tags)
 {
-  MeloTags *dest;
-
-  /* Create a new tags */
-  dest = melo_tags_new ();
-  if (!dest)
-    return NULL;
-
-  /* Copy tags */
-  dest->title = g_strdup (src->title);
-  dest->artist = g_strdup (src->artist);
-  dest->album = g_strdup (src->album);
-  dest->genre = g_strdup (src->genre);
-  dest->date = src->date;
-  dest->track = src->track;
-  dest->tracks = src->tracks;
-  if (src->cover)
-    dest->cover = g_bytes_ref (src->cover);
-
-  return dest;
+  tags->ref_count++;
+  return tags;
 }
 
-void
-melo_tags_update_from_gst_tag_list (MeloTags *tags, GstTagList *tlist,
-                                    MeloTagsFields fields)
+MeloTags *
+melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
 {
-  /* Clear before update */
-  melo_tags_clear (tags);
+  MeloTags *tags;
+
+  /* Create new tags */
+  tags = melo_tags_new ();
+  if (!tags)
+    return NULL;
 
   /* No fields to read */
   if (fields == MELO_TAGS_FIELDS_NONE)
-    return;
+    return tags;
 
   /* Fill MeloTags from GstTagList */
   if (fields & MELO_TAGS_FIELDS_TITLE)
@@ -141,6 +137,8 @@ melo_tags_update_from_gst_tag_list (MeloTags *tags, GstTagList *tlist,
         gst_buffer_unref (buffer);
     }
   }
+
+  return tags;
 }
 
 MeloTagsFields
@@ -188,7 +186,7 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
                               MeloTagsFields fields)
 {
   /* Nothing to do */
-  if (fields == MELO_TAGS_FIELDS_NONE)
+  if (!tags || fields == MELO_TAGS_FIELDS_NONE)
     return;
 
   /* Fill object */
@@ -240,19 +238,13 @@ melo_tags_to_json_object (MeloTags *tags, MeloTagsFields fields)
 }
 
 void
-melo_tags_clear (MeloTags *tags)
+melo_tags_unref (MeloTags *tags)
 {
-  g_clear_pointer (&tags->title, g_free);
-  g_clear_pointer (&tags->artist, g_free);
-  g_clear_pointer (&tags->album, g_free);
-  g_clear_pointer (&tags->genre, g_free);
-  g_clear_pointer (&tags->cover, g_bytes_unref);
-  memset (tags, 0, sizeof (*tags));
-}
+  tags->ref_count--;
+  if (tags->ref_count)
+    return;
 
-void
-melo_tags_free (MeloTags *tags)
-{
+  /* Free tags */
   g_free (tags->title);
   g_free (tags->artist);
   g_free (tags->album);

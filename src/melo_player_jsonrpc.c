@@ -246,7 +246,7 @@ melo_player_jsonrpc_get_status (const gchar *method,
 
   /* Generate status */
   obj = melo_player_jsonrpc_status_to_object (status, fields, tags_fields);
-  melo_player_status_free (status);
+  melo_player_status_unref (status);
 
   /* Return result */
   *result = json_node_new (JSON_NODE_OBJECT);
