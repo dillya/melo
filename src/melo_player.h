@@ -40,6 +40,7 @@ typedef struct _MeloPlayer MeloPlayer;
 typedef struct _MeloPlayerClass MeloPlayerClass;
 typedef struct _MeloPlayerPrivate MeloPlayerPrivate;
 
+typedef struct _MeloPlayerInfo MeloPlayerInfo;
 typedef struct _MeloPlayerStatus MeloPlayerStatus;
 
 typedef enum {
@@ -65,6 +66,9 @@ struct _MeloPlayer {
 struct _MeloPlayerClass {
   GObjectClass parent_class;
 
+  /* Player infos */
+  const MeloPlayerInfo *(*get_info) (MeloPlayer *player);
+
   /* Control callbacks */
   gboolean (*play) (MeloPlayer *player, const gchar *path);
   MeloPlayerState (*set_state) (MeloPlayer *player, MeloPlayerState state);
@@ -75,6 +79,10 @@ struct _MeloPlayerClass {
   gchar *(*get_name) (MeloPlayer *player);
   gint (*get_pos) (MeloPlayer *player, gint *duration);
   MeloPlayerStatus *(*get_status) (MeloPlayer *player);
+};
+
+struct _MeloPlayerInfo {
+  const gchar *playlist_id;
 };
 
 struct _MeloPlayerStatus {
@@ -92,6 +100,7 @@ GType melo_player_get_type (void);
 
 MeloPlayer *melo_player_new (GType type, const gchar *id);
 const gchar *melo_player_get_id (MeloPlayer *player);
+const MeloPlayerInfo *melo_player_get_info (MeloPlayer *player);
 MeloPlayer *melo_player_get_player_by_id (const gchar *id);
 
 /* Playlist */

@@ -28,6 +28,7 @@ static GList *melo_player_list = NULL;
 
 struct _MeloPlayerPrivate {
   gchar *id;
+  MeloPlayerInfo info;
 };
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloPlayer, melo_player, G_TYPE_OBJECT)
@@ -75,6 +76,7 @@ melo_player_init (MeloPlayer *self)
 
   self->priv = priv;
   priv->id = NULL;
+  priv->info.playlist_id = NULL;
 }
 
 static void
@@ -90,6 +92,23 @@ const gchar *
 melo_player_get_id (MeloPlayer *player)
 {
   return player->priv->id;
+}
+
+const MeloPlayerInfo *
+melo_player_get_info (MeloPlayer *player)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+  MeloPlayerPrivate *priv = player->priv;
+
+  /* Copy info from sub module */
+  if (pclass->get_info)
+    priv->info = *pclass->get_info (player);
+
+  /* Update playlist ID */
+  if (!priv->info.playlist_id);
+    priv->info.playlist_id = melo_playlist_get_id (player->playlist);
+
+  return &priv->info;
 }
 
 MeloPlayer *
