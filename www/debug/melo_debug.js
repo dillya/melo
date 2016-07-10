@@ -231,8 +231,10 @@ function melo_add_players(id, name) {
                            '<div class="player_cursor"></div>' +
                         '</div>' +
                         '<a class="playlist" href="#">Playlist &gt;</a><br>' +
+                        '<a class="prev" href="#">&lt; Previous</a> | ' +
                         '<a class="play_pause" href="#">Play</a> | ' +
-                        '<a class="stop" href="#">Stop</a><br>' +
+                        '<a class="stop" href="#">Stop</a> | ' +
+                        '<a class="next" href="#">Next &gt;</a><br>' +
                         'State: <span class="state"></span><br>' +
                         'Name: <span class="name"></span><br>' +
                         'Pos: <span class="pos"></span><br>' +
@@ -272,6 +274,16 @@ function melo_add_players(id, name) {
           return false;
         });
       }
+
+      /* Add a link for previous and next */
+      stat.find("a.prev").click([id, play], function(e) {
+        melo_player_action("prev", e.data[0], e.data[1]);
+        return false;
+      });
+      stat.find("a.next").click([id, play], function(e) {
+        melo_player_action("next", e.data[0], e.data[1]);
+        return false;
+      });
 
       /* Get status */
       melo_update_player(play);
@@ -376,6 +388,17 @@ function melo_player_poll(state) {
 
 function melo_set_player_state(id, state, play) {
   jsonrpc_call("player.set_state", JSON.parse('["' + id + '","' + state + '"]'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
+
+    /* Update player status */
+    melo_update_player(play);
+  });
+}
+
+function melo_player_action(action, id, play) {
+  jsonrpc_call("player." + action, JSON.parse('["' + id + '"]'),
                function(response) {
     if (response.error || !response.result)
       return;
