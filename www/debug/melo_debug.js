@@ -145,21 +145,27 @@ function melo_get_browser_list(id, path) {
       } else {
         /* Do action on file / item */
         item.children("a").click([id, fpath], function(e) {
-          melo_browser_play(e.data[0], e.data[1]);
+          melo_browser_action("play", e.data[0], e.data[1], false);
+          return false;
+        });
+      }
+
+      /* Add a link if item is addable */
+      if (response.result[i].add != null) {
+        item.append(' [<a class="add" href="#">' + response.result[i].add + '</a>]');
+        item.children('a.add').click([id, fpath], function(e) {
+          melo_browser_action("add", e.data[0], e.data[1], false);
           return false;
         });
       }
 
       /* Add a link if item is removable */
       if (response.result[i].remove != null) {
-        var rm = $('<a href="#">' + response.result[i].remove + '</a>');
-        rm.click([id, npath], function(e) {
-          melo_browser_remove(e.data[0], e.data[1]);
+        item.append(' [<a class="rm" href="#">' + response.result[i].remove + '</a>]');
+        item.children('a.rm').click([id, npath], function(e) {
+          melo_browser_action("remove", e.data[0], e.data[1], true);
           return false;
         });
-        item.append(" [");
-        item.append(rm);
-        item.append("]");
       }
 
       /* Add item */
@@ -168,22 +174,15 @@ function melo_get_browser_list(id, path) {
   });
 }
 
-function melo_browser_play(id, path) {
-  jsonrpc_call("browser.play", JSON.parse('["' + id + '","' + path + '"]'),
-               function(response) {
-    if (response.error || !response.result)
-      return;
-  });
-}
-
-function melo_browser_remove(id, path) {
-  jsonrpc_call("browser.remove", JSON.parse('["' + id + '","' + path + '"]'),
+function melo_browser_action(action, id, path, update) {
+  jsonrpc_call("browser." + action, JSON.parse('["' + id + '","' + path + '"]'),
                function(response) {
     if (response.error || !response.result)
       return;
 
     /* Update list when remove is done */
-    melo_get_browser_list(melo_browser_current_id, melo_browser_current_path);
+    if (update)
+      melo_get_browser_list(melo_browser_current_id, melo_browser_current_path);
   });
 }
 
