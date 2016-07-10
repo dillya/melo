@@ -35,6 +35,10 @@
     .under {
       text-decoration: underline;
     }
+    .current {
+      background-color: #ccc;
+      border: 1px solid black;
+    }
 
     .player_cover {
       width: 200px;
@@ -91,6 +95,13 @@
         <p><span class="title">Browser list:</span></p>
         <a id="browser_prev" href="#">&lt; Previous</a>
         <ul id="browser_list"></ul>
+      </div>
+      <div class="block">
+        <h2>Playlist</h2>
+        <p><span class="title">Playlist list:</span> [ <a id="playlist_refresh" href="#">refresh</a> ]</p>
+        <input type="checkbox" id="playlist_poll" value="enabled">
+        <label for="playlist_poll">Enable playlist status poll (every 1s)</label>
+        <ul id="playlist_list"></ul>
       </div>
     </div>
   </div>
