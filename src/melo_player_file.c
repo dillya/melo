@@ -28,6 +28,7 @@ static void pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink);
 
 static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path,
                                        gboolean insert);
+static gboolean melo_player_file_prev (MeloPlayer *player);
 static gboolean melo_player_file_next (MeloPlayer *player);
 static MeloPlayerState melo_player_file_set_state (MeloPlayer *player,
                                                    MeloPlayerState state);
@@ -94,6 +95,8 @@ melo_player_file_class_init (MeloPlayerFileClass *klass)
   /* Control */
   pclass->play = melo_player_file_play;
   pclass->set_state = melo_player_file_set_state;
+  pclass->prev = melo_player_file_prev;
+  pclass->next = melo_player_file_next;
   pclass->set_pos = melo_player_file_set_pos;
 
   /* Status */
@@ -260,7 +263,7 @@ melo_player_file_play (MeloPlayer *player, const gchar *path,
   g_mutex_lock (&priv->mutex);
 
   /* Stop pipeline */
-  gst_element_set_state (priv->pipeline, GST_STATE_NULL);
+  gst_element_set_state (priv->pipeline, GST_STATE_READY);
   melo_player_status_unref (priv->status);
   gst_tag_list_unref (priv->tag_list);
 
@@ -288,9 +291,29 @@ melo_player_file_play (MeloPlayer *player, const gchar *path,
 }
 
 static gboolean
+melo_player_file_prev (MeloPlayer *player)
+{
+  gboolean ret;
+  gchar *path;
+
+  g_return_val_if_fail (player->playlist, FALSE);
+
+  /* Get URI for previous media */
+  path = melo_playlist_get_prev (player->playlist, TRUE);
+  if (!path)
+    return FALSE;
+
+  /* Play file */
+  ret = melo_player_file_play (player, path, FALSE);
+  g_free (path);
+
+  return ret;
+}
+
+static gboolean
 melo_player_file_next (MeloPlayer *player)
 {
-  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gboolean ret;
   gchar *path;
 
   g_return_val_if_fail (player->playlist, FALSE);
@@ -300,31 +323,11 @@ melo_player_file_next (MeloPlayer *player)
   if (!path)
     return FALSE;
 
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
+  /* Play file */
+  ret = melo_player_file_play (player, path, FALSE);
+  g_free (path);
 
-  /* Erase status and tags */
-  gst_element_set_state (priv->pipeline, GST_STATE_READY);
-  melo_player_status_unref (priv->status);
-  gst_tag_list_unref (priv->tag_list);
-
-  /* Replace URI */
-  g_free (priv->uri);
-  priv->uri = path;
-
-  /* Create new status */
-  priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING,
-                                         g_path_get_basename (path));
-  priv->tag_list = gst_tag_list_new_empty ();
-
-  /* Set new location to src element */
-  g_object_set (priv->src, "uri", path, NULL);
-  gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
-
-  return TRUE;
+  return ret;
 }
 
 static MeloPlayerState
