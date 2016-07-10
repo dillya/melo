@@ -43,6 +43,7 @@ static void melo_browser_file_set_id (GObject *obj,
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static GList *melo_browser_file_get_list (MeloBrowser *browser,
                                           const gchar *path);
+static gboolean melo_browser_file_add (MeloBrowser *browser, const gchar *path);
 static gboolean melo_browser_file_play (MeloBrowser *browser,
                                         const gchar *path);
 static gboolean melo_browser_file_remove (MeloBrowser *browser,
@@ -92,6 +93,7 @@ melo_browser_file_class_init (MeloBrowserFileClass *klass)
 
   bclass->get_info = melo_browser_file_get_info;
   bclass->get_list = melo_browser_file_get_list;
+  bclass->add = melo_browser_file_add;
   bclass->play = melo_browser_file_play;
   bclass->remove = melo_browser_file_remove;
 
@@ -267,6 +269,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
     MeloBrowserItem *item;
     const gchar *itype;
     gchar *name;
+    gchar *add = NULL;
     GFileType type;
 
     /* Get item type */
@@ -274,6 +277,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
     if (type == G_FILE_TYPE_REGULAR) {
       itype = "file";
       name = g_strdup (g_file_info_get_name (info));
+      add = g_strdup ("Add to playlist");
     } else if (type == G_FILE_TYPE_DIRECTORY) {
       itype = "directory";
       name = g_strdup (g_file_info_get_name (info));
@@ -305,6 +309,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
     item = melo_browser_item_new (NULL, itype);
     item->name = name;
     item->full_name = g_strdup (g_file_info_get_display_name (info));
+    item->add = add;
     list = g_list_insert_sorted (list, item,
                                  (GCompareFunc) melo_browser_item_cmp);
     g_object_unref (info);
@@ -635,12 +640,11 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
   return list;
 }
 
-static gboolean
-melo_browser_file_play (MeloBrowser *browser, const gchar *path)
+static gchar *
+melo_browser_file_get_uri (MeloBrowser *browser, const gchar *path)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   gchar *uri;
-  gboolean ret;
 
   g_return_val_if_fail (browser->player, FALSE);
   g_return_val_if_fail (*path && *path == '/', FALSE);
@@ -661,13 +665,13 @@ melo_browser_file_play (MeloBrowser *browser, const gchar *path)
     /* Get mount from volume / mount ID */
     mount = melo_browser_file_get_mount (MELO_BROWSER_FILE (browser), path);
     if (!mount)
-      return FALSE;
+      return NULL;
 
     /* Get root */
     root = g_mount_get_root (mount);
     g_object_unref (mount);
     if (!root)
-      return FALSE;
+      return NULL;
 
     /* Get root URI */
     path += MELO_BROWSER_FILE_ID_LENGTH;
@@ -678,6 +682,38 @@ melo_browser_file_play (MeloBrowser *browser, const gchar *path)
     uri = g_strconcat (root_uri, path, NULL);
     g_free (root_uri);
   } else
+    return NULL;
+
+  return uri;
+}
+
+static gboolean
+melo_browser_file_add (MeloBrowser *browser, const gchar *path)
+{
+  gboolean ret;
+  gchar *uri;
+
+  /* Get final URI from path */
+  uri = melo_browser_file_get_uri (browser, path);
+  if (!uri)
+    return FALSE;
+
+  /* Add with URI */
+  ret = melo_player_add (browser->player, uri);
+  g_free (uri);
+
+  return ret;
+}
+
+static gboolean
+melo_browser_file_play (MeloBrowser *browser, const gchar *path)
+{
+  gboolean ret;
+  gchar *uri;
+
+  /* Get final URI from path */
+  uri = melo_browser_file_get_uri (browser, path);
+  if (!uri)
     return FALSE;
 
   /* Play with URI */
