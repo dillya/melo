@@ -148,7 +148,8 @@ melo_player_jsonrpc_get_fields (JsonObject *obj)
 static JsonObject *
 melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
                                       MeloPlayerJSONRPCFields fields,
-                                      MeloTagsFields tags_fields)
+                                      MeloTagsFields tags_fields,
+                                      gint64 tags_timestamp)
 {
   JsonObject *obj = json_object_new ();
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_STATE) {
@@ -163,10 +164,15 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
     json_object_set_int_member (obj, "pos", status->pos);
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_DURATION)
     json_object_set_int_member (obj, "duration", status->duration);
-  if (fields & MELO_PLAYER_JSONRPC_FIELDS_TAGS)
-    json_object_set_object_member (obj, "tags",
-                                   melo_tags_to_json_object (status->tags,
-                                                             tags_fields));
+  if (fields & MELO_PLAYER_JSONRPC_FIELDS_TAGS) {
+    if (tags_timestamp <= 0 ||
+        (status->tags && status->tags->timestamp > tags_timestamp))
+      json_object_set_object_member (obj, "tags",
+                                     melo_tags_to_json_object (status->tags,
+                                                               tags_fields));
+    else
+      json_object_set_null_member (obj, "tags");
+  }
   return obj;
 }
 
@@ -301,6 +307,7 @@ melo_player_jsonrpc_get_status (const gchar *method,
   MeloPlayer *play;
   JsonArray *array;
   JsonObject *obj;
+  gint64 tags_ts = 0;
 
   /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
@@ -320,9 +327,14 @@ melo_player_jsonrpc_get_status (const gchar *method,
   /* Get tags fields */
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_TAGS &&
       json_object_has_member (obj, "tags")) {
+    /* Get tags fields array */
     array = json_object_get_array_member (obj, "tags");
     if (array)
       tags_fields = melo_tags_get_fields_from_json_array (array);
+
+    /* Get tags timestamp */
+    if (json_object_has_member (obj, "tags_ts"))
+      tags_ts = json_object_get_int_member (obj, "tags_ts");
   }
   json_object_unref (obj);
 
@@ -333,7 +345,8 @@ melo_player_jsonrpc_get_status (const gchar *method,
     return;
 
   /* Generate status */
-  obj = melo_player_jsonrpc_status_to_object (status, fields, tags_fields);
+  obj = melo_player_jsonrpc_status_to_object (status, fields,
+                                              tags_fields, tags_ts);
   melo_player_status_unref (status);
 
   /* Return result */
@@ -386,6 +399,10 @@ static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
               "  },"
               "  {"
               "    \"name\": \"tags\", \"type\": \"array\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"tags_ts\", \"type\": \"int\","
               "    \"required\": false"
               "  }"
               "]",

@@ -40,6 +40,7 @@ struct _MeloTags {
   GBytes *cover;
   gchar *cover_type;
 
+  gint64 timestamp;
   gint ref_count;
 };
 
@@ -58,7 +59,8 @@ enum _MeloTagsFields {
 };
 
 MeloTags *melo_tags_new (void);
-MeloTags *melo_tags_ref (MeloTags *src);
+void melo_tags_update (MeloTags *tags);
+MeloTags *melo_tags_ref (MeloTags *tags);
 void melo_tags_unref (MeloTags *tags);
 
 /* Gstreamer helper */

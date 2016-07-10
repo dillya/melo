@@ -38,7 +38,16 @@ melo_tags_new (void)
   /* Set reference counter to 1 */
   tags->ref_count = 1;
 
+  /* Set initial timestamp */
+  tags->timestamp = g_get_monotonic_time ();
+
   return tags;
+}
+
+void
+melo_tags_update (MeloTags *tags)
+{
+  tags->timestamp = g_get_monotonic_time ();
 }
 
 MeloTags *
@@ -207,6 +216,9 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
   /* Nothing to do */
   if (!tags || fields == MELO_TAGS_FIELDS_NONE)
     return;
+
+  /* Set timestamp in any case */
+  json_object_set_int_member (obj, "timestamp", tags->timestamp);
 
   /* Fill object */
   if (fields & MELO_TAGS_FIELDS_TITLE)
