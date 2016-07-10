@@ -354,6 +354,42 @@ melo_player_jsonrpc_get_status (const gchar *method,
   json_node_take_object (*result, obj);
 }
 
+static void
+melo_player_jsonrpc_action (const gchar *method,
+                            JsonArray *s_params, JsonNode *params,
+                            JsonNode **result, JsonNode **error,
+                            gpointer user_data)
+{
+  MeloPlayer *play;
+  JsonObject *obj;
+  gboolean ret = FALSE;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get player from id */
+  play = melo_player_jsonrpc_get_player (obj, error);
+  json_object_unref (obj);
+  if (!play)
+    return;
+
+  /* Do action */
+  if (g_str_equal (method, "player.prev"))
+    ret = melo_player_prev (play);
+  else if (g_str_equal (method, "player.next"))
+    ret = melo_player_next (play);
+  g_object_unref (play);
+
+  /* Create answer */
+  obj = json_object_new ();
+  json_object_set_boolean_member (obj, "done", ret);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
 /* List of methods */
 static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
   {
@@ -408,6 +444,24 @@ static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_player_jsonrpc_get_status,
+    .user_data = NULL,
+  },
+  {
+    .method = "prev",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_player_jsonrpc_action,
+    .user_data = NULL,
+  },
+  {
+    .method = "next",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_player_jsonrpc_action,
     .user_data = NULL,
   },
 };
