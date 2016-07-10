@@ -28,6 +28,7 @@ static void pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink);
 
 static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path,
                                        gboolean insert);
+static gboolean melo_player_file_next (MeloPlayer *player);
 static MeloPlayerState melo_player_file_set_state (MeloPlayer *player,
                                                    MeloPlayerState state);
 static gint melo_player_file_set_pos (MeloPlayer *player, gint pos);
@@ -147,6 +148,7 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 {
   MeloPlayerFile *pfile = MELO_PLAYER_FILE (data);
   MeloPlayerFilePrivate *priv = pfile->priv;
+  MeloPlayer *player = MELO_PLAYER (pfile);
   GError *error;
 
   /* Process bus message */
@@ -186,9 +188,12 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       break;
     }
     case GST_MESSAGE_EOS:
-      /* End of stream */
-      gst_element_set_state (priv->pipeline, GST_STATE_NULL);
-      priv->status->state = MELO_PLAYER_STATE_STOPPED;
+      /* Play next media */
+      if (!melo_player_file_next (player)) {
+        /* Stop playing */
+        gst_element_set_state (priv->pipeline, GST_STATE_NULL);
+        priv->status->state = MELO_PLAYER_STATE_STOPPED;
+      }
       break;
 
     case GST_MESSAGE_ERROR:
@@ -275,6 +280,46 @@ melo_player_file_play (MeloPlayer *player, const gchar *path,
   /* Add new file to playlist */
   if (insert)
     melo_player_add (player, name, name, path, TRUE);
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+}
+
+static gboolean
+melo_player_file_next (MeloPlayer *player)
+{
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gchar *path;
+
+  g_return_val_if_fail (player->playlist, FALSE);
+
+  /* Get URI for next media */
+  path = melo_playlist_get_next (player->playlist, TRUE);
+  if (!path)
+    return FALSE;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Erase status and tags */
+  gst_element_set_state (priv->pipeline, GST_STATE_READY);
+  melo_player_status_unref (priv->status);
+  gst_tag_list_unref (priv->tag_list);
+
+  /* Replace URI */
+  g_free (priv->uri);
+  priv->uri = path;
+
+  /* Create new status */
+  priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING,
+                                         g_path_get_basename (path));
+  priv->tag_list = gst_tag_list_new_empty ();
+
+  /* Set new location to src element */
+  g_object_set (priv->src, "uri", path, NULL);
+  gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);

@@ -33,6 +33,10 @@ static gboolean melo_playlist_file_add (MeloPlaylist *playlist,
                                         const gchar *full_name,
                                         const gchar *path,
                                         gboolean is_current);
+static gchar *melo_playlist_file_get_prev (MeloPlaylist *playlist,
+                                           gboolean set);
+static gchar *melo_playlist_file_get_next (MeloPlaylist *playlist,
+                                           gboolean set);
 static gboolean melo_playlist_file_play (MeloPlaylist *playlist,
                                          const gchar *name);
 static gboolean melo_playlist_file_remove (MeloPlaylist *playlist,
@@ -42,7 +46,7 @@ struct _MeloPlaylistFilePrivate {
   GMutex mutex;
   GList *playlist;
   GHashTable *names;
-  MeloPlaylistItem *current;
+  GList *current;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloPlaylistFile, melo_playlist_file, MELO_TYPE_PLAYLIST)
@@ -71,13 +75,15 @@ melo_playlist_file_finalize (GObject *gobject)
 static void
 melo_playlist_file_class_init (MeloPlaylistFileClass *klass)
 {
-  MeloPlaylistClass *bclass = MELO_PLAYLIST_CLASS (klass);
+  MeloPlaylistClass *plclass = MELO_PLAYLIST_CLASS (klass);
   GObjectClass *oclass = G_OBJECT_CLASS (klass);
 
-  bclass->get_list = melo_playlist_file_get_list;
-  bclass->add = melo_playlist_file_add;
-  bclass->play = melo_playlist_file_play;
-  bclass->remove = melo_playlist_file_remove;
+  plclass->get_list = melo_playlist_file_get_list;
+  plclass->add = melo_playlist_file_add;
+  plclass->get_prev = melo_playlist_file_get_prev;
+  plclass->get_next = melo_playlist_file_get_next;
+  plclass->play = melo_playlist_file_play;
+  plclass->remove = melo_playlist_file_remove;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_playlist_file_finalize;
@@ -113,7 +119,7 @@ melo_playlist_file_get_list (MeloPlaylist *playlist, gchar **current)
   list = g_list_copy_deep (priv->playlist, (GCopyFunc) melo_playlist_item_ref,
                            NULL);
   if (priv->current)
-    *current = g_strdup (priv->current->name);
+    *current = g_strdup (((MeloPlaylistItem *) priv->current->data)->name);
 
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
@@ -148,12 +154,14 @@ melo_playlist_file_add (MeloPlaylist *playlist, const gchar *name,
   /* Add a new file to playlist */
   item = melo_playlist_item_new (NULL, full_name, path);
   item->name = final_name;
-  priv->playlist = g_list_append (priv->playlist, item);
-  g_hash_table_insert (priv->names, final_name, item);
+  item->can_play = TRUE;
+  item->can_remove = TRUE;
+  priv->playlist = g_list_prepend (priv->playlist, item);
+  g_hash_table_insert (priv->names, final_name, priv->playlist);
 
   /* Set as current */
   if (is_current)
-    priv->current = item;
+    priv->current = priv->playlist;
 
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
@@ -161,21 +169,68 @@ melo_playlist_file_add (MeloPlaylist *playlist, const gchar *name,
   return TRUE;
 }
 
+static gchar *
+melo_playlist_file_get_prev (MeloPlaylist *playlist, gboolean set)
+{
+  MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
+  MeloPlaylistFilePrivate *priv = plfile->priv;
+  gchar *path = NULL;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get next item after current */
+  if (priv->current && priv->current->next) {
+    path = g_strdup (((MeloPlaylistItem *) priv->current->next->data)->path);
+    if (set)
+      priv->current = priv->current->next;
+  }
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return path;
+}
+
+static gchar *
+melo_playlist_file_get_next (MeloPlaylist *playlist, gboolean set)
+{
+  MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
+  MeloPlaylistFilePrivate *priv = plfile->priv;
+  gchar *path = NULL;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get previous item before current */
+  if (priv->current && priv->current->prev) {
+    path = g_strdup (((MeloPlaylistItem *) priv->current->prev->data)->path);
+    priv->current = priv->current->prev;
+  }
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return path;
+}
+
 static gboolean
 melo_playlist_file_play (MeloPlaylist *playlist, const gchar *name)
 {
   MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
   MeloPlaylistFilePrivate *priv = plfile->priv;
-  MeloPlaylistItem *item;
+  MeloPlaylistItem *item = NULL;
+  GList *element;
 
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
   /* Find media in hash table */
-  item = g_hash_table_lookup (priv->names, name);
-  if (item) {
+  element = g_hash_table_lookup (priv->names, name);
+  if (element) {
+    item = (MeloPlaylistItem *) element->data;
     melo_playlist_item_ref (item);
-    priv->current = item;
+    priv->current = element;
   }
 
   /* Unlock playlist */
@@ -199,15 +254,23 @@ melo_playlist_file_remove (MeloPlaylist *playlist, const gchar *name)
   MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
   MeloPlaylistFilePrivate *priv = plfile->priv;
   MeloPlaylistItem *item;
+  GList *element;
 
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
   /* Find media in hash table */
-  item = g_hash_table_lookup (priv->names, name);
-  if (!item) {
+  element = g_hash_table_lookup (priv->names, name);
+  if (!element) {
     g_mutex_unlock (&priv->mutex);
     return FALSE;
+  }
+  item = (MeloPlaylistItem *) element->data;
+
+  /* Stop play */
+  if (element == priv->current) {
+    melo_player_set_state (playlist->player, MELO_PLAYER_STATE_NONE);
+    priv->current = NULL;
   }
 
   /* Remove from list and hash table */
