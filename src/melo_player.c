@@ -192,14 +192,13 @@ melo_player_get_playlist (MeloPlayer *player)
 }
 
 gboolean
-melo_player_add (MeloPlayer *player, const gchar *name, const gchar *full_name,
-                 const gchar *path, gboolean is_current)
+melo_player_add (MeloPlayer *player, const gchar *path)
 {
-  if (!player->playlist)
-    return FALSE;
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 
-  return melo_playlist_add (player->playlist, name, full_name, path,
-                            is_current);
+  g_return_val_if_fail (pclass->add, FALSE);
+
+  return pclass->add (player, path);
 }
 
 gboolean

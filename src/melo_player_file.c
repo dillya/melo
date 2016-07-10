@@ -26,6 +26,7 @@
 static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data);
 static void pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink);
 
+static gboolean melo_player_file_add (MeloPlayer *player, const gchar *path);
 static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path,
                                        gboolean insert);
 static gboolean melo_player_file_prev (MeloPlayer *player);
@@ -93,6 +94,7 @@ melo_player_file_class_init (MeloPlayerFileClass *klass)
   MeloPlayerClass *pclass = MELO_PLAYER_CLASS (klass);
 
   /* Control */
+  pclass->add = melo_player_file_add;
   pclass->play = melo_player_file_play;
   pclass->set_state = melo_player_file_set_state;
   pclass->prev = melo_player_file_prev;
@@ -253,6 +255,20 @@ pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink)
 }
 
 static gboolean
+melo_player_file_add (MeloPlayer *player, const gchar *path)
+{
+  gchar *name;
+
+  if (!player->playlist)
+    return FALSE;
+
+  /* Add URI to playlist */
+  name = g_path_get_basename (path);
+  melo_playlist_add (player->playlist, name, name, path, FALSE);
+  return TRUE;
+}
+
+static gboolean
 melo_player_file_play (MeloPlayer *player, const gchar *path,
                        gboolean insert)
 {
@@ -281,8 +297,8 @@ melo_player_file_play (MeloPlayer *player, const gchar *path,
   gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
 
   /* Add new file to playlist */
-  if (insert)
-    melo_player_add (player, name, name, path, TRUE);
+  if (insert && player->playlist)
+    melo_playlist_add (player->playlist, name, name, path, TRUE);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
