@@ -172,6 +172,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
     json_object_set_string_member (obj, "name", item->name);
     json_object_set_string_member (obj, "full_name", item->full_name);
     json_object_set_string_member (obj, "type", item->type);
+    json_object_set_string_member (obj, "add", item->add);
     json_object_set_string_member (obj, "remove", item->remove);
     json_array_add_object_element (array, obj);
   }
@@ -213,6 +214,8 @@ melo_browser_jsonrpc_item_action (const gchar *method,
   /* Do action on item */
   if (!g_strcmp0 (method, "browser.play"))
     ret = melo_browser_play (bro, path);
+  else if (!g_strcmp0 (method, "browser.add"))
+    ret = melo_browser_add (bro, path);
   else if (!g_strcmp0 (method, "browser.remove"))
     ret = melo_browser_remove (bro, path);
   json_object_unref (obj);
@@ -262,6 +265,16 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
   },
   {
     .method = "play",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"path\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_browser_jsonrpc_item_action,
+    .user_data = NULL,
+  },
+  {
+    .method = "add",
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
               "  {\"name\": \"path\", \"type\": \"string\"}"

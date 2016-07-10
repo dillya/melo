@@ -47,6 +47,7 @@ struct _MeloBrowser {
 
   /*< protected */
   MeloPlayer *player;
+  MeloPlaylist *playlist;
 
   /*< private >*/
   MeloBrowserPrivate *priv;
@@ -57,6 +58,7 @@ struct _MeloBrowserClass {
 
   const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
   GList *(*get_list) (MeloBrowser *browser, const gchar *path);
+  gboolean (*add) (MeloBrowser *browser, const gchar *path);
   gboolean (*play) (MeloBrowser *browser, const gchar *path);
   gboolean (*remove) (MeloBrowser *browser, const gchar *path);
 };
@@ -70,6 +72,7 @@ struct _MeloBrowserItem {
   gchar *name;
   gchar *full_name;
   gchar *type;
+  gchar *add;
   gchar *remove;
 };
 
@@ -84,6 +87,7 @@ void melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player);
 MeloPlayer *melo_browser_get_player (MeloBrowser *browser);
 
 GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path);
+gboolean melo_browser_add (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_play (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_remove (MeloBrowser *browser, const gchar *path);
 

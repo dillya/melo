@@ -167,7 +167,6 @@ failed:
   return NULL;
 }
 
-
 void
 melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player)
 {
@@ -193,6 +192,16 @@ melo_browser_get_list (MeloBrowser *browser, const gchar *path)
   g_return_val_if_fail (bclass->get_list, NULL);
 
   return bclass->get_list (browser, path);
+}
+
+gboolean
+melo_browser_add (MeloBrowser *browser, const gchar *path)
+{
+  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
+
+  g_return_val_if_fail (bclass->add, FALSE);
+
+  return bclass->add (browser, path);
 }
 
 gboolean
