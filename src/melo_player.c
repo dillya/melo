@@ -222,6 +222,26 @@ melo_player_set_state (MeloPlayer *player, MeloPlayerState state)
   return pclass->set_state (player, state);
 }
 
+gboolean
+melo_player_prev (MeloPlayer *player)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->prev, FALSE);
+
+  return pclass->prev (player);
+}
+
+gboolean
+melo_player_next (MeloPlayer *player)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->next, FALSE);
+
+  return pclass->next (player);
+}
+
 gint
 melo_player_set_pos (MeloPlayer *player, gint pos)
 {
