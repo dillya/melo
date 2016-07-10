@@ -148,6 +148,7 @@ melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
         GstCaps *caps;
         gpointer data;
         gsize size, dsize;
+        gchar *c;
 
         /* Get buffer and caps */
         buffer = gst_sample_get_buffer (final_sample);
@@ -162,6 +163,9 @@ melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
 
         /* Copy type string */
         tags->cover_type = gst_caps_to_string (caps);
+        c = g_strstr_len (tags->cover_type, -1, ",");
+        if (c)
+          *c = '\0';
         gst_sample_unref (final_sample);
     }
   }
@@ -248,7 +252,7 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
 
     /* Add to object */
     json_object_set_string_member (obj, "cover", cover);
-    json_object_set_string_member (obj, "cover-type", tags->cover_type);
+    json_object_set_string_member (obj, "cover_type", tags->cover_type);
     g_free (cover);
   }
 }
