@@ -223,23 +223,43 @@ function melo_add_players(id, name) {
       /* Add player to list */
       var player = $('<p> + <span class="title">' + id + '</span>' +
                             ' [<a href="#">refresh</a>]</p>');
-      var stat = $('<p></p>');
-
-      /* Add a link for refresh */
-      player.children("a").click([id, stat], function(e) {
-        melo_update_player(e.data[0], e.data[1]);
-        return false;
-      });
-
-      /* Get status */
-      melo_update_player(id, stat);
+      var stat = $('<p>' +
+                     '<div>' +
+                        '<img class="player_cover" src="" alt="cover">' +
+                        '<div class="player_pos">' +
+                           '<div class="player_cursor"></div>' +
+                        '</div>' +
+                        '<a class="play_pause" href="#">Play</a> | ' +
+                        '<a class="stop" href="#">Stop</a><br>' +
+                        'State: <span class="state"></span><br>' +
+                        'Name: <span class="name"></span><br>' +
+                        'Pos: <span class="pos"></span><br>' +
+                        '<span class="under">Tags:</span><br>' +
+                        'Title: <span class="title"></span><br>' +
+                        'Artist: <span class="artist"></span><br>' +
+                        'Alnum: <span class="album"></span><br>' +
+                        'Genre: <span class="genre"></span><br>' +
+                        'Date: <span class="date"></span><br>' +
+                        'Track: <span class="track"></span>' +
+                     '</div>' +
+                   '</p>');
 
       /* Add player to list */
       var play = {};
       play.id = id;
       play.element = stat;
       play.timer = null;
+      play.tags_ts = 0;
       players.push(play);
+
+      /* Add a link for refresh */
+      player.children("a").click(play, function(e) {
+        melo_update_player(e.data);
+        return false;
+      });
+
+      /* Get status */
+      melo_update_player(play);
 
       /* Add player */
       $("#player_list").append(player);
@@ -248,8 +268,14 @@ function melo_add_players(id, name) {
   });
 }
 
-function melo_update_player(id, element) {
-  jsonrpc_call("player.get_status", JSON.parse('["' + id + '",["full"],["full"]]'),
+function melo_update_player(play) {
+  var id = play.id;
+  var player = play.element;
+  var tags_ts = play.tags_ts;
+
+  /* Get status */
+  jsonrpc_call("player.get_status",
+               JSON.parse('["' + id + '",["full"],["full"],' + tags_ts + ']'),
                function(response) {
     if (response.error || !response.result)
       return;
@@ -257,26 +283,17 @@ function melo_update_player(id, element) {
     var l = (s.state == "playing") ? "Pause" : "Play";
     var ns = (s.state == "playing") ? "paused" : "playing";
 
-    /* Generate player status */
-    var player = $('<div><img class="player_cover" src="" alt="cover">' +
-                        '<div class="player_pos">' +
-                           '<div class="player_cursor"></div>' +
-                        '</div>' +
-                        '<a class="play_pause" href="#">' + l + '</a> | ' +
-                        '<a class="stop" href="#">Stop</a><br>' +
-                   'State: ' + s.state + '<br>' +
-                   'Name: ' + s.name + '<br>' +
-                   'Pos: ' + s.pos + ' / ' + s.duration + '</div>');
-
-    /* Update image src if available */
-    if (s.tags.cover != null)
-      player.children("img.player_cover").attr('src', 'data:;base64,' + s.tags.cover);
+    /* Update player status */
+    player.children('.play_pause').text(l);
+    player.children('.state').text(s.state);
+    player.children('.name').text(s.name);
+    player.children('.pos').text(s.pos + ' / ' + s.duration);
 
     /* Set width of player cursor */
     player.find("div.player_cursor").width((s.pos * 100 / s.duration) + "%");
 
     /* Add action for seek */
-    player.children("div.player_pos").click([id, s.duration], function(e) {
+    player.children("div.player_pos").unbind().click([id, s.duration], function(e) {
       var pos = e.data[1] * (e.pageX - $(this).offset().left) / $(this).width();
       pos = parseInt(pos, 10);
       melo_player_seek(e.data[0], pos);
@@ -285,30 +302,37 @@ function melo_update_player(id, element) {
     });
 
     /* Add link to play / pause */
-    player.children("a.play_pause").click([id, element, ns], function(e) {
+    player.find("a.play_pause").unbind().click([id, ns, play], function(e) {
       melo_set_player_state(e.data[0], e.data[1], e.data[2]);
       return false;
     });
 
     /* Add link to stop */
-    player.children("a.stop").click([id, element, "stopped"], function(e) {
+    player.find("a.stop").unbind().click([id, "stopped", play], function(e) {
       melo_set_player_state(e.data[0], e.data[1], e.data[2]);
       return false;
     });
 
-    /* Add tasg to player */
-    if (s.tags != null) {
-      player.append('<br>' +
-                    'Title: ' + s.tags.title + '<br>' +
-                    'Artist: ' + s.tags.artist + '<br>' +
-                    'Alnum: ' + s.tags.album + '<br>' +
-                    'Genre: ' + s.tags.genre + '<br>' +
-                    'Date: ' + s.tags.date + '<br>' +
-                    'Track: ' + s.tags.track + ' / ' + s.tags.track);
-    }
+    /* Update tags if tags are available and timestamp has changed */
+    if (s.tags != null && s.tags.timestamp > tags_ts) {
+      /* Update tags timestamp */
+      play.tags_ts;
+      play.tags_ts = s.tags.timestamp;
 
-    /* Add players */
-    element.html(player);
+      /* Update tags */
+      player.children('.title').text(s.tags.title);
+      player.children('.artist').text(s.tags.artist);
+      player.children('.album').text(s.tags.album);
+      player.children('.genre').text(s.tags.genre);
+      player.children('.date').text(s.tags.date);
+      player.children('.track').text(s.tags.track + ' / ' + s.tags.track);
+
+      /* Update image src if available */
+      var img_src = "";
+      if (s.tags.cover != null)
+        img_src = "data:" + s.tags.cover_type + ";base64," + s.tags.cover;
+      player.children("img.player_cover").attr('src', img_src);
+    }
   });
 }
 
@@ -318,10 +342,9 @@ function melo_player_poll(state) {
     /* Enable */
     for (var i = 0; i < players.length; i++) {
       if (players[i].timer == null) {
-        var id = players[i].id;
-        var el = players[i].element;
+        var play = players[i];
         players[i].timer = setInterval(function() {
-          melo_update_player(id, el);
+          melo_update_player(play);
         }, 1000);
       }
     }
@@ -336,14 +359,14 @@ function melo_player_poll(state) {
   }
 }
 
-function melo_set_player_state(id, element, state) {
+function melo_set_player_state(id, state, play) {
   jsonrpc_call("player.set_state", JSON.parse('["' + id + '","' + state + '"]'),
                function(response) {
     if (response.error || !response.result)
       return;
 
     /* Update player status */
-    melo_update_player(id, element);
+    melo_update_player(play);
   });
 }
 
