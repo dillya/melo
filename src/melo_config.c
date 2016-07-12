@@ -251,6 +251,123 @@ melo_config_load_default (MeloConfig *config)
   g_mutex_unlock (&config->priv->mutex);
 }
 
+gboolean
+melo_config_load_from_file (MeloConfig *config, const gchar *filename)
+{
+  MeloConfigValues *groups_values = config->priv->values;
+  const MeloConfigGroup *groups = config->priv->groups;
+  GKeyFile *kfile;
+  gint i, j;
+
+  /* Load file */
+  kfile = g_key_file_new ();
+  if (!g_key_file_load_from_file (kfile, filename, 0, NULL)) {
+    g_key_file_unref (kfile);
+    return FALSE;
+  }
+
+  /* Lock config access */
+  g_mutex_lock (&config->priv->mutex);
+
+  /* Load values in each groups */
+  for (i = 0; i < config->priv->groups_count; i++) {
+    MeloConfigValue *values = groups_values[i].values;
+    MeloConfigItem *items = groups[i].items;
+    const gchar *gid = groups[i].id;
+
+    /* Set default values */
+    for (j = 0; j < groups[i].items_count; j++) {
+      const gchar *id = items[j].id;
+
+      switch (items[j].type) {
+        case MELO_CONFIG_TYPE_BOOLEAN:
+          values[j]._boolean = g_key_file_get_boolean (kfile, gid, id, NULL);
+          break;
+        case MELO_CONFIG_TYPE_INTEGER:
+          values[j]._integer = g_key_file_get_int64 (kfile, gid, id, NULL);
+          break;
+        case MELO_CONFIG_TYPE_DOUBLE:
+          values[j]._double = g_key_file_get_double (kfile, gid, id, NULL);
+          break;
+        case MELO_CONFIG_TYPE_STRING:
+          g_free (values[j]._string);
+          values[j]._string = g_key_file_get_string (kfile, gid, id, NULL);
+          break;
+        default:
+          values[j]._integer = 0;
+      }
+    }
+  }
+
+  /* Unlock config access */
+  g_mutex_unlock (&config->priv->mutex);
+
+  /* Close file */
+  g_key_file_unref (kfile);
+
+  return TRUE;
+}
+
+gboolean
+melo_config_save_to_file (MeloConfig *config, const gchar *filename)
+{
+  MeloConfigValues *groups_values = config->priv->values;
+  const MeloConfigGroup *groups = config->priv->groups;
+  gboolean ret = FALSE;
+  GKeyFile *kfile;
+  gchar *path;
+  gint i, j;
+
+  /* Load file */
+  kfile = g_key_file_new ();
+
+  /* Lock config access */
+  g_mutex_lock (&config->priv->mutex);
+
+  /* Load values in each groups */
+  for (i = 0; i < config->priv->groups_count; i++) {
+    MeloConfigValue *values = groups_values[i].values;
+    MeloConfigItem *items = groups[i].items;
+    const gchar *gid = groups[i].id;
+
+    /* Set default values */
+    for (j = 0; j < groups[i].items_count; j++) {
+      const gchar *id = items[j].id;
+
+      switch (items[j].type) {
+        case MELO_CONFIG_TYPE_BOOLEAN:
+          g_key_file_set_boolean (kfile, gid, id, values[j]._boolean);
+          break;
+        case MELO_CONFIG_TYPE_INTEGER:
+          g_key_file_set_integer (kfile, gid, id, values[j]._integer);
+          break;
+        case MELO_CONFIG_TYPE_DOUBLE:
+          g_key_file_set_double (kfile, gid, id, values[j]._double);
+          break;
+        case MELO_CONFIG_TYPE_STRING:
+          g_key_file_set_string (kfile, gid, id, values[j]._string);
+          break;
+        default:
+          ;
+      }
+    }
+  }
+
+  /* Unlock config access */
+  g_mutex_unlock (&config->priv->mutex);
+
+  /* Save to file (create direcory if necessary) */
+  path = g_path_get_dirname (filename);
+  if (!g_mkdir_with_parents (path, 0700))
+    ret = g_key_file_save_to_file (kfile, filename, NULL);
+  g_free (path);
+
+  /* Close file */
+  g_key_file_unref (kfile);
+
+  return ret;
+}
+
 static inline gboolean
 melo_config_find_item (MeloConfigPrivate *priv, const gchar *group,
                        const gchar *id, gint *group_idx, gint *item_idx)
