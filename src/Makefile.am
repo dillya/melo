@@ -25,6 +25,7 @@ libmelo_la_SOURCES = \
 	melo_player.c \
 	melo_playlist.c \
 	melo_tags.c \
+	melo_config_jsonrpc.c \
 	melo_module_jsonrpc.c \
 	melo_browser_jsonrpc.c \
 	melo_player_jsonrpc.c \
@@ -39,6 +40,7 @@ meloinclude_HEADERS = \
 	melo_player.h \
 	melo_playlist.h \
 	melo_tags.h \
+	melo_config_jsonrpc.h \
 	melo_module_jsonrpc.h \
 	melo_browser_jsonrpc.h \
 	melo_player_jsonrpc.h \
