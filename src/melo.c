@@ -32,6 +32,7 @@
 
 #include "melo_file.h"
 #include "melo_httpd.h"
+#include "melo_config_main.h"
 
 #include "melo_config_jsonrpc.h"
 #include "melo_module_jsonrpc.h"
@@ -67,8 +68,11 @@ main (int argc, char *argv[])
   };
   GOptionContext *ctx;
   GError *err = NULL;
+  /* Main configuration */
+  MeloConfig *config;
   /* HTTP server */
   MeloHTTPD *server;
+  gint64 port;
   /* Main loop */
   GMainLoop *loop;
 
@@ -92,6 +96,14 @@ main (int argc, char *argv[])
   /* Free option context */
   g_option_context_free (ctx);
 
+  /* Load configuration */
+  config = melo_config_main_new ();
+  melo_config_load_default (config);
+
+  /* Get HTTP server port */
+  if (!melo_config_get_integer (config, "http", "port", &port))
+    port = 8080;
+
   /* Register standard JSON-RPC methods */
   melo_config_register_methods ();
   melo_module_register_methods ();
@@ -104,7 +116,7 @@ main (int argc, char *argv[])
 
   /* Create and start HTTP server */
   server = melo_httpd_new ();
-  if (!melo_httpd_start (server, 8080))
+  if (!melo_httpd_start (server, port))
     goto end;
 
   /* Start main loop */
@@ -135,6 +147,9 @@ end:
   melo_browser_unregister_methods ();
   melo_module_unregister_methods ();
   melo_config_unregister_methods ();
+
+  /* Free configuration */
+  g_object_unref (config);
 
   return 0;
 }

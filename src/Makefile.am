@@ -64,6 +64,7 @@ melo_SOURCES = \
 	melo_httpd.c \
 	melo_httpd_file.c \
 	melo_httpd_jsonrpc.c \
+	melo_config_main.c \
 	melo.c
 
 melo_CFLAGS = \
@@ -84,6 +85,7 @@ noinst_HEADERS = \
 	melo_browser_file.h \
 	melo_player_file.h \
 	melo_playlist_file.h \
+	melo_config_main.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
 	melo_httpd_jsonrpc.h
