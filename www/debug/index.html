@@ -64,6 +64,12 @@
     <h1>Melo: debug page</h1>
     <div class="col-l">
       <div class="block">
+        <h2>Menu</h2>
+        <ul>
+          <li><a id="main_config" href="#">Settings</a></li>
+        </ul>
+      </div>
+      <div class="block">
         <h2>Module</h2>
         <p><span class="title">Module list:</span> [ <a id="module_refresh" href="#">refresh</a> ]</p>
         <ul id="module_list"></ul>
@@ -102,6 +108,10 @@
         <input type="checkbox" id="playlist_poll" value="enabled">
         <label for="playlist_poll">Enable playlist status poll (every 1s)</label>
         <ul id="playlist_list"></ul>
+      </div>
+      <div class="block">
+        <h2>Config</h2>
+        <div id="config"></div>
       </div>
     </div>
   </div>

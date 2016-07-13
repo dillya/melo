@@ -509,11 +509,60 @@ function melo_playlist_poll(state) {
   }
 }
 
+function melo_get_config(id) {
+  jsonrpc_call("config.get", JSON.parse('["' + id + '"]'),
+               function(response) {
+    if (response.error || !response.result)
+      return;
+    var groups = response.result
+
+    /* Display configuration */
+    $("#config").html("");
+    for (var i = 0; i < groups.length; i++) {
+      var items = groups[i].items;
+
+      /* Create a new form */
+      $("#config").append("<form>");
+
+      /* Display group name */
+      $("#config").append('<p>' +
+                            '<span class="title">' + groups[i].name + ' ('
+                                                    + groups[i].id + ')' +
+                            '</span>' +
+                          '</p><p>');
+
+      /* Display all items */
+      for (var j = 0; j < items.length; j++) {
+        var id = items[j].id;
+        var name = items[j].name;
+        var value = items[j].val;
+        var element = items[j].element;
+
+        /* Add new form element */
+        if (id == null)
+          $("#config").append('<span class="under">' + name + ':</span><br>');
+        else if (element == "checkbox")
+          $("#config").append('<input type="checkbox" id="' + id + '" ' + (value ? "checked": "") + '>' +
+                              '<label for="' + id + '">' + name + '</label><br>');
+        else
+          $("#config").append(name + ': <input type="' + element + '" name="' + id + '" value="' + value + '"><br>');
+      }
+
+      /* Add a save button */
+      $("#config").append('<input type="submit" value="Save"><br>');
+
+      /* Close form */
+      $("#config").append("</p></form>");
+    }
+  });
+}
+
 $(document).ready(function() {
   /* Load module list */
   melo_update_list();
 
   /* Add click events */
+  $("#main_config").click(function() {melo_get_config("main"); return false;});
   $("#module_refresh").click(function() {melo_update_list(); return false;});
   $("#browser_prev").click(function() {melo_browser_previous(); return false;});
   $("#player_poll").change(function() {melo_player_poll(this.checked); return false;});
