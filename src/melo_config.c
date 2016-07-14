@@ -42,6 +42,12 @@ static const gchar *melo_config_elements[MELO_CONFIG_ELEMENT_COUNT] = {
   [MELO_CONFIG_ELEMENT_PASSWORD] = "password",
 };
 
+typedef struct _MeloConfigValues {
+  GHashTable *ids;
+  MeloConfigValue *values;
+  gsize size;
+} MeloConfigValues;
+
 struct _MeloConfigPrivate {
   gchar *id;
 
@@ -369,8 +375,8 @@ melo_config_save_to_file (MeloConfig *config, const gchar *filename)
 }
 
 static inline gboolean
-melo_config_find_item (MeloConfigPrivate *priv, const gchar *group,
-                       const gchar *id, gint *group_idx, gint *item_idx)
+melo_config_find (MeloConfigPrivate *priv, const gchar *group, const gchar *id,
+                  gint *group_idx, gint *item_idx)
 {
   /* Find group index */
   if (!g_hash_table_lookup_extended (priv->ids, group,
@@ -394,7 +400,7 @@ melo_config_get_value (MeloConfig *config, const gchar *group, const gchar *id,
   gint g, i;
 
   /* Get indexes */
-  if (!melo_config_find_item (priv, group, id, &g, &i))
+  if (!melo_config_find (priv, group, id, &g, &i))
     return FALSE;
 
   /* Check value type */
@@ -461,11 +467,23 @@ melo_config_get_string (MeloConfig *config, const gchar *group,
 }
 
 /* Advanced functions */
+struct _MeloConfigContext {
+  MeloConfigPrivate *priv;
+  gint group_idx;
+  gint item_idx;
+  const MeloConfigGroup *group;
+  const MeloConfigValues *values;
+};
+
 gpointer
-melo_config_read_all (MeloConfig *config, MeloConfigFunc callback,
-                      gpointer user_data)
+melo_config_parse (MeloConfig *config, MeloConfigFunc callback,
+                   gpointer user_data)
 {
   MeloConfigPrivate *priv = config->priv;
+  MeloConfigContext context = {
+    .priv = priv,
+    .group_idx = 0,
+  };
   gpointer ret = NULL;
 
   /* Lock config access */
@@ -473,10 +491,103 @@ melo_config_read_all (MeloConfig *config, MeloConfigFunc callback,
 
   /* Call the callback */
   if (callback)
-    ret = callback (priv->groups, priv->groups_count, priv->values, user_data);
+    ret = callback (&context, user_data);
 
   /* Unlock config access */
   g_mutex_unlock (&priv->mutex);
 
   return ret;
+}
+
+gint
+melo_config_get_group_count (MeloConfigContext *context)
+{
+  return context->priv->groups_count;
+}
+
+gboolean
+melo_config_next_group (MeloConfigContext *context,
+                        const MeloConfigGroup **group, gint *items_count)
+{
+  MeloConfigPrivate *priv = context->priv;
+
+  /* End of group list */
+  if (context->group_idx >= priv->groups_count)
+    return FALSE;
+
+  /* Update context */
+  context->group = &priv->groups[context->group_idx];
+  context->values = &priv->values[context->group_idx];
+  context->group_idx++;
+  context->item_idx = 0;
+
+  /* Set values */
+  *group = context->group;
+  *items_count = context->group->items_count;
+
+  return TRUE;
+}
+
+gboolean
+melo_config_next_item (MeloConfigContext *context, MeloConfigItem **item,
+                       MeloConfigValue **value)
+{
+  /* End of group list */
+  if (context->item_idx >= context->group->items_count)
+    return FALSE;
+
+  /* Set values */
+  *item = &context->group->items[context->item_idx];
+  *value = &context->values->values[context->item_idx];
+
+  /* Update context */
+  context->item_idx++;
+
+  return TRUE;
+}
+
+gboolean
+melo_config_find_group (MeloConfigContext *context, const gchar *group_id,
+                        const MeloConfigGroup **group, gint *items_count)
+{
+  MeloConfigPrivate *priv = context->priv;
+  gint idx;
+
+  /* Find group */
+  if (!g_hash_table_lookup_extended (priv->ids, group_id,
+                                    NULL, (gpointer *) &idx))
+    return FALSE;
+
+  /* Update context */
+  context->group = &priv->groups[idx];
+  context->values = &priv->values[idx];
+  context->group_idx = idx + 1;
+  context->item_idx = 0;
+
+  /* Set values */
+  *group = context->group;
+  *items_count = context->group->items_count;
+
+  return TRUE;
+}
+
+gboolean
+melo_config_find_item (MeloConfigContext *context, const gchar *item_id,
+                       MeloConfigItem **item, MeloConfigValue **value)
+{
+  gint idx;
+
+  /* Find group */
+  if (!g_hash_table_lookup_extended (context->values->ids, item_id,
+                                    NULL, (gpointer *) &idx))
+    return FALSE;
+
+  /* Set values */
+  *item = &context->group->items[idx];
+  *value = &context->values->values[idx];
+
+  /* Update context */
+  context->item_idx = idx + 1;
+
+  return TRUE;
 }

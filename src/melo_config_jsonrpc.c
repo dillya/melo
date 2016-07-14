@@ -62,69 +62,33 @@ melo_config_jsonrpc_set_member (JsonObject *obj, const gchar *member,
 }
 
 static JsonArray *
-melo_config_jsonrpc_gen_item_array (MeloConfigItem *items, gint count,
-                                    MeloConfigValue *values)
+melo_config_jsonrpc_gen_item_array (MeloConfigContext *context, gint item_count)
 {
+  MeloConfigItem *item;
+  MeloConfigValue *value;
   JsonArray *array;
   JsonObject *obj;
-  gint i;
 
-  /* Create new array */
-  array = json_array_sized_new (count);
-  if (!array)
-    return NULL;
+  /* Create and fill item array */
+  array = json_array_sized_new (item_count);
 
-  /* Fill array with items */
-  for (i = 0; i < count; i++) {
-    if (items[i].flags & MELO_CONFIG_FLAGS_DONT_SHOW)
-      continue;
-
-    /* Create new object */
+  /* List all items */
+  while (melo_config_next_item (context, &item, &value)) {
+    /* Create new object for item */
     obj = json_object_new ();
     if (!obj)
       continue;
-    json_object_set_string_member (obj, "id", items[i].id);
-    json_object_set_string_member (obj, "name", items[i].name);
+
+    /* Fill item */
+    json_object_set_string_member (obj, "id", item->id);
+    json_object_set_string_member (obj, "name", item->name);
     json_object_set_string_member (obj, "type",
-                                   melo_config_type_to_string (items[i].type));
+                                   melo_config_type_to_string (item->type));
     json_object_set_string_member (obj, "element",
-                              melo_config_element_to_string (items[i].element));
-    melo_config_jsonrpc_set_member (obj, "val", items[i].type, values[i]);
+                                 melo_config_element_to_string (item->element));
+    melo_config_jsonrpc_set_member (obj, "val", item->type, *value);
 
-    /* Add to array */
-    json_array_add_object_element (array, obj);
-  }
-
-  return array;
-}
-
-static JsonArray *
-melo_config_jsonrpc_gen_group_array (const MeloConfigGroup *groups, gint count,
-                                     MeloConfigValues *values)
-{
-  JsonArray *array;
-  JsonObject *obj;
-  gint i;
-
-  /* Create new array */
-  array = json_array_sized_new (count);
-  if (!array)
-    return NULL;
-
-  /* Fill array with items */
-  for (i = 0; i < count; i++) {
-    /* Create new object */
-    obj = json_object_new ();
-    if (!obj)
-      continue;
-    json_object_set_string_member (obj, "id", groups[i].id);
-    json_object_set_string_member (obj, "name", groups[i].name);
-    json_object_set_array_member (obj, "items",
-                    melo_config_jsonrpc_gen_item_array (groups[i].items,
-                                                        groups[i].items_count,
-                                                        values[i].values));
-
-    /* Add to array */
+    /* Add to item array */
     json_array_add_object_element (array, obj);
   }
 
@@ -132,27 +96,49 @@ melo_config_jsonrpc_gen_group_array (const MeloConfigGroup *groups, gint count,
 }
 
 static gpointer
-melo_config_jsonrpc_read_cb (const MeloConfigGroup *groups, gint groups_count,
-                             MeloConfigValues *values, gpointer user_data)
+melo_config_jsonrpc_gen_array (MeloConfigContext *context, gpointer user_data)
 {
   const gchar *group_id = (const gchar *) user_data;
-  gint i;
+  const MeloConfigGroup *group;
+  JsonArray *array;
+  JsonObject *obj;
+  gint group_count;
+  gint item_count;
 
-  /* Generate complete JSON array */
-  if (!group_id)
-    return melo_config_jsonrpc_gen_group_array (groups, groups_count, values);
-
-  /* Find group and generate its item array */
-  for (i = 0; i < groups_count; i++) {
-    /* Group found */
-    if (g_str_equal (groups[i].id, group_id)) {
-      return melo_config_jsonrpc_gen_item_array (groups[i].items,
-                                                 groups[i].items_count,
-                                                 values[i].values);
-    }
+  /* Generate only array for group */
+  if (group_id) {
+    /* Find group from group ID */
+    if (!melo_config_find_group (context, group_id, &group, &item_count))
+      return NULL;
+    return melo_config_jsonrpc_gen_item_array (context, item_count);
   }
 
-  return NULL;
+  /* Get group count */
+  group_count = melo_config_get_group_count (context);
+
+  /* Create group array */
+  array = json_array_sized_new (group_count);
+  if (!array)
+    return NULL;
+
+  /* List all groups */
+  while (melo_config_next_group (context, &group, &item_count)) {
+    /* Create a new object for group */
+    obj = json_object_new ();
+    if (!obj)
+      continue;
+
+    /* Fill group */
+    json_object_set_string_member (obj, "id", group->id);
+    json_object_set_string_member (obj, "name", group->name);
+    json_object_set_array_member (obj, "items",
+                      melo_config_jsonrpc_gen_item_array (context, item_count));
+
+    /* Add to group array */
+    json_array_add_object_element (array, obj);
+  }
+
+  return array;
 }
 
 /* Method callbacks */
@@ -182,8 +168,8 @@ melo_config_jsonrpc_get (const gchar *method,
     group_id = json_object_get_string_member (obj, "group");
 
   /* Convert config to JSON */
-  array = melo_config_read_all (cfg, melo_config_jsonrpc_read_cb,
-                                (gpointer) group_id);
+  array = melo_config_parse (cfg, melo_config_jsonrpc_gen_array,
+                             (gpointer) group_id);
   json_object_unref (obj);
   g_object_unref (cfg);
   if (!array) {

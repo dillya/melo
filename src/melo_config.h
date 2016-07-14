@@ -40,8 +40,7 @@ typedef struct _MeloConfigPrivate MeloConfigPrivate;
 typedef union _MeloConfigValue MeloConfigValue;
 typedef struct _MeloConfigItem MeloConfigItem;
 typedef struct _MeloConfigGroup MeloConfigGroup;
-
-typedef struct _MeloConfigValues MeloConfigValues;
+typedef struct _MeloConfigContext MeloConfigContext;
 
 struct _MeloConfig {
   GObject parent_instance;
@@ -104,12 +103,6 @@ struct _MeloConfigGroup {
   gint items_count;
 };
 
-struct _MeloConfigValues {
-  GHashTable *ids;
-  MeloConfigValue *values;
-  gsize size;
-};
-
 GType melo_config_get_type (void);
 
 MeloConfig *melo_config_new (const gchar *id, const MeloConfigGroup *groups,
@@ -135,12 +128,24 @@ gboolean melo_config_get_string (MeloConfig *config, const gchar *group,
                                  const gchar *id, gchar **value);
 
 /* Advanced functions */
-typedef gpointer (*MeloConfigFunc) (const MeloConfigGroup *groups,
-                                    gint groups_count,
-                                    MeloConfigValues *values,
+typedef gpointer (*MeloConfigFunc) (MeloConfigContext *context,
                                     gpointer user_data);
-gpointer melo_config_read_all (MeloConfig *config, MeloConfigFunc callback,
-                               gpointer user_data);
+gpointer melo_config_parse (MeloConfig *config, MeloConfigFunc callback,
+                            gpointer user_data);
+
+gint melo_config_get_group_count (MeloConfigContext *context);
+gboolean melo_config_next_group (MeloConfigContext *context,
+                                 const MeloConfigGroup **group,
+                                 gint *items_count);
+gboolean melo_config_next_item (MeloConfigContext *context,
+                                MeloConfigItem **item, MeloConfigValue **value);
+gboolean melo_config_find_group (MeloConfigContext *context,
+                                 const gchar *group_id,
+                                 const MeloConfigGroup **group,
+                                 gint *items_count);
+gboolean melo_config_find_item (MeloConfigContext *context,
+                                const gchar *item_id, MeloConfigItem **item,
+                                MeloConfigValue **value);
 
 G_END_DECLS
 
