@@ -127,6 +127,15 @@ gboolean melo_config_get_double (MeloConfig *config, const gchar *group,
 gboolean melo_config_get_string (MeloConfig *config, const gchar *group,
                                  const gchar *id, gchar **value);
 
+gboolean melo_config_set_boolean (MeloConfig *config, const gchar *group,
+                                  const gchar *id, gboolean value);
+gboolean melo_config_set_integer (MeloConfig *config, const gchar *group,
+                                  const gchar *id, gint64 value);
+gboolean melo_config_set_double (MeloConfig *config, const gchar *group,
+                                 const gchar *id, gdouble value);
+gboolean melo_config_set_string (MeloConfig *config, const gchar *group,
+                                 const gchar *id, gchar *value);
+
 /* Advanced functions */
 typedef gpointer (*MeloConfigFunc) (MeloConfigContext *context,
                                     gpointer user_data);

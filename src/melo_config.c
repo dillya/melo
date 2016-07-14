@@ -466,6 +466,82 @@ melo_config_get_string (MeloConfig *config, const gchar *group,
                                 MELO_CONFIG_TYPE_STRING, value);
 }
 
+static gboolean
+melo_config_set_value (MeloConfig *config, const gchar *group, const gchar *id,
+                       MeloConfigType type, gpointer value)
+{
+  MeloConfigPrivate *priv = config->priv;
+  gboolean ret = TRUE;
+  gint g, i;
+
+  /* Get indexes */
+  if (!melo_config_find (priv, group, id, &g, &i))
+    return FALSE;
+
+  /* Check value type */
+  if (priv->groups[g].items[i].type != type)
+    return FALSE;
+
+  /* Lock config access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Copy value */
+  switch (type) {
+    case MELO_CONFIG_TYPE_BOOLEAN:
+      priv->values[g].values[i]._boolean = (gboolean) GPOINTER_TO_INT (value);
+      break;
+    case MELO_CONFIG_TYPE_INTEGER:
+      priv->values[g].values[i]._integer = (gint64) GPOINTER_TO_INT (value);
+      break;
+    case MELO_CONFIG_TYPE_DOUBLE:
+      priv->values[g].values[i]._double = (gdouble) GPOINTER_TO_INT (value);
+      break;
+    case MELO_CONFIG_TYPE_STRING:
+      g_free (priv->values[g].values[i]._string);
+      priv->values[g].values[i]._string = g_strdup ((gchar *) value);
+      break;
+    default:
+      ret = FALSE;
+  }
+
+  /* Unlock config access */
+  g_mutex_unlock (&priv->mutex);
+
+  return ret;
+}
+
+gboolean
+melo_config_set_boolean (MeloConfig *config, const gchar *group,
+                         const gchar *id, gboolean value)
+{
+  return melo_config_set_value (config, group, id, MELO_CONFIG_TYPE_BOOLEAN,
+                                GINT_TO_POINTER (value));
+}
+
+gboolean
+melo_config_set_integer (MeloConfig *config, const gchar *group,
+                         const gchar *id, gint64 value)
+{
+  return melo_config_set_value (config, group, id, MELO_CONFIG_TYPE_INTEGER,
+                                GINT_TO_POINTER (value));
+}
+
+gboolean
+melo_config_set_double (MeloConfig *config, const gchar *group,
+                        const gchar *id, gdouble value)
+{
+  return melo_config_set_value (config, group, id, MELO_CONFIG_TYPE_DOUBLE,
+                                GINT_TO_POINTER (value));
+}
+
+gboolean
+melo_config_set_string (MeloConfig *config, const gchar *group,
+                        const gchar *id, gchar *value)
+{
+  return melo_config_set_value (config, group, id, MELO_CONFIG_TYPE_STRING,
+                                value);
+}
+
 /* Advanced functions */
 struct _MeloConfigContext {
   MeloConfigPrivate *priv;
