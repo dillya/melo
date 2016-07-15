@@ -76,8 +76,9 @@ typedef enum {
 typedef enum {
   MELO_CONFIG_FLAGS_NONE = 0,
   MELO_CONFIG_FLAGS_READ_ONLY = 1 << 0,
-  MELO_CONFIG_FLAGS_DONT_SHOW = 1 << 1,
-  MELO_CONFIG_FLAGS_DONT_SAVE = 1 << 2,
+  MELO_CONFIG_FLAGS_WRITE_ONLY = 1 << 1,
+  MELO_CONFIG_FLAGS_DONT_SHOW = 1 << 2,
+  MELO_CONFIG_FLAGS_DONT_SAVE = 1 << 3,
 } MeloConfigFlags;
 
 union _MeloConfigValue {

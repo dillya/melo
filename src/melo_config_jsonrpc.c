@@ -86,7 +86,10 @@ melo_config_jsonrpc_gen_item_array (MeloConfigContext *context, gint item_count)
                                    melo_config_type_to_string (item->type));
     json_object_set_string_member (obj, "element",
                                  melo_config_element_to_string (item->element));
-    melo_config_jsonrpc_set_member (obj, "val", item->type, value);
+    if (item->flags & MELO_CONFIG_FLAGS_WRITE_ONLY)
+      json_object_set_null_member (obj, "val");
+    else
+      melo_config_jsonrpc_set_member (obj, "val", item->type, value);
 
     /* Add to item array */
     json_array_add_object_element (array, obj);
