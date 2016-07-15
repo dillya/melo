@@ -124,6 +124,15 @@ main (int argc, char *argv[])
   if (!melo_httpd_start (server, port))
     goto end;
 
+  /* Load HTTP server configuration */
+  melo_config_main_load_http (config, server);
+
+  /* Add config handler for HTTP server */
+  melo_config_set_check_callback (config, "http", melo_config_main_check_http,
+                                  server);
+  melo_config_set_update_callback (config, "http", melo_config_main_http_update,
+                                   server);
+
   /* Start main loop */
   loop = g_main_loop_new (NULL, FALSE);
 
