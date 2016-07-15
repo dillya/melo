@@ -620,6 +620,7 @@ struct _MeloConfigContext {
   gint item_idx;
   const MeloConfigGroup *group;
   const MeloConfigValues *values;
+  MeloConfigType type;
 
   gboolean update;
   MeloConfigValue *new_value;
@@ -732,6 +733,7 @@ melo_config_next_group (MeloConfigContext *context,
   if (context->update) {
     context->new_value = &context->values->new_values[0];
     context->updated_value = &context->values->updated_values[0];
+    context->type = context->group->items[0].type;
   }
 
   /* Set values */
@@ -761,6 +763,7 @@ melo_config_next_item (MeloConfigContext *context, MeloConfigItem **item,
   if (context->update) {
     context->new_value = &context->values->new_values[context->item_idx];
     context->updated_value = &context->values->updated_values[context->item_idx];
+    context->type = context->group->items[context->item_idx].type;
   }
 
   /* Update context */
@@ -790,6 +793,7 @@ melo_config_find_group (MeloConfigContext *context, const gchar *group_id,
   if (context->update) {
     context->new_value = &context->values->new_values[0];
     context->updated_value = &context->values->updated_values[0];
+    context->type = context->group->items[0].type;
   }
 
   /* Set values */
@@ -823,6 +827,7 @@ melo_config_find_item (MeloConfigContext *context, const gchar *item_id,
   if (context->update) {
     context->new_value = &context->values->new_values[idx];
     context->updated_value = &context->values->updated_values[idx];
+    context->type = context->group->items[idx].type;
   }
 
   /* Update context */
@@ -871,6 +876,8 @@ melo_config_update_string (MeloConfigContext *context, const gchar *value)
 void
 melo_config_remove_update (MeloConfigContext *context)
 {
+  if (context->type == MELO_CONFIG_TYPE_STRING)
+    g_clear_pointer (&context->new_value->_string, g_free);
   *context->updated_value = FALSE;
 }
 
