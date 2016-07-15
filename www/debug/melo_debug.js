@@ -522,38 +522,90 @@ function melo_get_config(id) {
       var items = groups[i].items;
 
       /* Create a new form */
-      $("#config").append("<form>");
+      var group = $('<form></form>');
 
       /* Display group name */
-      $("#config").append('<p>' +
-                            '<span class="title">' + groups[i].name + ' ('
-                                                    + groups[i].id + ')' +
-                            '</span>' +
-                          '</p><p>');
+      group.append('<p>' +
+                     '<span class="title">' + groups[i].name + ' (' +
+                                              groups[i].id + ')' +
+                     '</span>' +
+                   '</p><p>');
 
       /* Display all items */
       for (var j = 0; j < items.length; j++) {
-        var id = items[j].id;
+        var item_id = items[j].id;
         var name = items[j].name;
         var value = items[j].val;
         var element = items[j].element;
 
         /* Add new form element */
-        if (id == null)
-          $("#config").append('<span class="under">' + name + ':</span><br>');
+        if (item_id == null)
+          group.append('<span class="under">' + name + ':</span><br>');
         else if (element == "checkbox")
-          $("#config").append('<input type="checkbox" id="' + id + '" ' + (value ? "checked": "") + '>' +
-                              '<label for="' + id + '">' + name + '</label><br>');
+          group.append('<input type="checkbox" id="' + item_id + '" ' + (value ? "checked": "") + '>' +
+                              '<label for="' + item_id + '">' + name + '</label><br>');
         else
-          $("#config").append(name + ': <input type="' + element + '" name="' + id + '" value="' + value + '"><br>');
+          group.append(name + ': <input type="' + element + '" id="' + item_id + '"' +
+                                 ' name="' + item_id + '" value="' + (value ? value : "") + '"><br>');
       }
 
       /* Add a save button */
-      $("#config").append('<input type="submit" value="Save"><br>');
+      group.append('<input type="submit" value="Save"><br>');
+      group.append('</p>');
+
+      /* Add action for save button */
+      group.submit([id, groups[i].id, items, group], function(e) {
+        melo_set_config (e.data[0], e.data[1], e.data[2], e.data[3]);
+        e.preventDefault();
+      })
 
       /* Close form */
-      $("#config").append("</p></form>");
+      $("#config").append(group);
     }
+  });
+}
+
+function melo_set_config(id, group_id, items, form) {
+  var params = [];
+  var group_list = [];
+  var group = {};
+  var list = [];
+
+  /* Parse form */
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].id == null)
+      continue;
+
+    /* Get children value */
+    var obj = {};
+    obj.id = items[i].id;
+    if (items[i].element == "checkbox")
+      obj.val = form.children('#' + items[i].id).is(':checked');
+    else if (items[i].element == "number")
+      obj.val = parseInt(form.children('#' + items[i].id).val());
+    else
+      obj.val = form.children('#' + items[i].id).val();
+
+    /* Add item to list */
+    list.push(obj);
+  }
+
+  /* Generate group */
+  group.id = group_id;
+  group.list = list;
+  group_list.push(group);
+
+  /* Generate params */
+  params.push(id);
+  params.push(group_list);
+
+  /* Send new configuration */
+  jsonrpc_call("config.set", params, function(response) {
+    if (response.error || !response.result)
+      return;
+
+    /* Update */
+    melo_get_config(id);
   });
 }
 
