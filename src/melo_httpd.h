@@ -53,6 +53,13 @@ MeloHTTPD *melo_httpd_new (void);
 gboolean melo_httpd_start (MeloHTTPD *httpd, guint port);
 void melo_httpd_stop (MeloHTTPD *httpd);
 
+void melo_httpd_auth_enable (MeloHTTPD *httpd);
+void melo_httpd_auth_disable (MeloHTTPD *httpd);
+void melo_httpd_auth_set_username (MeloHTTPD *httpd, const gchar *username);
+void melo_httpd_auth_set_password (MeloHTTPD *httpd, const gchar *password);
+gchar *melo_httpd_auth_get_username (MeloHTTPD *httpd);
+gchar *melo_httpd_auth_get_password (MeloHTTPD *httpd);
+
 G_END_DECLS
 
 #endif /* __MELO_HTTPD_H__ */

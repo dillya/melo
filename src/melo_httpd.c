@@ -33,8 +33,23 @@
 #include "config.h"
 #endif
 
+#define MELO_HTTPD_REALM "Melo"
+
+static gboolean melo_httpd_basic_auth_callback (SoupAuthDomain *auth_domain,
+                                                SoupMessage *msg,
+                                                const char *username,
+                                                const char *password,
+                                                gpointer data);
+
 struct _MeloHTTPDPrivate {
+  GMutex mutex;
   SoupServer *server;
+
+  /* Authentication */
+  SoupAuthDomain *auth_domain;
+  gboolean auth_enabled;
+  gchar *username;
+  gchar *password;
 
   /* Thread pools */
   GThreadPool *jsonrpc_pool;
@@ -53,6 +68,14 @@ melo_httpd_finalize (GObject *gobject)
 
   /* Free thread pools */
   g_thread_pool_free (priv->jsonrpc_pool, TRUE, FALSE);
+
+  /* free authentication */
+  g_object_unref (priv->auth_domain);
+  g_free (priv->username);
+  g_free (priv->password);
+
+  /* Clear mutex */
+  g_mutex_clear (&priv->mutex);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_httpd_parent_class)->finalize (gobject);
@@ -73,13 +96,34 @@ melo_httpd_init (MeloHTTPD *self)
   MeloHTTPDPrivate *priv = melo_httpd_get_instance_private (self);
 
   self->priv = priv;
+  priv->username = NULL;
+  priv->password = NULL;
+
+  /* Init mutex */
+  g_mutex_init (&priv->mutex);
 
   /* Create a new HTTP server */
   priv->server = soup_server_new (0, NULL);
 
+  /* Create a basic authentication domain */
+  priv->auth_domain = soup_auth_domain_basic_new (
+                          SOUP_AUTH_DOMAIN_REALM, MELO_HTTPD_REALM,
+                          SOUP_AUTH_DOMAIN_ADD_PATH, "",
+                          SOUP_AUTH_DOMAIN_BASIC_AUTH_CALLBACK,
+                              melo_httpd_basic_auth_callback,
+                          SOUP_AUTH_DOMAIN_BASIC_AUTH_DATA, priv,
+                          NULL);
+  priv->auth_enabled = FALSE;
+
   /* Init thread pools */
   priv->jsonrpc_pool = g_thread_pool_new (melo_httpd_jsonrpc_thread_handler,
                                           priv->server, 10, FALSE, NULL);
+}
+
+MeloHTTPD *
+melo_httpd_new (void)
+{
+  return g_object_new (MELO_TYPE_HTTPD, NULL);
 }
 
 gboolean
@@ -115,8 +159,84 @@ melo_httpd_stop (MeloHTTPD *httpd)
   soup_server_disconnect (httpd->priv->server);
 }
 
-MeloHTTPD *
-melo_httpd_new (void)
+void
+melo_httpd_auth_enable (MeloHTTPD *httpd)
 {
-  return g_object_new (MELO_TYPE_HTTPD, NULL);
+   if (httpd->priv->auth_enabled)
+     return;
+  httpd->priv->auth_enabled = TRUE;
+
+  /* Add authentication domain */
+  soup_server_add_auth_domain (httpd->priv->server, httpd->priv->auth_domain);
+}
+
+void
+melo_httpd_auth_disable (MeloHTTPD *httpd)
+{
+   if (!httpd->priv->auth_enabled)
+     return;
+  httpd->priv->auth_enabled = FALSE;
+
+  /* Remove authentication domain */
+  soup_server_remove_auth_domain (httpd->priv->server,
+                                  httpd->priv->auth_domain);
+}
+
+void
+melo_httpd_auth_set_username (MeloHTTPD *httpd, const gchar *username)
+{
+  g_mutex_lock (&httpd->priv->mutex);
+  g_free (httpd->priv->username);
+  httpd->priv->username = g_strdup (username);
+  g_mutex_unlock (&httpd->priv->mutex);
+}
+
+void
+melo_httpd_auth_set_password (MeloHTTPD *httpd, const gchar *password)
+{
+  g_mutex_lock (&httpd->priv->mutex);
+  g_free (httpd->priv->password);
+  httpd->priv->password = g_strdup (password);
+  g_mutex_unlock (&httpd->priv->mutex);
+}
+
+gchar *
+melo_httpd_auth_get_username (MeloHTTPD *httpd)
+{
+  gchar *username;
+  g_mutex_lock (&httpd->priv->mutex);
+  username = g_strdup (httpd->priv->username);
+  g_mutex_unlock (&httpd->priv->mutex);
+  return username;
+}
+
+gchar *
+melo_httpd_auth_get_password (MeloHTTPD *httpd)
+{
+  gchar *password;
+  g_mutex_lock (&httpd->priv->mutex);
+  password = g_strdup (httpd->priv->password);
+  g_mutex_unlock (&httpd->priv->mutex);
+  return password;
+}
+
+static gboolean
+melo_httpd_basic_auth_callback (SoupAuthDomain *auth_domain, SoupMessage *msg,
+                                const char *username, const char *password,
+                                gpointer data)
+{
+  MeloHTTPDPrivate *priv = (MeloHTTPDPrivate *) data;
+  gboolean ret = TRUE;
+
+  /* Lock auth login */
+  g_mutex_lock (&priv->mutex);
+
+  if (priv->password)
+    ret = !strcmp (password, priv->password) &&
+          (!priv->username || !strcmp (username, priv->username));
+
+  /* Unlock auth login */
+  g_mutex_unlock (&priv->mutex);
+
+  return ret;
 }
