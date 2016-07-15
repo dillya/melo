@@ -19,6 +19,8 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <string.h>
+
 #include "melo_config.h"
 
 /* Internal config list */
@@ -45,7 +47,16 @@ static const gchar *melo_config_elements[MELO_CONFIG_ELEMENT_COUNT] = {
 typedef struct _MeloConfigValues {
   GHashTable *ids;
   MeloConfigValue *values;
+  MeloConfigValue *new_values;
+  gboolean *updated_values;
+  gsize bsize;
   gsize size;
+
+  MeloConfigCheckFunc check_cb;
+  gpointer check_data;
+
+  MeloConfigUpdateFunc update_cb;
+  gpointer update_data;
 } MeloConfigValues;
 
 struct _MeloConfigPrivate {
@@ -84,6 +95,8 @@ melo_config_finalize (GObject *gobject)
 
   /* Free all values for each groups */
   for (i = 0; i < priv->groups_count; i++) {
+    g_slice_free1 (priv->values[i].bsize, priv->values[i].updated_values);
+    g_slice_free1 (priv->values[i].size, priv->values[i].new_values);
     g_slice_free1 (priv->values[i].size, priv->values[i].values);
     g_hash_table_unref (priv->values[i].ids);
   }
@@ -167,7 +180,10 @@ melo_config_new (const gchar *id, const MeloConfigGroup *groups,
 
     priv->values[i].ids = g_hash_table_new (g_str_hash, g_str_equal);
     priv->values[i].size = groups[i].items_count * sizeof (MeloConfigValue);
+    priv->values[i].bsize = groups[i].items_count * sizeof (gboolean);
     priv->values[i].values = g_slice_alloc0 (priv->values[i].size);
+    priv->values[i].new_values = g_slice_alloc0 (priv->values[i].size);
+    priv->values[i].updated_values = g_slice_alloc0 (priv->values[i].bsize);
 
     /* Fill hash table with ids */
     for (j = 0; j < groups[i].items_count; j++) {
@@ -340,6 +356,10 @@ melo_config_save_to_file (MeloConfig *config, const gchar *filename)
     for (j = 0; j < groups[i].items_count; j++) {
       const gchar *id = items[j].id;
 
+      /* Do not save this item */
+      if (items[j].flags & MELO_CONFIG_FLAGS_DONT_SAVE)
+        continue;
+
       switch (items[j].type) {
         case MELO_CONFIG_TYPE_BOOLEAN:
           g_key_file_set_boolean (kfile, gid, id, values[j]._boolean);
@@ -351,7 +371,8 @@ melo_config_save_to_file (MeloConfig *config, const gchar *filename)
           g_key_file_set_double (kfile, gid, id, values[j]._double);
           break;
         case MELO_CONFIG_TYPE_STRING:
-          g_key_file_set_string (kfile, gid, id, values[j]._string);
+          if (values[j]._string)
+            g_key_file_set_string (kfile, gid, id, values[j]._string);
           break;
         default:
           ;
@@ -378,15 +399,21 @@ static inline gboolean
 melo_config_find (MeloConfigPrivate *priv, const gchar *group, const gchar *id,
                   gint *group_idx, gint *item_idx)
 {
+  gpointer p;
+
   /* Find group index */
-  if (!g_hash_table_lookup_extended (priv->ids, group,
-                                     NULL, (gpointer *) group_idx))
+  if (!g_hash_table_lookup_extended (priv->ids, group, NULL, &p))
     return FALSE;
+  *group_idx = GPOINTER_TO_INT (p);
+
+  /* Find only the group */
+  if (!id)
+    return TRUE;
 
   /* Find item index */
-  if (!g_hash_table_lookup_extended (priv->values[*group_idx].ids, id,
-                                     NULL, (gpointer *) item_idx))
+  if (!g_hash_table_lookup_extended (priv->values[*group_idx].ids, id, NULL, &p))
     return FALSE;
+  *item_idx = GPOINTER_TO_INT (p);
 
   return TRUE;
 }
@@ -397,7 +424,7 @@ melo_config_get_value (MeloConfig *config, const gchar *group, const gchar *id,
 {
   MeloConfigPrivate *priv = config->priv;
   gboolean ret = TRUE;
-  gint g, i;
+  gint g, i = 0;
 
   /* Get indexes */
   if (!melo_config_find (priv, group, id, &g, &i))
@@ -472,7 +499,7 @@ melo_config_set_value (MeloConfig *config, const gchar *group, const gchar *id,
 {
   MeloConfigPrivate *priv = config->priv;
   gboolean ret = TRUE;
-  gint g, i;
+  gint g, i = 0;
 
   /* Get indexes */
   if (!melo_config_find (priv, group, id, &g, &i))
@@ -536,10 +563,54 @@ melo_config_set_double (MeloConfig *config, const gchar *group,
 
 gboolean
 melo_config_set_string (MeloConfig *config, const gchar *group,
-                        const gchar *id, gchar *value)
+                        const gchar *id, const gchar *value)
 {
   return melo_config_set_value (config, group, id, MELO_CONFIG_TYPE_STRING,
-                                value);
+                                (gpointer) value);
+}
+
+void
+melo_config_set_check_callback (MeloConfig *config, const gchar *group,
+                                MeloConfigCheckFunc callback,
+                                gpointer user_data)
+{
+  gint idx;
+
+  /* Find group */
+  if (!melo_config_find (config->priv, group, NULL, &idx, NULL))
+    return;
+
+  /* Lock config access */
+  g_mutex_lock (&config->priv->mutex);
+
+  /* Set callback */
+  config->priv->values[idx].check_cb = callback;
+  config->priv->values[idx].check_data = user_data;
+
+  /* Unlock config access */
+  g_mutex_unlock (&config->priv->mutex);
+}
+
+void
+melo_config_set_update_callback (MeloConfig *config, const gchar *group,
+                                 MeloConfigUpdateFunc callback,
+                                 gpointer user_data)
+{
+  gint idx;
+
+  /* Find group */
+  if (!melo_config_find (config->priv, group, NULL, &idx, NULL))
+    return;
+
+  /* Lock config access */
+  g_mutex_lock (&config->priv->mutex);
+
+  /* Set callback */
+  config->priv->values[idx].update_cb = callback;
+  config->priv->values[idx].update_data = user_data;
+
+  /* Unlock config access */
+  g_mutex_unlock (&config->priv->mutex);
 }
 
 /* Advanced functions */
@@ -549,6 +620,10 @@ struct _MeloConfigContext {
   gint item_idx;
   const MeloConfigGroup *group;
   const MeloConfigValues *values;
+
+  gboolean update;
+  MeloConfigValue *new_value;
+  gboolean *updated_value;
 };
 
 gpointer
@@ -575,6 +650,64 @@ melo_config_parse (MeloConfig *config, MeloConfigFunc callback,
   return ret;
 }
 
+gboolean
+melo_config_update (MeloConfig *config, MeloConfigFunc callback,
+                    gpointer user_data)
+{
+  MeloConfigPrivate *priv = config->priv;
+  MeloConfigContext context = {
+    .priv = priv,
+    .group_idx = 0,
+    .update = TRUE,
+  };
+  gint i, j;
+
+  /* Lock config access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Reset updated values */
+  for (i = 0; i < priv->groups_count; i++) {
+    memset (priv->values[i].new_values, 0, priv->values[i].size);
+    memset (priv->values[i].updated_values, 0, priv->values[i].bsize);
+  }
+
+  /* Call the callback */
+  if (callback && !callback (&context, user_data))
+    goto failed;
+
+  /* Check new values */
+  context.group_idx = 0;
+  while (melo_config_next_group (&context, NULL, NULL)) {
+    if (context.values->check_cb &&
+        !context.values->check_cb (&context, context.values->check_data))
+      goto failed;
+  }
+
+  /* Copy updated values */
+  for (i = 0; i < priv->groups_count; i++) {
+    /* Call update callback */
+    if (priv->values[i].update_cb)
+      priv->values[i].update_cb (&context, priv->values[i].update_data);
+
+    /* Copy all updated values */
+    for (j = 0; j < priv->groups[i].items_count; j++) {
+      if (priv->values[i].updated_values[j]) {
+        if (priv->groups[i].items[j].type == MELO_CONFIG_TYPE_STRING)
+          g_free (priv->values[i].values[j]._string);
+        priv->values[i].values[j] = priv->values[i].new_values[j];
+      }
+    }
+  }
+
+  /* Unlock config access */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+failed:
+  g_mutex_unlock (&priv->mutex);
+  return FALSE;
+}
+
 gint
 melo_config_get_group_count (MeloConfigContext *context)
 {
@@ -596,25 +729,39 @@ melo_config_next_group (MeloConfigContext *context,
   context->values = &priv->values[context->group_idx];
   context->group_idx++;
   context->item_idx = 0;
+  if (context->update) {
+    context->new_value = &context->values->new_values[0];
+    context->updated_value = &context->values->updated_values[0];
+  }
 
   /* Set values */
-  *group = context->group;
-  *items_count = context->group->items_count;
+  if (group)
+    *group = context->group;
+  if (items_count)
+    *items_count = context->group->items_count;
 
   return TRUE;
 }
 
 gboolean
 melo_config_next_item (MeloConfigContext *context, MeloConfigItem **item,
-                       MeloConfigValue **value)
+                       MeloConfigValue *value)
 {
   /* End of group list */
   if (context->item_idx >= context->group->items_count)
     return FALSE;
 
   /* Set values */
-  *item = &context->group->items[context->item_idx];
-  *value = &context->values->values[context->item_idx];
+  if (item)
+    *item = &context->group->items[context->item_idx];
+  if (value)
+    *value = context->values->values[context->item_idx];
+
+  /* Set update context */
+  if (context->update) {
+    context->new_value = &context->values->new_values[context->item_idx];
+    context->updated_value = &context->values->updated_values[context->item_idx];
+  }
 
   /* Update context */
   context->item_idx++;
@@ -627,43 +774,124 @@ melo_config_find_group (MeloConfigContext *context, const gchar *group_id,
                         const MeloConfigGroup **group, gint *items_count)
 {
   MeloConfigPrivate *priv = context->priv;
+  gpointer p;
   gint idx;
 
   /* Find group */
-  if (!g_hash_table_lookup_extended (priv->ids, group_id,
-                                    NULL, (gpointer *) &idx))
+  if (!g_hash_table_lookup_extended (priv->ids, group_id, NULL, &p))
     return FALSE;
+  idx = GPOINTER_TO_INT (p);
 
   /* Update context */
   context->group = &priv->groups[idx];
   context->values = &priv->values[idx];
   context->group_idx = idx + 1;
   context->item_idx = 0;
+  if (context->update) {
+    context->new_value = &context->values->new_values[0];
+    context->updated_value = &context->values->updated_values[0];
+  }
 
   /* Set values */
-  *group = context->group;
-  *items_count = context->group->items_count;
+  if (group)
+    *group = context->group;
+  if (items_count)
+    *items_count = context->group->items_count;
 
   return TRUE;
 }
 
 gboolean
 melo_config_find_item (MeloConfigContext *context, const gchar *item_id,
-                       MeloConfigItem **item, MeloConfigValue **value)
+                       MeloConfigItem **item, MeloConfigValue *value)
 {
+  gpointer p;
   gint idx;
 
-  /* Find group */
-  if (!g_hash_table_lookup_extended (context->values->ids, item_id,
-                                    NULL, (gpointer *) &idx))
+  /* Find item */
+  if (!g_hash_table_lookup_extended (context->values->ids, item_id, NULL, &p))
     return FALSE;
+  idx = GPOINTER_TO_INT (p);
 
   /* Set values */
-  *item = &context->group->items[idx];
-  *value = &context->values->values[idx];
+  if (item)
+    *item = &context->group->items[idx];
+  if (value)
+    *value = context->values->values[idx];
+
+  /* Set update context */
+  if (context->update) {
+    context->new_value = &context->values->new_values[idx];
+    context->updated_value = &context->values->updated_values[idx];
+  }
 
   /* Update context */
   context->item_idx = idx + 1;
 
   return TRUE;
 }
+
+void
+melo_config_update_boolean (MeloConfigContext *context, gboolean value)
+{
+  if (!context->update)
+    return;
+  context->new_value->_boolean = value;
+  *context->updated_value = TRUE;
+}
+
+void
+melo_config_update_integer (MeloConfigContext *context, gint64 value)
+{
+  if (!context->update)
+    return;
+  context->new_value->_integer = value;
+  *context->updated_value = TRUE;
+}
+
+void
+melo_config_update_double (MeloConfigContext *context, gdouble value)
+{
+  if (!context->update)
+    return;
+  context->new_value->_double = value;
+  *context->updated_value = TRUE;
+}
+
+void
+melo_config_update_string (MeloConfigContext *context, const gchar *value)
+{
+  if (!context->update)
+    return;
+  g_free (context->new_value->_string);
+  context->new_value->_string = g_strdup (value);
+  *context->updated_value = TRUE;
+}
+
+void
+melo_config_remove_update (MeloConfigContext *context)
+{
+  *context->updated_value = FALSE;
+}
+
+#define DEFINE_GET_UPDATED(_type, _field) \
+gboolean \
+melo_config_get_updated_##_field (MeloConfigContext *context, const gchar *id, \
+                                 _type *value, _type *old_value) \
+{ \
+  MeloConfigValue val; \
+ \
+  if (!context->update || !melo_config_find_item (context, id, NULL, &val) || \
+      !*context->updated_value) \
+    return FALSE; \
+ \
+  if (old_value) \
+    *old_value = val._##_field; \
+  *value = context->new_value->_ ##_field; \
+  return TRUE; \
+}
+
+DEFINE_GET_UPDATED(gboolean, boolean)
+DEFINE_GET_UPDATED(gint64, integer)
+DEFINE_GET_UPDATED(gdouble, double)
+DEFINE_GET_UPDATED(const gchar *, string)

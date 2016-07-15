@@ -134,27 +134,63 @@ gboolean melo_config_set_integer (MeloConfig *config, const gchar *group,
 gboolean melo_config_set_double (MeloConfig *config, const gchar *group,
                                  const gchar *id, gdouble value);
 gboolean melo_config_set_string (MeloConfig *config, const gchar *group,
-                                 const gchar *id, gchar *value);
+                                 const gchar *id, const gchar *value);
+
+typedef gboolean (*MeloConfigCheckFunc) (MeloConfigContext *context,
+                                         gpointer user_data);
+typedef void (*MeloConfigUpdateFunc) (MeloConfigContext *context,
+                                      gpointer user_data);
+void melo_config_set_check_callback (MeloConfig *config, const gchar *group,
+                                     MeloConfigCheckFunc callback,
+                                     gpointer user_data);
+void melo_config_set_update_callback (MeloConfig *config, const gchar *group,
+                                      MeloConfigUpdateFunc callback,
+                                      gpointer user_data);
 
 /* Advanced functions */
 typedef gpointer (*MeloConfigFunc) (MeloConfigContext *context,
                                     gpointer user_data);
 gpointer melo_config_parse (MeloConfig *config, MeloConfigFunc callback,
                             gpointer user_data);
+gboolean melo_config_update (MeloConfig *config, MeloConfigFunc callback,
+                             gpointer user_data);
 
 gint melo_config_get_group_count (MeloConfigContext *context);
 gboolean melo_config_next_group (MeloConfigContext *context,
                                  const MeloConfigGroup **group,
                                  gint *items_count);
 gboolean melo_config_next_item (MeloConfigContext *context,
-                                MeloConfigItem **item, MeloConfigValue **value);
+                                MeloConfigItem **item, MeloConfigValue *value);
 gboolean melo_config_find_group (MeloConfigContext *context,
                                  const gchar *group_id,
                                  const MeloConfigGroup **group,
                                  gint *items_count);
 gboolean melo_config_find_item (MeloConfigContext *context,
                                 const gchar *item_id, MeloConfigItem **item,
-                                MeloConfigValue **value);
+                                MeloConfigValue *value);
+
+void melo_config_update_boolean (MeloConfigContext *context, gboolean value);
+void melo_config_update_integer (MeloConfigContext *context, gint64 value);
+void melo_config_update_double (MeloConfigContext *context, gdouble value);
+void melo_config_update_string (MeloConfigContext *context, const gchar *value);
+void melo_config_remove_update (MeloConfigContext *context);
+
+gboolean melo_config_get_updated_boolean (MeloConfigContext *context,
+                                          const gchar *id,
+                                          gboolean *value,
+                                          gboolean *old_value);
+gboolean melo_config_get_updated_integer (MeloConfigContext *context,
+                                          const gchar *id,
+                                          gint64 *value,
+                                          gint64 *old_value);
+gboolean melo_config_get_updated_double (MeloConfigContext *context,
+                                         const gchar *id,
+                                         gdouble *value,
+                                         gdouble *old_value);
+gboolean melo_config_get_updated_string (MeloConfigContext *context,
+                                         const gchar *id,
+                                         const gchar **value,
+                                         const gchar **old_value);
 
 G_END_DECLS
 
