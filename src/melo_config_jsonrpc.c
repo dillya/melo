@@ -86,6 +86,8 @@ melo_config_jsonrpc_gen_item_array (MeloConfigContext *context, gint item_count)
                                    melo_config_type_to_string (item->type));
     json_object_set_string_member (obj, "element",
                                  melo_config_element_to_string (item->element));
+    json_object_set_boolean_member (obj, "read_only",
+                                    item->flags & MELO_CONFIG_FLAGS_READ_ONLY);
     if (item->flags & MELO_CONFIG_FLAGS_WRITE_ONLY)
       json_object_set_null_member (obj, "val");
     else
