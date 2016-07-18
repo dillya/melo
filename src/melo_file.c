@@ -23,11 +23,13 @@
 #include "melo_browser_file.h"
 #include "melo_player_file.h"
 #include "melo_playlist_file.h"
+#include "melo_config_file.h"
 
 /* Module file info */
 static MeloModuleInfo melo_file_info = {
   .name = "Files",
   .description = "Navigate and play any of your music files",
+  .config_id = "file",
 };
 
 static const MeloModuleInfo *melo_file_get_info (MeloModule *module);
@@ -36,6 +38,7 @@ struct _MeloFilePrivate {
   MeloBrowser *files;
   MeloPlayer *player;
   MeloPlaylist *playlist;
+  MeloConfig *config;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloFile, melo_file, MELO_TYPE_MODULE)
@@ -79,6 +82,7 @@ static void
 melo_file_init (MeloFile *self)
 {
   MeloFilePrivate *priv = melo_file_get_instance_private (self);
+  gchar *path;
 
   self->priv = priv;
   priv->files = melo_browser_new (MELO_TYPE_BROWSER_FILE, "file_files");
@@ -96,6 +100,19 @@ melo_file_init (MeloFile *self)
   melo_player_set_playlist (priv->player, priv->playlist);
   melo_playlist_set_player (priv->playlist, priv->player);
   melo_browser_set_player (priv->files, priv->player);
+
+  /* Initialize and load configuration */
+  priv->config = melo_config_file_new ();
+  if (!melo_config_load_from_def_file (priv->config)) {
+    melo_config_load_default (priv->config);
+    melo_config_save_to_def_file (priv->config);
+  }
+
+  /* Load local path for browser */
+  if (melo_config_get_string (priv->config, "global", "local_path", &path)) {
+    melo_browser_file_set_local_path (MELO_BROWSER_FILE (priv->files), path);
+    g_free (path);
+  }
 }
 
 static const MeloModuleInfo *

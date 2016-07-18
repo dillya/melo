@@ -41,7 +41,7 @@ struct _MeloBrowserFile {
   MeloBrowser parent_instance;
 
   /*< private >*/
-  MeloBrowserFilePrivate *priv;
+MeloBrowserFilePrivate *priv;
 };
 
 struct _MeloBrowserFileClass {
@@ -49,6 +49,9 @@ struct _MeloBrowserFileClass {
 };
 
 GType melo_browser_file_get_type (void);
+
+void melo_browser_file_set_local_path (MeloBrowserFile *bfile,
+                                       const gchar *path);
 
 G_END_DECLS
 

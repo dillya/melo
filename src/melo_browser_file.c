@@ -50,6 +50,7 @@ static gboolean melo_browser_file_remove (MeloBrowser *browser,
                                           const gchar *path);
 
 struct _MeloBrowserFilePrivate {
+  gchar *local_path;
   GVolumeMonitor *monitor;
   GMutex mutex;
   GList *vms;
@@ -81,6 +82,9 @@ melo_browser_file_finalize (GObject *gobject)
   /* Free volume and mount list */
   g_list_free_full (priv->vms, g_object_unref);
 
+  /* Free local path */
+  g_free (priv->local_path);
+
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_browser_file_parent_class)->finalize (gobject);
 }
@@ -107,6 +111,9 @@ melo_browser_file_init (MeloBrowserFile *self)
   MeloBrowserFilePrivate *priv = melo_browser_file_get_instance_private (self);
 
   self->priv = priv;
+
+  /* Set local path to default */
+  priv->local_path = g_strdup ("");
 
   /* Get volume monitor */
   priv->monitor = g_volume_monitor_get ();
@@ -138,6 +145,13 @@ melo_browser_file_init (MeloBrowserFile *self)
   /* Init Hash table for shortcuts */
   priv->shortcuts = g_hash_table_new_full (g_str_hash, g_str_equal,
                                            g_free, g_free);
+}
+
+void
+melo_browser_file_set_local_path (MeloBrowserFile *bfile, const gchar *path)
+{
+  g_free (bfile->priv->local_path);
+  bfile->priv->local_path = g_strdup (path);
 }
 
 static const MeloBrowserInfo *
@@ -625,7 +639,7 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
 
     /* Get file path: "/local/" */
     path = melo_brower_file_fix_path (path + 5);
-    uri = g_strdup_printf ("file:/%s", path);
+    uri = g_strdup_printf ("file:%s/%s", bfile->priv->local_path, path);
     list = melo_browser_file_get_local_list (bfile, uri);
     g_free (uri);
   } else if (g_str_has_prefix (path, "network")) {
@@ -653,7 +667,7 @@ melo_browser_file_get_uri (MeloBrowser *browser, const gchar *path)
   /* Generate URI from path */
   if (g_str_has_prefix (path, "local/")) {
     path = melo_brower_file_fix_path (path + 5);
-    uri = g_strdup_printf ("file:/%s", path);
+    uri = g_strdup_printf ("file:%s/%s", bfile->priv->local_path, path);
   } else if (g_str_has_prefix (path, "network/")) {
     uri = melo_browser_file_get_network_uri (bfile, path + 8);
   } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&

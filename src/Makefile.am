@@ -55,6 +55,7 @@ libmelo_file_la_SOURCES = \
 	melo_browser_file.c \
 	melo_player_file.c \
 	melo_playlist_file.c \
+	melo_config_file.c \
 	melo_file.c
 
 # Main program
