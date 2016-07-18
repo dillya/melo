@@ -27,6 +27,7 @@ typedef enum {
   MELO_MODULE_JSONRPC_FIELDS_NONE = 0,
   MELO_MODULE_JSONRPC_FIELDS_NAME = 1,
   MELO_MODULE_JSONRPC_FIELDS_DESCRIPTION = 2,
+  MELO_MODULE_JSONRPC_FIELDS_CONFIG_ID = 4,
   MELO_MODULE_JSONRPC_FIELDS_FULL = 255,
 } MeloModuleJSONRPCFields;
 
@@ -81,6 +82,8 @@ melo_module_jsonrpc_get_fields (JsonObject *obj)
       fields |= MELO_MODULE_JSONRPC_FIELDS_NAME;
     else if (!g_strcmp0 (field, "description"))
       fields |= MELO_MODULE_JSONRPC_FIELDS_DESCRIPTION;
+    else if (!g_strcmp0 (field, "config_id"))
+      fields |= MELO_MODULE_JSONRPC_FIELDS_CONFIG_ID;
   }
 
   return fields;
@@ -98,6 +101,8 @@ melo_module_jsonrpc_info_to_object (const gchar *id, const MeloModuleInfo *info,
       json_object_set_string_member (obj, "name", info->name);
     if (fields & MELO_MODULE_JSONRPC_FIELDS_DESCRIPTION)
       json_object_set_string_member (obj, "description", info->description);
+    if (fields & MELO_MODULE_JSONRPC_FIELDS_CONFIG_ID)
+      json_object_set_string_member (obj, "config_id", info->config_id);
   }
   return obj;
 }

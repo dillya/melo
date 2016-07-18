@@ -58,6 +58,7 @@ struct _MeloModuleClass {
 struct _MeloModuleInfo {
   const gchar *name;
   const gchar *description;
+  const gchar *config_id;
 };
 
 GType melo_module_get_type (void);
