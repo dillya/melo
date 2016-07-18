@@ -23,6 +23,7 @@ function melo_update_list() {
                            response.result[i].id + '] (' +
                            '<a class="info" href="#">info</a>' +
                            ' | <a class="browsers" href="#">browsers</a>' +
+                           ' | <a class="config" href="#">config</a>' +
                   ')<ul class=browser_list></ul></li>');
 
       /* Add a link to get module details */
@@ -36,6 +37,12 @@ function melo_update_list() {
                        [response.result[i].id, mod.children("ul.browser_list")],
                        function(e) {
         melo_get_browsers(e.data[0], e.data[1]);
+        return false;
+      });
+
+      /* Add a link to get module config */
+      mod.children("a.config").click(response.result[i].config_id, function(e) {
+        melo_get_config(e.data);
         return false;
       });
 
@@ -536,17 +543,20 @@ function melo_get_config(id) {
         var item_id = items[j].id;
         var name = items[j].name;
         var value = items[j].val;
+        var ro = items[j].read_only;
         var element = items[j].element;
 
         /* Add new form element */
         if (item_id == null)
           group.append('<span class="under">' + name + ':</span><br>');
         else if (element == "checkbox")
-          group.append('<input type="checkbox" id="' + item_id + '" ' + (value ? "checked": "") + '>' +
+          group.append('<input type="checkbox" id="' + item_id + '"' +
+                              (value ? " checked": "") + (ro ? " readonly" : "") + '>' +
                               '<label for="' + item_id + '">' + name + '</label><br>');
         else
           group.append(name + ': <input type="' + element + '" id="' + item_id + '"' +
-                                 ' name="' + item_id + '" value="' + (value ? value : "") + '"><br>');
+                                 ' name="' + item_id + '" value="' + (value ? value : "") + '"' +
+                                 (ro ? " readonly" : "") + '><br>');
       }
 
       /* Add a save button */
@@ -573,7 +583,7 @@ function melo_set_config(id, group_id, items, form) {
 
   /* Parse form */
   for (var i = 0; i < items.length; i++) {
-    if (items[i].id == null)
+    if (items[i].id == null || items[i].read_only)
       continue;
 
     /* Get children value */
