@@ -171,7 +171,7 @@ melo_config_new (const gchar *id, const MeloConfigGroup *groups,
 
   /* Allocate values table */
   priv->values_size = groups_count * sizeof (MeloConfigValues);
-  priv->values = g_slice_alloc (priv->values_size);
+  priv->values = g_slice_alloc0 (priv->values_size);
 
   /* Init all values for each groups */
   priv->ids = g_hash_table_new (g_str_hash, g_str_equal);
