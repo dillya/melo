@@ -118,6 +118,8 @@ const MeloConfigGroup *melo_config_get_groups (MeloConfig *config, gint *count);
 void melo_config_load_default (MeloConfig *config);
 gboolean melo_config_load_from_file (MeloConfig *config, const gchar *filename);
 gboolean melo_config_save_to_file (MeloConfig *config, const gchar *filename);
+gboolean melo_config_load_from_def_file (MeloConfig *config);
+gboolean melo_config_save_to_def_file (MeloConfig *config);
 
 gboolean melo_config_get_boolean (MeloConfig *config, const gchar *group,
                                  const gchar *id, gboolean *value);

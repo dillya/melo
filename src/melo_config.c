@@ -395,6 +395,41 @@ melo_config_save_to_file (MeloConfig *config, const gchar *filename)
   return ret;
 }
 
+static inline gchar *
+melo_config_get_def_file (MeloConfig *config)
+{
+  return g_strdup_printf ("%s/melo/%s.cfg", g_get_user_config_dir (),
+                          config->priv->id);
+}
+
+gboolean
+melo_config_load_from_def_file (MeloConfig *config)
+{
+  gchar *filename;
+  gboolean ret;
+
+  /* Load from default config file */
+  filename = melo_config_get_def_file (config);
+  ret = melo_config_load_from_file (config, filename);
+  g_free (filename);
+
+  return ret;
+}
+
+gboolean
+melo_config_save_to_def_file (MeloConfig *config)
+{
+  gchar *filename;
+  gboolean ret;
+
+  /* Save to default config file */
+  filename = melo_config_get_def_file (config);
+  ret = melo_config_save_to_file (config, filename);
+  g_free (filename);
+
+  return ret;
+}
+
 static inline gboolean
 melo_config_find (MeloConfigPrivate *priv, const gchar *group, const gchar *id,
                   gint *group_idx, gint *item_idx)

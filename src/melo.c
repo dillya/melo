@@ -70,7 +70,6 @@ main (int argc, char *argv[])
   GError *err = NULL;
   /* Main configuration */
   MeloConfig *config;
-  gchar *config_file;
   /* HTTP server */
   MeloHTTPD *server;
   gint64 port;
@@ -97,12 +96,9 @@ main (int argc, char *argv[])
   /* Free option context */
   g_option_context_free (ctx);
 
-  /* Create configuration file name */
-  config_file = g_strdup_printf ("%s/melo/main.cfg", g_get_user_config_dir ());
-
   /* Load configuration */
   config = melo_config_main_new ();
-  if (!melo_config_load_from_file (config, config_file))
+  if (!melo_config_load_from_def_file (config))
     melo_config_load_default (config);
 
   /* Get HTTP server port */
@@ -163,11 +159,10 @@ end:
   melo_config_unregister_methods ();
 
   /* Save configuration */
-  melo_config_save_to_file (config, config_file);
+  melo_config_save_to_def_file (config);
 
   /* Free configuration */
   g_object_unref (config);
-  g_free (config_file);
 
   return 0;
 }
