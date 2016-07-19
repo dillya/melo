@@ -26,8 +26,10 @@
 static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data);
 static void pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink);
 
-static gboolean melo_player_file_add (MeloPlayer *player, const gchar *path);
+static gboolean melo_player_file_add (MeloPlayer *player, const gchar *path,
+                                      const gchar *name, MeloTags *tags);
 static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path,
+                                       const gchar *name, MeloTags *tags,
                                        gboolean insert);
 static gboolean melo_player_file_prev (MeloPlayer *player);
 static gboolean melo_player_file_next (MeloPlayer *player);
@@ -255,25 +257,24 @@ pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink)
 }
 
 static gboolean
-melo_player_file_add (MeloPlayer *player, const gchar *path)
+melo_player_file_add (MeloPlayer *player, const gchar *path, const gchar *name,
+                      MeloTags *tags)
 {
-  gchar *name;
-
   if (!player->playlist)
     return FALSE;
 
   /* Add URI to playlist */
-  name = g_path_get_basename (path);
+  if (!name)
+    name = g_path_get_basename (path);
   melo_playlist_add (player->playlist, name, name, path, FALSE);
   return TRUE;
 }
 
 static gboolean
-melo_player_file_play (MeloPlayer *player, const gchar *path,
-                       gboolean insert)
+melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
+                       MeloTags *tags, gboolean insert)
 {
   MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
-  gchar *name;
 
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
@@ -288,7 +289,8 @@ melo_player_file_play (MeloPlayer *player, const gchar *path,
   priv->uri = g_strdup (path);
 
   /* Create new status */
-  name = g_path_get_basename (priv->uri);
+  if (!name)
+    name = g_path_get_basename (priv->uri);
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
   priv->tag_list = gst_tag_list_new_empty ();
 
@@ -320,7 +322,7 @@ melo_player_file_prev (MeloPlayer *player)
     return FALSE;
 
   /* Play file */
-  ret = melo_player_file_play (player, path, FALSE);
+  ret = melo_player_file_play (player, path, NULL, NULL, FALSE);
   g_free (path);
 
   return ret;
@@ -340,7 +342,7 @@ melo_player_file_next (MeloPlayer *player)
     return FALSE;
 
   /* Play file */
-  ret = melo_player_file_play (player, path, FALSE);
+  ret = melo_player_file_play (player, path, NULL, NULL, FALSE);
   g_free (path);
 
   return ret;

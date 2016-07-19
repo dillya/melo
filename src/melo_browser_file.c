@@ -713,7 +713,7 @@ melo_browser_file_add (MeloBrowser *browser, const gchar *path)
     return FALSE;
 
   /* Add with URI */
-  ret = melo_player_add (browser->player, uri);
+  ret = melo_player_add (browser->player, uri, NULL, NULL);
   g_free (uri);
 
   return ret;
@@ -731,7 +731,7 @@ melo_browser_file_play (MeloBrowser *browser, const gchar *path)
     return FALSE;
 
   /* Play with URI */
-  ret = melo_player_play (browser->player, uri, TRUE);
+  ret = melo_player_play (browser->player, uri, NULL, NULL, TRUE);
   g_free (uri);
 
   return ret;

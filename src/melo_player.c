@@ -192,23 +192,25 @@ melo_player_get_playlist (MeloPlayer *player)
 }
 
 gboolean
-melo_player_add (MeloPlayer *player, const gchar *path)
+melo_player_add (MeloPlayer *player, const gchar *path, const gchar *name,
+                 MeloTags *tags)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 
   g_return_val_if_fail (pclass->add, FALSE);
 
-  return pclass->add (player, path);
+  return pclass->add (player, path, name, tags);
 }
 
 gboolean
-melo_player_play (MeloPlayer *player, const gchar *path, gboolean insert)
+melo_player_play (MeloPlayer *player, const gchar *path, const gchar *name,
+                  MeloTags *tags, gboolean insert)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 
   g_return_val_if_fail (pclass->play, FALSE);
 
-  return pclass->play (player, path, insert);
+  return pclass->play (player, path, name, tags, insert);
 }
 
 MeloPlayerState
