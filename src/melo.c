@@ -31,6 +31,7 @@
 #include <gst/gst.h>
 
 #include "melo_file.h"
+#include "melo_radio.h"
 #include "melo_httpd.h"
 #include "melo_config_main.h"
 
@@ -114,6 +115,7 @@ main (int argc, char *argv[])
 
   /* Register built-in modules */
   melo_module_register (MELO_TYPE_FILE, "file");
+  melo_module_register (MELO_TYPE_RADIO, "radio");
 
   /* Create and start HTTP server */
   server = melo_httpd_new ();
@@ -149,6 +151,7 @@ end:
   g_object_unref (server);
 
   /* Unregister built-in modules */
+  melo_module_unregister ("radio");
   melo_module_unregister ("file");
 
   /* Unregister standard JSON-RPC methods */

@@ -15,6 +15,7 @@ AM_LDFLAGS = \
 melolibdir = $(libdir)/melo
 melolib_LTLIBRARIES = \
 	libmelo_file.la \
+	libmelo_radio.la \
 	libmelo.la
 
 # Main library
@@ -58,6 +59,16 @@ libmelo_file_la_SOURCES = \
 	melo_config_file.c \
 	melo_file.c
 
+# Radio module library
+libmelo_radio_la_DEPENDENCIES = \
+	libmelo.la
+
+libmelo_radio_la_SOURCES = \
+	melo_browser_radio.c \
+	melo_player_radio.c \
+	melo_playlist_radio.c \
+	melo_radio.c
+
 # Main program
 bin_PROGRAMS = melo
 
@@ -79,6 +90,7 @@ melo_LDFLAGS = \
 
 melo_LDADD = \
 	libmelo_file.la \
+	libmelo_radio.la \
 	libmelo.la
 
 noinst_HEADERS = \
@@ -86,6 +98,11 @@ noinst_HEADERS = \
 	melo_browser_file.h \
 	melo_player_file.h \
 	melo_playlist_file.h \
+	melo_config_file.h \
+	melo_radio.h \
+	melo_browser_radio.h \
+	melo_player_radio.h \
+	melo_playlist_radio.h \
 	melo_config_main.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
