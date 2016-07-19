@@ -207,13 +207,12 @@ function melo_browser_previous() {
 }
 
 var players = [];
+var players_timer = null;
 
 function melo_add_players(id, name) {
   /* Remove all players and there timers */
-  for (var i = 0; i < players.length; i++) {
-    if (players[i].timer != null)
-      clearInterval(players[i].timer);
-  }
+  if (players_timer != null)
+      clearInterval(players_timer);
   players = [];
 
   jsonrpc_call("module.get_player_list", JSON.parse('["' + id + '",["full"]]'),
@@ -258,7 +257,6 @@ function melo_add_players(id, name) {
       var play = {};
       play.id = id;
       play.element = stat;
-      play.timer = null;
       play.tags_ts = 0;
       players.push(play);
 
@@ -373,21 +371,17 @@ function melo_player_poll(state) {
   /* Enable / Disable timer for player polling */
   if (state) {
     /* Enable */
-    for (var i = 0; i < players.length; i++) {
-      if (players[i].timer == null) {
-        var play = players[i];
-        players[i].timer = setInterval(function() {
-          melo_update_player(play);
-        }, 1000);
-      }
+    if (players_timer == null) {
+      players_timer = setInterval(function() {
+        for (var i = 0; i < players.length; i++)
+          melo_update_player(players[i]);
+       }, 1000);
     }
   } else {
     /* Disable */
-    for (var i = 0; i < players.length; i++) {
-      if (players[i].timer != null) {
-        clearInterval(players[i].timer);
-        players[i].timer = null;
-      }
+    if (players_timer != null) {
+      clearInterval(players_timer);
+      players_timer = null;
     }
   }
 }
