@@ -2,6 +2,7 @@ AM_CFLAGS = \
 	$(GLIB_CFLAGS) \
 	$(GST_CFLAGS) \
 	$(GST_TAG_CFLAGS) \
+	$(AVAHI_GOBJECT_CFLAGS) \
 	$(LIBJSON_GLIB_CFLAGS) \
 	-Wall
 
@@ -9,6 +10,7 @@ AM_LDFLAGS = \
 	$(GLIB_LIBS) \
 	$(GST_LIBS) \
 	$(GST_TAG_LIBS) \
+	$(AVAHI_GOBJECT_LIBS) \
 	$(LIBJSON_GLIB_LIBS)
 
 # Libraries
@@ -31,6 +33,7 @@ libmelo_la_SOURCES = \
 	melo_browser_jsonrpc.c \
 	melo_player_jsonrpc.c \
 	melo_playlist_jsonrpc.c \
+	melo_avahi.c \
 	melo_jsonrpc.c
 
 meloincludedir = $(includedir)/melo
@@ -46,6 +49,7 @@ meloinclude_HEADERS = \
 	melo_browser_jsonrpc.h \
 	melo_player_jsonrpc.h \
 	melo_playlist_jsonrpc.h \
+	melo_avahi.h \
 	melo_jsonrpc.h
 
 # File module library

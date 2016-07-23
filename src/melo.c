@@ -28,12 +28,12 @@
 #include <glib-unix.h>
 #endif
 
-#include <gst/gst.h>
+#include "melo_avahi.h"
+#include "melo_config_main.h"
 
 #include "melo_file.h"
 #include "melo_radio.h"
 #include "melo_httpd.h"
-#include "melo_config_main.h"
 
 #include "melo_config_jsonrpc.h"
 #include "melo_module_jsonrpc.h"
@@ -72,6 +72,7 @@ main (int argc, char *argv[])
   /* Main configuration */
   MeloConfig *config;
   /* HTTP server */
+  MeloAvahi *avahi;
   MeloHTTPD *server;
   gint64 port;
   /* Main loop */
@@ -131,6 +132,11 @@ main (int argc, char *argv[])
   melo_config_set_update_callback (config, "http", melo_config_main_http_update,
                                    server);
 
+  /* Create a avahi context */
+  avahi = melo_avahi_new ();
+  if (avahi)
+    melo_avahi_add (avahi, "Melo", "_http._tcp", port, NULL);
+
   /* Start main loop */
   loop = g_main_loop_new (NULL, FALSE);
 
@@ -144,6 +150,9 @@ main (int argc, char *argv[])
 
   /* End of loop: free main loop */
   g_main_loop_unref (loop);
+
+  /* Remove avahi context */
+  g_object_unref (avahi);
 
 end:
   /* Stop and Free HTTP server */

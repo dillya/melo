@@ -66,6 +66,14 @@ PKG_CHECK_MODULES([GST_TAG],
     AC_MSG_ERROR(Gstreamer-tag $GST_REQ or later is required)
   ])
 
+dnl Check for Avahi gobject
+AVAHI_GOBJECT_REQ=0.6.31
+PKG_CHECK_MODULES([AVAHI_GOBJECT],
+  avahi-gobject >= $AVAHI_GOBJECT_REQ, [],
+  [
+    AC_MSG_ERROR(Avahi-gobject $AVAHI_OBJECT_REQ or later is required)
+  ])
+
 AC_CONFIG_FILES(
 Makefile
 src/Makefile
