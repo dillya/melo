@@ -18,6 +18,7 @@ melolibdir = $(libdir)/melo
 melolib_LTLIBRARIES = \
 	libmelo_file.la \
 	libmelo_radio.la \
+	libmelo_airplay.la \
 	libmelo.la
 
 # Main library
@@ -73,6 +74,13 @@ libmelo_radio_la_SOURCES = \
 	melo_playlist_radio.c \
 	melo_radio.c
 
+# Airplay module library
+libmelo_airplay_la_DEPENDENCIES = \
+	libmelo.la
+
+libmelo_airplay_la_SOURCES = \
+	melo_airplay.c
+
 # Main program
 bin_PROGRAMS = melo
 
@@ -95,6 +103,7 @@ melo_LDFLAGS = \
 melo_LDADD = \
 	libmelo_file.la \
 	libmelo_radio.la \
+	libmelo_airplay.la \
 	libmelo.la
 
 noinst_HEADERS = \
@@ -107,6 +116,7 @@ noinst_HEADERS = \
 	melo_browser_radio.h \
 	melo_player_radio.h \
 	melo_playlist_radio.h \
+	melo_airplay.h \
 	melo_config_main.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
