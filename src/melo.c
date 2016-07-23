@@ -72,6 +72,7 @@ main (int argc, char *argv[])
   GError *err = NULL;
   /* Main configuration */
   MeloConfig *config;
+  gchar *name;
   /* HTTP server */
   MeloAvahi *avahi;
   MeloHTTPD *server;
@@ -103,6 +104,10 @@ main (int argc, char *argv[])
   config = melo_config_main_new ();
   if (!melo_config_load_from_def_file (config))
     melo_config_load_default (config);
+
+  /* Get name */
+  if (!melo_config_get_string (config, "global", "name", &name) || !name)
+    name = g_strdup ("Melo");
 
   /* Get HTTP server port */
   if (!melo_config_get_integer (config, "http", "port", &port))
@@ -137,7 +142,7 @@ main (int argc, char *argv[])
   /* Create a avahi context */
   avahi = melo_avahi_new ();
   if (avahi)
-    melo_avahi_add (avahi, "Melo", "_http._tcp", port, NULL);
+    melo_avahi_add (avahi, name, "_http._tcp", port, NULL);
 
   /* Start main loop */
   loop = g_main_loop_new (NULL, FALSE);

@@ -21,6 +21,16 @@
 
 #include "melo_config_main.h"
 
+static MeloConfigItem melo_config_global[] = {
+  {
+    .id = "name",
+    .name = "Name",
+    .type = MELO_CONFIG_TYPE_STRING,
+    .element = MELO_CONFIG_ELEMENT_TEXT,
+    .def._string = "Melo",
+  },
+};
+
 static MeloConfigItem melo_config_http[] = {
   {
     .id = NULL,
@@ -73,6 +83,12 @@ static MeloConfigItem melo_config_http[] = {
 };
 
 static MeloConfigGroup melo_config_main[] = {
+  {
+    .id = "global",
+    .name = "Global",
+    .items = melo_config_global,
+    .items_count = G_N_ELEMENTS (melo_config_global),
+  },
   {
     .id = "http",
     .name = "HTTP Server",
