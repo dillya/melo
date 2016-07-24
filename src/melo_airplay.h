@@ -50,6 +50,9 @@ struct _MeloAirplayClass {
 
 GType melo_airplay_get_type (void);
 
+gboolean melo_airplay_set_name (MeloAirplay *air, const gchar *name);
+gboolean melo_airplay_set_port (MeloAirplay *air, int port);
+
 G_END_DECLS
 
 #endif /* __MELO_AIRPLAY_H__ */

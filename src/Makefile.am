@@ -79,6 +79,7 @@ libmelo_airplay_la_DEPENDENCIES = \
 	libmelo.la
 
 libmelo_airplay_la_SOURCES = \
+	melo_config_airplay.c \
 	melo_airplay.c
 
 # Main program
@@ -117,6 +118,7 @@ noinst_HEADERS = \
 	melo_player_radio.h \
 	melo_playlist_radio.h \
 	melo_airplay.h \
+	melo_config_airplay.h \
 	melo_config_main.h \
 	melo_httpd.h \
 	melo_httpd_file.h \

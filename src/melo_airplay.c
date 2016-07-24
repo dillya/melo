@@ -25,6 +25,7 @@
 #include <net/if.h>
 
 #include "melo_avahi.h"
+#include "melo_config_airplay.h"
 
 #include "melo_airplay.h"
 
@@ -41,7 +42,9 @@ static guchar melo_default_hw_addr[6] = {0x00, 0x51, 0x52, 0x53, 0x54, 0x55};
 static const MeloModuleInfo *melo_airplay_get_info (MeloModule *module);
 
 struct _MeloAirplayPrivate {
+  MeloConfig *config;
   MeloAvahi *avahi;
+  const MeloAvahiService *service;
   guchar hw_addr[6];
   gchar *name;
   int port;
@@ -62,6 +65,10 @@ melo_airplay_finalize (GObject *gobject)
   /* Free name */
   g_free (priv->name);
 
+  /* Save and free configuration */
+  melo_config_save_to_def_file (priv->config);
+  g_object_unref (priv->config);
+
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_airplay_parent_class)->finalize (gobject);
 }
@@ -78,11 +85,10 @@ melo_airplay_class_init (MeloAirplayClass *klass)
   oclass->finalize = melo_airplay_finalize;
 }
 
-
 static gboolean
 melo_airplay_set_hardware_address (MeloAirplayPrivate *priv)
 {
-    struct ifaddrs *ifap, *i;
+  struct ifaddrs *ifap, *i;
 
   /* Get network interfaces */
   if (getifaddrs (&ifap))
@@ -105,13 +111,49 @@ melo_airplay_set_hardware_address (MeloAirplayPrivate *priv)
 }
 
 static void
+melo_airplay_update_service (MeloAirplayPrivate *priv)
+{
+  gchar *sname;
+
+  /* Generate service name */
+  sname = g_strdup_printf ("%02x%02x%02x%02x%02x%02x@%s", priv->hw_addr[0],
+                           priv->hw_addr[1], priv->hw_addr[2], priv->hw_addr[3],
+                           priv->hw_addr[4], priv->hw_addr[5], priv->name);
+
+  /* Add service */
+  if (!priv->service)
+    priv->service = melo_avahi_add (priv->avahi, sname, "_raop._tcp",
+                                    priv->port,
+                                    "tp=TCP,UDP", "sm=false", "sv=false",
+                                    "ek=1", "et=0,1", "cn=0,1", "ch=2", "ss=16",
+                                    "sr=44100", "pw=false", "vn=3", "md=0,1,2",
+                                    "txtvers=1", NULL);
+  else
+    melo_avahi_update (priv->avahi, priv->service, sname, NULL, priv->port,
+                       NULL);
+
+  /* Free service name */
+  g_free (sname);
+}
+
+static void
 melo_airplay_init (MeloAirplay *self)
 {
   MeloAirplayPrivate *priv = melo_airplay_get_instance_private (self);
+  gint64 port = 5000;
 
   self->priv = priv;
-  priv->name = g_strdup ("Melo");
-  priv->port = 5000;
+
+  /* Load configuration */
+  priv->config = melo_config_airplay_new ();
+  if (!melo_config_load_from_def_file (priv->config))
+    melo_config_load_default (priv->config);
+
+  /* Get name and port from configuration */
+  if (!melo_config_get_string (priv->config, "general", "name", &priv->name))
+    priv->name = g_strdup ("Melo");
+  melo_config_get_integer (priv->config, "general", "port", &port);
+  priv->port = port;
 
   /* Set hardware address */
   if (!melo_airplay_set_hardware_address (priv))
@@ -119,27 +161,47 @@ melo_airplay_init (MeloAirplay *self)
 
   /* Create avahi client */
   priv->avahi = melo_avahi_new ();
-  if (priv->avahi) {
-    gchar *sname;
+  if (priv->avahi)
+    melo_airplay_update_service (priv);
 
-    /* Generate service name */
-    sname = g_strdup_printf ("%02x%02x%02x%02x%02x%02x@%s",
-                                    priv->hw_addr[0], priv->hw_addr[1],
-                                    priv->hw_addr[2], priv->hw_addr[3],
-                                    priv->hw_addr[4], priv->hw_addr[5],
-                                    priv->name);
-
-    /* Add service */
-    melo_avahi_add (priv->avahi, sname, "_raop._tcp", priv->port,
-                    "tp=TCP,UDP", "sm=false", "sv=false", "ek=1", "et=0,1",
-                    "cn=0,1", "ch=2", "ss=16", "sr=44100", "pw=false", "vn=3",
-                    "md=0,1,2", "txtvers=1", NULL);
-    g_free (sname);
-  }
+  /* Add config handler for update */
+  melo_config_set_update_callback (priv->config, "general",
+                                   melo_config_airplay_update, self);
 }
 
 static const MeloModuleInfo *
 melo_airplay_get_info (MeloModule *module)
 {
   return &melo_airplay_info;
+}
+
+gboolean
+melo_airplay_set_name (MeloAirplay *air, const gchar *name)
+{
+  MeloAirplayPrivate *priv = air->priv;
+
+  /* Replace name */
+  g_free (priv->name);
+  priv->name = g_strdup (name);
+
+  /* Update service */
+  if (priv->avahi)
+    melo_airplay_update_service (priv);
+
+  return TRUE;
+}
+
+gboolean
+melo_airplay_set_port (MeloAirplay *air, int port)
+{
+  MeloAirplayPrivate *priv = air->priv;
+
+  /* Replace port */
+  priv->port = port;
+
+  /* Update service */
+  if (priv->avahi)
+    melo_airplay_update_service (priv);
+
+  return TRUE;
 }
