@@ -69,6 +69,7 @@ struct _MeloConfigPrivate {
   GMutex mutex;
   MeloConfigValues *values;
   gsize values_size;
+  gboolean save_to_def;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloConfig, melo_config, G_TYPE_OBJECT)
@@ -430,6 +431,12 @@ melo_config_save_to_def_file (MeloConfig *config)
   return ret;
 }
 
+void
+melo_config_save_to_def_file_at_update (MeloConfig *config, gboolean save)
+{
+  config->priv->save_to_def = save;
+}
+
 static inline gboolean
 melo_config_find (MeloConfigPrivate *priv, const gchar *group, const gchar *id,
                   gint *group_idx, gint *item_idx)
@@ -738,6 +745,10 @@ melo_config_update (MeloConfig *config, MeloConfigFunc callback,
 
   /* Unlock config access */
   g_mutex_unlock (&priv->mutex);
+
+  /* Save to default file */
+  if (priv->save_to_def)
+    melo_config_save_to_def_file (config);
 
   return TRUE;
 failed:

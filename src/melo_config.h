@@ -121,6 +121,8 @@ gboolean melo_config_save_to_file (MeloConfig *config, const gchar *filename);
 gboolean melo_config_load_from_def_file (MeloConfig *config);
 gboolean melo_config_save_to_def_file (MeloConfig *config);
 
+void melo_config_save_to_def_file_at_update (MeloConfig *config, gboolean save);
+
 gboolean melo_config_get_boolean (MeloConfig *config, const gchar *group,
                                  const gchar *id, gboolean *value);
 gboolean melo_config_get_integer (MeloConfig *config, const gchar *group,
