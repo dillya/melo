@@ -720,17 +720,18 @@ melo_config_update (MeloConfig *config, MeloConfigFunc callback,
   }
 
   /* Copy updated values */
-  for (i = 0; i < priv->groups_count; i++) {
+  context.group_idx = 0;
+  while (melo_config_next_group (&context, NULL, NULL)) {
     /* Call update callback */
-    if (priv->values[i].update_cb)
-      priv->values[i].update_cb (&context, priv->values[i].update_data);
+    if (context.values->update_cb)
+      context.values->update_cb (&context, context.values->update_data);
 
     /* Copy all updated values */
-    for (j = 0; j < priv->groups[i].items_count; j++) {
-      if (priv->values[i].updated_values[j]) {
-        if (priv->groups[i].items[j].type == MELO_CONFIG_TYPE_STRING)
-          g_free (priv->values[i].values[j]._string);
-        priv->values[i].values[j] = priv->values[i].new_values[j];
+    for (j = 0; j < context.group->items_count; j++) {
+      if (context.values->updated_values[j]) {
+        if (context.group->items[j].type == MELO_CONFIG_TYPE_STRING)
+          g_free (context.values->values[j]._string);
+        context.values->values[j] = context.values->new_values[j];
       }
     }
   }
