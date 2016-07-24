@@ -213,6 +213,37 @@ melo_avahi_add (MeloAvahi *avahi, const gchar *name, const gchar *type,
   return s;
 }
 
+gboolean
+melo_avahi_update (MeloAvahi *avahi, const MeloAvahiService *service,
+                   const gchar *name, const gchar *type, gint port, ...)
+{
+  MeloAvahiService *s = (MeloAvahiService *) service;
+  MeloAvahiPrivate *priv = avahi->priv;
+
+  /* No service */
+  if (!s)
+    return FALSE;
+
+  /* Update name */
+  if (name && g_strcmp0 (name, s->name)) {
+    g_free (s->name);
+    s->name = g_strdup (name);
+  }
+
+  /* Update type */
+  if (type && g_strcmp0 (type, s->type)) {
+    g_free (s->type);
+    s->type = g_strdup (type);
+  }
+
+  /* Update port */
+  if (port && port != s->port)
+    s->port = port;
+
+  /* Update group */
+  return melo_avahi_update_group (melo_avahi_client->avahi_client, priv);
+}
+
 void
 melo_avahi_remove (MeloAvahi *avahi, const MeloAvahiService *service)
 {
