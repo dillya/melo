@@ -30,13 +30,6 @@
 G_LOCK_DEFINE_STATIC (melo_avahi_mutex);
 GaClient *melo_avahi_client;
 
-typedef struct _MeloAvahiService {
-  gchar *name;
-  gchar *type;
-  int port;
-  AvahiStringList *txt;
-} MeloAvahiService;
-
 struct _MeloAvahiPrivate {
   AvahiEntryGroup *group;
   GList *services;
@@ -184,7 +177,7 @@ melo_avahi_service_free (MeloAvahiService *s)
   g_slice_free (MeloAvahiService, s);
 }
 
-gboolean
+const MeloAvahiService *
 melo_avahi_add (MeloAvahi *avahi, const gchar *name, const gchar *type,
                 gint port, ...)
 {
@@ -196,12 +189,12 @@ melo_avahi_add (MeloAvahi *avahi, const gchar *name, const gchar *type,
   /* Check if service already exists */
   if (g_list_find_custom (priv->services, &service,
                           (GCompareFunc) melo_avahi_service_cmp))
-    return FALSE;
+    return NULL;
 
   /* Create new service */
   s = g_slice_new (MeloAvahiService);
   if (!s)
-    return FALSE;
+    return NULL;
   s->name = g_strdup (name);
   s->type = g_strdup (type);
   s->port = port;
@@ -215,28 +208,23 @@ melo_avahi_add (MeloAvahi *avahi, const gchar *name, const gchar *type,
   priv->services = g_list_prepend (priv->services, s);
 
   /* Update group */
-  return melo_avahi_update_group (melo_avahi_client->avahi_client, priv);
+  melo_avahi_update_group (melo_avahi_client->avahi_client, priv);
+
+  return s;
 }
 
-gboolean
-melo_avahi_remove (MeloAvahi *avahi, const gchar *name, const gchar *type)
+void
+melo_avahi_remove (MeloAvahi *avahi, const MeloAvahiService *service)
 {
-  MeloAvahiService service = { .name = (gchar *) name, .type = (gchar *) type };
   MeloAvahiPrivate *priv = avahi->priv;
-  GList *l;
 
-  /* Find service */
-  l = g_list_find_custom (priv->services, &service,
-                          (GCompareFunc) melo_avahi_service_cmp);
-  if (!l)
-    return FALSE;
-
-  /* Remove from list */
-  priv->services = g_list_delete_link (priv->services, l);
+  if (!service)
+    return;
 
   /* Remove service */
-  melo_avahi_service_free ((MeloAvahiService *) l->data);
+  priv->services = g_list_remove (priv->services, service);
+  melo_avahi_service_free ((MeloAvahiService*) service);
 
   /* Update group */
-  return melo_avahi_update_group (melo_avahi_client->avahi_client, priv);
+  melo_avahi_update_group (melo_avahi_client->avahi_client, priv);
 }

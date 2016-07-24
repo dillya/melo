@@ -37,6 +37,9 @@ typedef struct _MeloAvahi MeloAvahi;
 typedef struct _MeloAvahiClass MeloAvahiClass;
 typedef struct _MeloAvahiPrivate MeloAvahiPrivate;
 
+typedef struct AvahiStringList AvahiStringList;
+typedef struct _MeloAvahiService MeloAvahiService;
+
 struct _MeloAvahi {
   GObject parent_instance;
 
@@ -48,13 +51,19 @@ struct _MeloAvahiClass {
   GObjectClass parent_class;
 };
 
+struct _MeloAvahiService {
+  gchar *name;
+  gchar *type;
+  int port;
+  AvahiStringList *txt;
+};
+
 GType melo_avahi_get_type (void);
 
 MeloAvahi *melo_avahi_new (void);
-gboolean melo_avahi_add (MeloAvahi *avahi, const gchar *name, const gchar *type,
-                         gint port, ...);
-gboolean melo_avahi_remove (MeloAvahi *avahi, const gchar *name,
-                            const gchar *type);
+const MeloAvahiService *melo_avahi_add (MeloAvahi *avahi, const gchar *name,
+                                        const gchar *type, gint port, ...);
+void melo_avahi_remove (MeloAvahi *avahi, const MeloAvahiService *service);
 
 G_END_DECLS
 
