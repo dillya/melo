@@ -25,6 +25,7 @@
 
 #include <glib.h>
 
+#include "melo_avahi.h"
 #include "melo_httpd.h"
 #include "melo_httpd_file.h"
 #include "melo_httpd_jsonrpc.h"
@@ -45,6 +46,10 @@ struct _MeloHTTPDPrivate {
   GMutex mutex;
   SoupServer *server;
 
+  /* Avahi client */
+  MeloAvahi *avahi;
+  const MeloAvahiService *http_service;
+
   /* Authentication */
   SoupAuthDomain *auth_domain;
   gboolean auth_enabled;
@@ -62,6 +67,10 @@ melo_httpd_finalize (GObject *gobject)
 {
   MeloHTTPDPrivate *priv =
                          melo_httpd_get_instance_private (MELO_HTTPD (gobject));
+
+  /* Free avahi client */
+  if (priv->avahi)
+    g_object_unref (priv->avahi);
 
   /* Free HTTP server */
   g_object_unref (priv->server);
@@ -118,6 +127,9 @@ melo_httpd_init (MeloHTTPD *self)
   /* Init thread pools */
   priv->jsonrpc_pool = g_thread_pool_new (melo_httpd_jsonrpc_thread_handler,
                                           priv->server, 10, FALSE, NULL);
+
+  /* Create an avahi client */
+  priv->avahi = melo_avahi_new ();
 }
 
 MeloHTTPD *
@@ -127,7 +139,7 @@ melo_httpd_new (void)
 }
 
 gboolean
-melo_httpd_start (MeloHTTPD *httpd, guint port)
+melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name)
 {
   MeloHTTPDPrivate *priv = httpd->priv;
   SoupServer *server = priv->server;
@@ -149,14 +161,25 @@ melo_httpd_start (MeloHTTPD *httpd, guint port)
   soup_server_add_handler (server, "/rpc", melo_httpd_jsonrpc_handler,
                            priv->jsonrpc_pool, NULL);
 
+  /* Add avahi service */
+  if (priv->avahi)
+    priv->http_service = melo_avahi_add (priv->avahi, name, "_http._tcp", port,
+                                         NULL);
+
   return TRUE;
 }
 
 void
 melo_httpd_stop (MeloHTTPD *httpd)
 {
+  MeloHTTPDPrivate *priv = httpd->priv;
+
   /* Disconnect all remaining clients */
-  soup_server_disconnect (httpd->priv->server);
+  soup_server_disconnect (priv->server);
+
+  /* Remove avahi service */
+  if (priv->avahi)
+    melo_avahi_remove (priv->avahi, priv->http_service);
 }
 
 void

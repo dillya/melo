@@ -50,7 +50,7 @@ struct _MeloHTTPDClass {
 
 MeloHTTPD *melo_httpd_new (void);
 
-gboolean melo_httpd_start (MeloHTTPD *httpd, guint port);
+gboolean melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name);
 void melo_httpd_stop (MeloHTTPD *httpd);
 
 void melo_httpd_auth_enable (MeloHTTPD *httpd);
