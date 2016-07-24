@@ -27,11 +27,17 @@
 
 MeloConfig *melo_config_main_new (void);
 
+/* General section */
+gboolean melo_config_main_check_general (MeloConfigContext *context,
+                                         gpointer user_data);
+void melo_config_main_update_general (MeloConfigContext *context,
+                                      gpointer user_data);
+
 /* HTTP server section */
 void melo_config_main_load_http (MeloConfig *config, MeloHTTPD *server);
 gboolean melo_config_main_check_http (MeloConfigContext *context,
                                       gpointer user_data);
-void melo_config_main_http_update (MeloConfigContext *context,
+void melo_config_main_update_http (MeloConfigContext *context,
                                    gpointer user_data);
 
 #endif /* __MELO_CONFIG_MAIN_H__ */

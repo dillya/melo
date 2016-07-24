@@ -28,12 +28,12 @@
 #include <glib-unix.h>
 #endif
 
+#include "melo.h"
 #include "melo_config_main.h"
 
 #include "melo_file.h"
 #include "melo_radio.h"
 #include "melo_airplay.h"
-#include "melo_httpd.h"
 
 #include "melo_config_jsonrpc.h"
 #include "melo_module_jsonrpc.h"
@@ -71,9 +71,9 @@ main (int argc, char *argv[])
   GError *err = NULL;
   /* Main configuration */
   MeloConfig *config;
+  /* Melo context */
+  MeloContext context;
   gchar *name;
-  /* HTTP server */
-  MeloHTTPD *server;
   gint64 port;
   /* Main loop */
   GMainLoop *loop;
@@ -104,7 +104,7 @@ main (int argc, char *argv[])
     melo_config_load_default (config);
 
   /* Get name */
-  if (!melo_config_get_string (config, "global", "name", &name) || !name)
+  if (!melo_config_get_string (config, "general", "name", &name) || !name)
     name = g_strdup ("Melo");
 
   /* Get HTTP server port */
@@ -124,18 +124,24 @@ main (int argc, char *argv[])
   melo_module_register (MELO_TYPE_AIRPLAY, "airplay");
 
   /* Create and start HTTP server */
-  server = melo_httpd_new ();
-  if (!melo_httpd_start (server, port, name))
+  context.server = melo_httpd_new ();
+  if (!melo_httpd_start (context.server, port, name))
     goto end;
 
   /* Load HTTP server configuration */
-  melo_config_main_load_http (config, server);
+  melo_config_main_load_http (config, context.server);
+
+  /* Add config handler for general section */
+  melo_config_set_check_callback (config, "general",
+                                  melo_config_main_check_general, &context);
+  melo_config_set_update_callback (config, "general",
+                                  melo_config_main_update_general, &context);
 
   /* Add config handler for HTTP server */
   melo_config_set_check_callback (config, "http", melo_config_main_check_http,
-                                  server);
-  melo_config_set_update_callback (config, "http", melo_config_main_http_update,
-                                   server);
+                                  context.server);
+  melo_config_set_update_callback (config, "http", melo_config_main_update_http,
+                                   context.server);
 
   /* Start main loop */
   loop = g_main_loop_new (NULL, FALSE);
@@ -153,8 +159,8 @@ main (int argc, char *argv[])
 
 end:
   /* Stop and Free HTTP server */
-  melo_httpd_stop (server);
-  g_object_unref (server);
+  melo_httpd_stop (context.server);
+  g_object_unref (context.server);
 
   /* Unregister built-in modules */
   melo_module_unregister ("airplay");

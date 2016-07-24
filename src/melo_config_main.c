@@ -19,9 +19,10 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include "melo.h"
 #include "melo_config_main.h"
 
-static MeloConfigItem melo_config_global[] = {
+static MeloConfigItem melo_config_general[] = {
   {
     .id = "name",
     .name = "Name",
@@ -84,10 +85,10 @@ static MeloConfigItem melo_config_http[] = {
 
 static MeloConfigGroup melo_config_main[] = {
   {
-    .id = "global",
-    .name = "Global",
-    .items = melo_config_global,
-    .items_count = G_N_ELEMENTS (melo_config_global),
+    .id = "general",
+    .name = "General",
+    .items = melo_config_general,
+    .items_count = G_N_ELEMENTS (melo_config_general),
   },
   {
     .id = "http",
@@ -102,6 +103,25 @@ melo_config_main_new (void)
 {
   return melo_config_new ("main", melo_config_main,
                           G_N_ELEMENTS (melo_config_main));
+}
+
+/* General section */
+gboolean
+melo_config_main_check_general (MeloConfigContext *context, gpointer user_data)
+{
+  return TRUE;
+}
+
+void
+melo_config_main_update_general (MeloConfigContext *context, gpointer user_data)
+{
+  MeloContext *ctx = (MeloContext *) user_data;
+  const gchar *old, *new;
+
+  /* Update name */
+  if (melo_config_get_updated_string (context, "name", &new, &old) &&
+      g_strcmp0 (new, old))
+    melo_httpd_set_name (ctx->server, new);
 }
 
 /* HTTP server section */
@@ -175,7 +195,7 @@ melo_config_main_check_http (MeloConfigContext *context, gpointer user_data)
 }
 
 void
-melo_config_main_http_update (MeloConfigContext *context, gpointer user_data)
+melo_config_main_update_http (MeloConfigContext *context, gpointer user_data)
 {
   MeloHTTPD *server = user_data;
   const gchar *new, *old;
