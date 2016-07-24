@@ -31,9 +31,9 @@
 #include "melo.h"
 #include "melo_config_main.h"
 
-#include "melo_file.h"
-#include "melo_radio.h"
-#include "melo_airplay.h"
+#include "modules/airplay/melo_airplay.h"
+#include "modules/radio/melo_radio.h"
+#include "modules/file/melo_file.h"
 
 #include "melo_config_jsonrpc.h"
 #include "melo_module_jsonrpc.h"

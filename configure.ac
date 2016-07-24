@@ -2,7 +2,7 @@ dnl Autoconf settings for Melo
 AC_PREREQ([2.69])
 
 dnl Initialize Autoconf for Melo
-AC_INIT([Melo], [0.0.1], [http://www.sparod.com/aircat/], [melo])
+AC_INIT([Melo], [0.0.1], [http://www.sparod.com/melo/], [melo])
 
 dnl Initialize Automake
 AM_INIT_AUTOMAKE()
@@ -74,9 +74,30 @@ PKG_CHECK_MODULES([AVAHI_GOBJECT],
     AC_MSG_ERROR(Avahi-gobject $AVAHI_OBJECT_REQ or later is required)
   ])
 
+dnl Generate CFLAGS and LIBS for libraries
+MELO_ALL_CFLAGS="-I\$(top_srcdir)/src/lib \$(GLIB_CFLAGS) \$(GST_CFLAGS) \$(GST_TAG_CFLAGS) \$(AVAHI_GOBJECT_CFLAGS) \$(LIBJSON_GLIB_CFLAGS)"
+MELO_ALL_LIBS="\$(GLIB_LIBS) \$(GST_LIBS) \$(GST_TAG_LIBS) \$(AVAHI_GOBJECT_LIBS) \$(LIBJSON_GLIB_LIBS)"
+AC_SUBST(MELO_ALL_CFLAGS)
+AC_SUBST(MELO_ALL_LIBS)
+
+dnl Set Melo libraries directory
+melolibdir="\$(libdir)/melo"
+AC_SUBST(melolibdir)
+
+dnl Generate CFLAGS and LIBS for libmelo based programs
+MELO_LIB_CFLAGS="\$(MELO_ALL_CFLAGS)"
+MELO_LIB_LIBS="\$(top_builddir)/src/lib/libmelo.la \$(MELO_ALL_LIBS)"
+AC_SUBST(MELO_LIB_CFLAGS)
+AC_SUBST(MELO_LIB_LIBS)
+
 AC_CONFIG_FILES(
 Makefile
 src/Makefile
+src/lib/Makefile
+src/modules/Makefile
+src/modules/airplay/Makefile
+src/modules/file/Makefile
+src/modules/radio/Makefile
 tests/Makefile
 www/Makefile
 )

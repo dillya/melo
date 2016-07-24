@@ -1,86 +1,6 @@
-AM_CFLAGS = \
-	$(GLIB_CFLAGS) \
-	$(GST_CFLAGS) \
-	$(GST_TAG_CFLAGS) \
-	$(AVAHI_GOBJECT_CFLAGS) \
-	$(LIBJSON_GLIB_CFLAGS) \
-	-Wall
-
-AM_LDFLAGS = \
-	$(GLIB_LIBS) \
-	$(GST_LIBS) \
-	$(GST_TAG_LIBS) \
-	$(AVAHI_GOBJECT_LIBS) \
-	$(LIBJSON_GLIB_LIBS)
-
-# Libraries
-melolibdir = $(libdir)/melo
-melolib_LTLIBRARIES = \
-	libmelo_file.la \
-	libmelo_radio.la \
-	libmelo_airplay.la \
-	libmelo.la
-
-# Main library
-libmelo_la_SOURCES = \
-	melo_config.c \
-	melo_module.c \
-	melo_browser.c \
-	melo_player.c \
-	melo_playlist.c \
-	melo_tags.c \
-	melo_config_jsonrpc.c \
-	melo_module_jsonrpc.c \
-	melo_browser_jsonrpc.c \
-	melo_player_jsonrpc.c \
-	melo_playlist_jsonrpc.c \
-	melo_avahi.c \
-	melo_jsonrpc.c
-
-meloincludedir = $(includedir)/melo
-meloinclude_HEADERS = \
-	melo_config.h \
-	melo_module.h \
-	melo_browser.h \
-	melo_player.h \
-	melo_playlist.h \
-	melo_tags.h \
-	melo_config_jsonrpc.h \
-	melo_module_jsonrpc.h \
-	melo_browser_jsonrpc.h \
-	melo_player_jsonrpc.h \
-	melo_playlist_jsonrpc.h \
-	melo_avahi.h \
-	melo_jsonrpc.h
-
-# File module library
-libmelo_file_la_DEPENDENCIES = \
-	libmelo.la
-
-libmelo_file_la_SOURCES = \
-	melo_browser_file.c \
-	melo_player_file.c \
-	melo_playlist_file.c \
-	melo_config_file.c \
-	melo_file.c
-
-# Radio module library
-libmelo_radio_la_DEPENDENCIES = \
-	libmelo.la
-
-libmelo_radio_la_SOURCES = \
-	melo_browser_radio.c \
-	melo_player_radio.c \
-	melo_playlist_radio.c \
-	melo_radio.c
-
-# Airplay module library
-libmelo_airplay_la_DEPENDENCIES = \
-	libmelo.la
-
-libmelo_airplay_la_SOURCES = \
-	melo_config_airplay.c \
-	melo_airplay.c
+SUBDIRS = \
+	lib \
+	modules
 
 # Main program
 bin_PROGRAMS = melo
@@ -93,33 +13,23 @@ melo_SOURCES = \
 	melo.c
 
 melo_CFLAGS = \
-	$(AM_CFLAGS) \
+	$(MELO_LIB_CFLAGS) \
 	$(LIBSOUP_CFLAGS) \
 	-DMELO_DATA_DIR=\"$(pkgdatadir)\"
 
-melo_LDFLAGS = \
-	$(AM_LDFLAGS) \
+melo_LDADD = \
+	$(MELO_LIB_LIBS) \
 	$(LIBSOUP_LIBS)
 
-melo_LDADD = \
-	libmelo_file.la \
-	libmelo_radio.la \
-	libmelo_airplay.la \
-	libmelo.la
+# Built in modules
+melo_LDADD += \
+	modules/airplay/libmelo_airplay.la \
+	modules/file/libmelo_file.la \
+	modules/radio/libmelo_radio.la
 
 noinst_HEADERS = \
-	melo_file.h \
-	melo_browser_file.h \
-	melo_player_file.h \
-	melo_playlist_file.h \
-	melo_config_file.h \
-	melo_radio.h \
-	melo_browser_radio.h \
-	melo_player_radio.h \
-	melo_playlist_radio.h \
-	melo_airplay.h \
-	melo_config_airplay.h \
 	melo_config_main.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
-	melo_httpd_jsonrpc.h
+	melo_httpd_jsonrpc.h \
+	melo.h
