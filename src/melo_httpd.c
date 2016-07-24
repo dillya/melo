@@ -183,6 +183,16 @@ melo_httpd_stop (MeloHTTPD *httpd)
 }
 
 void
+melo_httpd_set_name (MeloHTTPD *httpd, const gchar *name)
+{
+  MeloHTTPDPrivate *priv = httpd->priv;
+
+  /* Update avahi name service */
+  if (priv->avahi && priv->http_service)
+    melo_avahi_update (priv->avahi, priv->http_service, name, NULL, 0, NULL);
+}
+
+void
 melo_httpd_auth_enable (MeloHTTPD *httpd)
 {
    if (httpd->priv->auth_enabled)
