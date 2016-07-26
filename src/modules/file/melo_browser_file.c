@@ -42,7 +42,8 @@ static void melo_browser_file_set_id (GObject *obj,
                                       MeloBrowserFilePrivate *priv);
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static GList *melo_browser_file_get_list (MeloBrowser *browser,
-                                          const gchar *path);
+                                          const gchar *path, gint offset,
+                                          gint count);
 static gboolean melo_browser_file_add (MeloBrowser *browser, const gchar *path);
 static gboolean melo_browser_file_play (MeloBrowser *browser,
                                         const gchar *path);
@@ -607,7 +608,8 @@ melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path)
 }
 
 static GList *
-melo_browser_file_get_list (MeloBrowser *browser, const gchar *path)
+melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
+                            gint offset, gint count)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   GList *list = NULL;

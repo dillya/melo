@@ -185,13 +185,14 @@ melo_browser_get_player (MeloBrowser *browser)
 }
 
 GList *
-melo_browser_get_list (MeloBrowser *browser, const gchar *path)
+melo_browser_get_list (MeloBrowser *browser, const gchar *path, gint offset,
+                       gint count)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
   g_return_val_if_fail (bclass->get_list, NULL);
 
-  return bclass->get_list (browser, path);
+  return bclass->get_list (browser, path, offset, count);
 }
 
 gboolean

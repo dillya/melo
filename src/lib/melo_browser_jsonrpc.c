@@ -143,6 +143,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   JsonObject *obj;
   GList *list, *l;
   const gchar *path;
+  gint offset, count;
 
   /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
@@ -159,8 +160,12 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   /* Get path */
   path = json_object_get_string_member (obj, "path");
 
+  /* Get list position */
+  offset = json_object_get_int_member (obj, "offset");
+  count = json_object_get_int_member (obj, "count");
+
   /* Get list */
-  list = melo_browser_get_list (bro, path);
+  list = melo_browser_get_list (bro, path, offset, count);
   json_object_unref (obj);
   g_object_unref (bro);
 
@@ -250,6 +255,8 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
               "  {\"name\": \"path\", \"type\": \"string\"},"
+              "  {\"name\": \"offset\", \"type\": \"integer\"},"
+              "  {\"name\": \"count\", \"type\": \"integer\"},"
               "  {"
               "    \"name\": \"fields\", \"type\": \"array\","
               "    \"required\": false"

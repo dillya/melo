@@ -32,7 +32,8 @@ static MeloBrowserInfo melo_browser_radio_info = {
 static const MeloBrowserInfo *melo_browser_radio_get_info (
                                                           MeloBrowser *browser);
 static GList *melo_browser_radio_get_list (MeloBrowser *browser,
-                                           const gchar *path);
+                                           const gchar *path, gint offset,
+                                           gint count);
 static gboolean melo_browser_radio_play (MeloBrowser *browser,
                                          const gchar *path);
 
@@ -89,7 +90,8 @@ melo_browser_radio_get_info (MeloBrowser *browser)
 }
 
 static GList *
-melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path)
+melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
+                             gint offset, gint count)
 {
   return NULL;
 }

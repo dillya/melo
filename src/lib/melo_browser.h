@@ -57,7 +57,8 @@ struct _MeloBrowserClass {
   GObjectClass parent_class;
 
   const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
-  GList *(*get_list) (MeloBrowser *browser, const gchar *path);
+  GList *(*get_list) (MeloBrowser *browser, const gchar *path,  gint offset,
+                      gint count);
   gboolean (*add) (MeloBrowser *browser, const gchar *path);
   gboolean (*play) (MeloBrowser *browser, const gchar *path);
   gboolean (*remove) (MeloBrowser *browser, const gchar *path);
@@ -86,7 +87,8 @@ MeloBrowser *melo_browser_get_browser_by_id (const gchar *id);
 void melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player);
 MeloPlayer *melo_browser_get_player (MeloBrowser *browser);
 
-GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path);
+GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path,
+                              gint offset, gint count);
 gboolean melo_browser_add (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_play (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_remove (MeloBrowser *browser, const gchar *path);
