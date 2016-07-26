@@ -91,7 +91,7 @@ function melo_get_browsers(id, ul) {
 
       /* Add a link to get list from browser */
       bro.children("a.open").click(response.result[i].id, function(e) {
-        melo_get_browser_list(e.data, "/");
+        melo_get_browser_list(e.data, "/", 0, 0);
         return false;
       });
 
@@ -115,9 +115,40 @@ function melo_get_browser_info(id) {
 
 var melo_browser_current_id = "";
 var melo_browser_current_path = "";
+var melo_browser_current_off = 0;
+var melo_browser_current_count = 0;
 
-function melo_get_browser_list(id, path) {
-  jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","' + path + '"]'),
+function melo_get_browser_list(id, path, off, count) {
+  /* Set navigation */
+  if (count == 0)
+    count = 100;
+  melo_browser_current_off = off;
+  melo_browser_current_count = count;
+
+  /* Update navigation */
+  $('#bnav').html('Offset: ' + off + ', Count: ' + count + ' | ');
+  if (off > 0)
+    $('#bnav').append('<a class="prev" href="">&lt;</a> ');
+  $('#bnav').append('<a class="next" href="">&gt;</a>');
+
+  /* Add links for navigation */
+  if (off > 0) {
+    var prev_off = off - count;
+    if (prev_off < 0)
+      prev_off = 0;
+    $('#bnav').children("a.prev").click([id, path, prev_off, count], function(e) {
+      melo_get_browser_list(e.data[0], e.data[1], e.data[2], e.data[3]);
+      return false;
+    });
+  }
+  $('#bnav').children("a.next").click([id, path, off+count, count], function(e) {
+    melo_get_browser_list(e.data[0], e.data[1], e.data[2], e.data[3]);
+    return false;
+  });
+
+  /* Do request */
+  jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","' + path + '",' +
+                                                off + ',' + count + ']'),
                function(response) {
     if (response.error || !response.result)
       return;
@@ -146,7 +177,7 @@ function melo_get_browser_list(id, path) {
           response.result[i].type == "category") {
         /* Get list of children */
         item.children("a").click([id, npath], function(e) {
-          melo_get_browser_list(e.data[0], e.data[1]);
+          melo_get_browser_list(e.data[0], e.data[1], 0, 0);
           return false;
         });
       } else {
@@ -189,7 +220,8 @@ function melo_browser_action(action, id, path, update) {
 
     /* Update list when remove is done */
     if (update)
-      melo_get_browser_list(melo_browser_current_id, melo_browser_current_path);
+      melo_get_browser_list(melo_browser_current_id, melo_browser_current_path,
+                            melo_browser_current_off, melo_browser_current_count);
   });
 }
 
@@ -203,7 +235,7 @@ function melo_browser_previous() {
 
   /* Get parent and update list */
   path = path.substring(0, n + 1);
-  melo_get_browser_list(melo_browser_current_id, path);
+  melo_get_browser_list(melo_browser_current_id, path, 0, 0);
 }
 
 var players = [];
