@@ -52,6 +52,7 @@ GType melo_airplay_get_type (void);
 
 gboolean melo_airplay_set_name (MeloAirplay *air, const gchar *name);
 gboolean melo_airplay_set_port (MeloAirplay *air, int port);
+void melo_airplay_set_password (MeloAirplay *air, const gchar *password);
 
 G_END_DECLS
 

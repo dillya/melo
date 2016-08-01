@@ -37,6 +37,12 @@ static MeloConfigItem melo_config_general[] = {
     .element = MELO_CONFIG_ELEMENT_NUMBER,
     .def._integer = 5000,
   },
+  {
+    .id = "password",
+    .name = "Password",
+    .type = MELO_CONFIG_TYPE_STRING,
+    .element = MELO_CONFIG_ELEMENT_PASSWORD,
+  },
 };
 
 static MeloConfigGroup melo_config_airplay[] = {
@@ -71,4 +77,9 @@ melo_config_airplay_update (MeloConfigContext *context, gpointer user_data)
   if (melo_config_get_updated_integer (context, "port", &port, &old_port) &&
       port != old_port)
     melo_airplay_set_port (air, port);
+
+  /* Update password */
+  if (melo_config_get_updated_string (context, "password", &new, &old) &&
+      g_strcmp0 (new, old))
+    melo_airplay_set_password (air, new);
 }

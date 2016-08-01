@@ -53,9 +53,11 @@ static void melo_airplay_request_handler (MeloRTSPClient *client,
                                           gpointer *data);
 
 struct _MeloAirplayPrivate {
+  GMutex mutex;
   MeloConfig *config;
   MeloRTSP *rtsp;
   RSA *pkey;
+  gchar *password;
   MeloAvahi *avahi;
   const MeloAvahiService *service;
   guchar hw_addr[6];
@@ -83,8 +85,14 @@ melo_airplay_finalize (GObject *gobject)
   if (priv->pkey)
     RSA_free (priv->pkey);
 
+  /* Free password */
+  g_free (priv->password);
+
   /* Free name */
   g_free (priv->name);
+
+  /* Clear mutex */
+  g_mutex_clear (&priv->mutex);
 
   /* Save and free configuration */
   melo_config_save_to_def_file (priv->config);
@@ -166,6 +174,9 @@ melo_airplay_init (MeloAirplay *self)
 
   self->priv = priv;
 
+  /* Init mutex */
+  g_mutex_init (&priv->mutex);
+
   /* Load configuration */
   priv->config = melo_config_airplay_new ();
   if (!melo_config_load_from_def_file (priv->config))
@@ -176,6 +187,7 @@ melo_airplay_init (MeloAirplay *self)
     priv->name = g_strdup ("Melo");
   melo_config_get_integer (priv->config, "general", "port", &port);
   priv->port = port;
+  melo_config_get_string (priv->config, "general", "password", &priv->password);
 
   /* Load RSA private key */
   temp_bio = BIO_new_mem_buf (AIRPORT_PRIVATE_KEY, -1);
@@ -240,6 +252,22 @@ melo_airplay_set_port (MeloAirplay *air, int port)
     melo_airplay_update_service (priv);
 
   return TRUE;
+}
+
+void
+melo_airplay_set_password (MeloAirplay *air, const gchar *password)
+{
+  MeloAirplayPrivate *priv = air->priv;
+
+  /* Lock mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Update password */
+  g_free (priv->password);
+  priv->password = g_strdup (password);
+
+  /* Unlock mutex */
+  g_mutex_unlock (&priv->mutex);
 }
 
 static gboolean
@@ -307,12 +335,25 @@ melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
 {
   MeloAirplayPrivate *priv = (MeloAirplayPrivate *) user_data;
 
+  /* Lock mutex */
+  g_mutex_lock (&priv->mutex);
+
   /* Prepare response */
-  melo_rtsp_init_response (client, 200, "OK");
+  if (priv->password && *priv->password != '\0' &&
+      !melo_rtsp_digest_auth_check (client, NULL, priv->password, priv->name)) {
+    melo_rtsp_digest_auth_response (client, priv->name, "", 0);
+    method = -1;
+  } else
+    melo_rtsp_init_response (client, 200, "OK");
+
+  /* Unlock mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  /* Prepare Apple response */
   melo_airplay_init_apple_response (client, priv->hw_addr, priv->pkey);
 
   /* Set common headers */
-  melo_rtsp_add_header (client, "Server", "Melo/1.0"); \
+  melo_rtsp_add_header (client, "Server", "Melo/1.0");
   melo_rtsp_add_header (client, "CSeq", melo_rtsp_get_header (client, "CSeq"));
 
   /* Parse method */
