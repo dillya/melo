@@ -33,6 +33,7 @@ static gboolean melo_playlist_radio_add (MeloPlaylist *playlist,
                                          const gchar *full_name,
                                          const gchar *path,
                                          gboolean is_current);
+static void melo_playlist_radio_empty (MeloPlaylist *playlist);
 
 struct _MeloPlaylistRadioPrivate {
   GMutex mutex;
@@ -66,6 +67,7 @@ melo_playlist_radio_class_init (MeloPlaylistRadioClass *klass)
 
   plclass->get_list = melo_playlist_radio_get_list;
   plclass->add = melo_playlist_radio_add;
+  plclass->empty = melo_playlist_radio_empty;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_playlist_radio_finalize;
@@ -117,8 +119,21 @@ melo_playlist_radio_add (MeloPlaylist *playlist, const gchar *name,
   MeloPlaylistRadioPrivate *priv = plradio->priv;
   MeloPlaylistItem *item;
 
+  /* Do not accept empty title */
+  if (strlen (name) < 4 && strchr (name, '-'))
+    return FALSE;
+
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
+
+  /* This item is already present */
+  if (priv->playlist) {
+    item = (MeloPlaylistItem *) priv->playlist->data;
+    if (!g_strcmp0 (name, item->name)) {
+      g_mutex_unlock (&priv->mutex);
+      return FALSE;
+    }
+  }
 
   /* Add a new song to playlist */
   item = melo_playlist_item_new (name, full_name, path);
@@ -130,4 +145,21 @@ melo_playlist_radio_add (MeloPlaylist *playlist, const gchar *name,
   g_mutex_unlock (&priv->mutex);
 
   return TRUE;
+}
+
+static void
+melo_playlist_radio_empty (MeloPlaylist *playlist)
+{
+  MeloPlaylistRadio *plradio = MELO_PLAYLIST_RADIO (playlist);
+  MeloPlaylistRadioPrivate *priv = plradio->priv;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Remove and free all items */
+  g_list_free_full (priv->playlist, (GDestroyNotify) melo_playlist_item_unref);
+  priv->playlist = NULL;
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
 }

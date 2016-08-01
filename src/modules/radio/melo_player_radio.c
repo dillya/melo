@@ -19,6 +19,8 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <string.h>
+
 #include <gst/gst.h>
 
 #include "melo_player_radio.h"
@@ -46,6 +48,9 @@ struct _MeloPlayerRadioPrivate {
   GstElement *pipeline;
   GstElement *src;
   guint bus_watch_id;
+
+  /* Gstreamer tags */
+  GstTagList *tag_list;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloPlayerRadio, melo_player_radio, MELO_TYPE_PLAYER)
@@ -65,6 +70,9 @@ melo_player_radio_finalize (GObject *gobject)
 
   /* Free gstreamer pipeline */
   g_object_unref (priv->pipeline);
+
+  /* Free tag list */
+  gst_tag_list_unref (priv->tag_list);
 
   /* Free status */
   melo_player_status_unref (priv->status);
@@ -112,6 +120,9 @@ melo_player_radio_init (MeloPlayerRadio *self)
   /* Create new status handler */
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
 
+  /* Create a new tag list */
+  priv->tag_list = gst_tag_list_new_empty ();
+
   /* Create pipeline */
   priv->pipeline = gst_pipeline_new ("radio_player_pipeline");
   priv->src = gst_element_factory_make ("uridecodebin",
@@ -134,11 +145,56 @@ static gboolean
 bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 {
   MeloPlayerRadio *pradio = MELO_PLAYER_RADIO (data);
+  MeloPlayer *player = MELO_PLAYER (pradio);
   MeloPlayerRadioPrivate *priv = pradio->priv;
   GError *error;
 
   /* Process bus message */
   switch (GST_MESSAGE_TYPE (msg)) {
+    case GST_MESSAGE_TAG: {
+      GstTagList *tags;
+      MeloTags *mtags;
+      gchar *artist, *title;
+
+      /* Get tag list from message */
+      gst_message_parse_tag (msg, &tags);
+
+      /* Lock player mutex */
+      g_mutex_lock (&priv->mutex);
+
+      /* Merge tags */
+      gst_tag_list_insert (priv->tag_list, tags, GST_TAG_MERGE_REPLACE);
+
+      /* Fill MeloTags with GstTagList */
+      mtags = melo_tags_new_from_gst_tag_list (priv->tag_list,
+                                               MELO_TAGS_FIELDS_FULL);
+      melo_player_status_take_tags (priv->status, mtags);
+
+      /* New title */
+      if (mtags->title) {
+        /* Add title to playlist */
+        melo_playlist_add (player->playlist, mtags->title, NULL, NULL, TRUE);
+
+        /* Split title */
+        if (!mtags->artist) {
+          /* Get title space */
+          artist = mtags->title;
+          title = strstr (mtags->title, " - ");
+          if (title) {
+            mtags->title = g_strdup (title + 3);
+            mtags->artist = g_strndup (artist, title - artist);
+            g_free (artist);
+          }
+        }
+      }
+
+      /* Unlock player mutex */
+      g_mutex_unlock (&priv->mutex);
+
+      /* Free tag list */
+      gst_tag_list_unref (tags);
+      break;
+    }
     case GST_MESSAGE_EOS:
       /* Stop playing */
       gst_element_set_state (priv->pipeline, GST_STATE_NULL);
@@ -214,7 +270,10 @@ melo_player_radio_play (MeloPlayer *player, const gchar *path,
 
   /* Replace status */
   melo_player_status_unref (priv->status);
+  gst_tag_list_unref (priv->tag_list);
+  melo_playlist_empty (player->playlist);
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
+  priv->tag_list = gst_tag_list_new_empty ();
 
   /* Set new location to src element */
   g_object_set (priv->src, "uri", path, NULL);
