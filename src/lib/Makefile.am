@@ -15,6 +15,7 @@ libmelo_la_SOURCES = \
 	melo_player_jsonrpc.c \
 	melo_playlist_jsonrpc.c \
 	melo_avahi.c \
+	melo_rtsp.c \
 	melo_jsonrpc.c
 
 libmelo_la_CFLAGS = $(MELO_ALL_CFLAGS)
@@ -34,4 +35,5 @@ meloinclude_HEADERS = \
 	melo_player_jsonrpc.h \
 	melo_playlist_jsonrpc.h \
 	melo_avahi.h \
+	melo_rtsp.h \
 	melo_jsonrpc.h
