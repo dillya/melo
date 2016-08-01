@@ -74,6 +74,14 @@ PKG_CHECK_MODULES([AVAHI_GOBJECT],
     AC_MSG_ERROR(Avahi-gobject $AVAHI_OBJECT_REQ or later is required)
   ])
 
+dnl Check for Libssl
+LIBSSL_REQ=1.O.1
+PKG_CHECK_MODULES([LIBSSL],
+  libssl >= $LIBSSL_REQ, [],
+  [
+    AC_MSG_ERROR(OpenSSL $LIBSSL_REQ or later is required)
+  ])
+
 dnl Generate CFLAGS and LIBS for libraries
 MELO_ALL_CFLAGS="-I\$(top_srcdir)/src/lib \$(GLIB_CFLAGS) \$(GST_CFLAGS) \$(GST_TAG_CFLAGS) \$(AVAHI_GOBJECT_CFLAGS) \$(LIBJSON_GLIB_CFLAGS)"
 MELO_ALL_LIBS="\$(GLIB_LIBS) \$(GST_LIBS) \$(GST_TAG_LIBS) \$(AVAHI_GOBJECT_LIBS) \$(LIBJSON_GLIB_LIBS)"

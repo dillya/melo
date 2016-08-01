@@ -8,8 +8,8 @@ libmelo_airplay_la_SOURCES = \
 	melo_config_airplay.c \
 	melo_airplay.c
 
-libmelo_airplay_la_CFLAGS = $(MELO_ALL_CFLAGS)
-libmelo_airplay_la_LIBADD = $(MELO_ALL_LIBS)
+libmelo_airplay_la_CFLAGS = $(MELO_ALL_CFLAGS) $(LIBSSL_CFLAGS)
+libmelo_airplay_la_LIBADD = $(MELO_ALL_LIBS) $(LIBSSL_LIBS)
 
 noinst_HEADERS = \
 	melo_airplay.h \

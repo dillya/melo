@@ -24,10 +24,16 @@
 #include <ifaddrs.h>
 #include <net/if.h>
 
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #include "melo_avahi.h"
+#include "melo_rtsp.h"
 #include "melo_config_airplay.h"
 
 #include "melo_airplay.h"
+#include "melo_airplay_pkey.h"
 
 /* Module airplay info */
 static MeloModuleInfo melo_airplay_info = {
@@ -40,9 +46,16 @@ static MeloModuleInfo melo_airplay_info = {
 static guchar melo_default_hw_addr[6] = {0x00, 0x51, 0x52, 0x53, 0x54, 0x55};
 
 static const MeloModuleInfo *melo_airplay_get_info (MeloModule *module);
+static void melo_airplay_request_handler (MeloRTSPClient *client,
+                                          MeloRTSPMethod method,
+                                          const gchar *url,
+                                          gpointer user_data,
+                                          gpointer *data);
 
 struct _MeloAirplayPrivate {
   MeloConfig *config;
+  MeloRTSP *rtsp;
+  RSA *pkey;
   MeloAvahi *avahi;
   const MeloAvahiService *service;
   guchar hw_addr[6];
@@ -61,6 +74,14 @@ melo_airplay_finalize (GObject *gobject)
   /* Free avahi client */
   if (priv->avahi)
     g_object_unref (priv->avahi);
+
+  /* Stop and free RTSP server */
+  melo_rtsp_stop (priv->rtsp);
+  g_object_unref (priv->rtsp);
+
+  /* Free private key */
+  if (priv->pkey)
+    RSA_free (priv->pkey);
 
   /* Free name */
   g_free (priv->name);
@@ -141,6 +162,7 @@ melo_airplay_init (MeloAirplay *self)
 {
   MeloAirplayPrivate *priv = melo_airplay_get_instance_private (self);
   gint64 port = 5000;
+  BIO *temp_bio;
 
   self->priv = priv;
 
@@ -155,9 +177,23 @@ melo_airplay_init (MeloAirplay *self)
   melo_config_get_integer (priv->config, "general", "port", &port);
   priv->port = port;
 
+  /* Load RSA private key */
+  temp_bio = BIO_new_mem_buf (AIRPORT_PRIVATE_KEY, -1);
+  priv->pkey = PEM_read_bio_RSAPrivateKey (temp_bio, NULL, NULL, NULL);
+  BIO_free (temp_bio);
+
   /* Set hardware address */
   if (!melo_airplay_set_hardware_address (priv))
     memcpy (priv->hw_addr, melo_default_hw_addr, 6);
+
+  /* Create RTSP server */
+  priv->rtsp = melo_rtsp_new ();
+  melo_rtsp_set_request_callback (priv->rtsp, melo_airplay_request_handler,
+                                  priv);
+
+  /* Start RTSP server */
+  melo_rtsp_start (priv->rtsp, port);
+  melo_rtsp_attach (priv->rtsp, g_main_context_default ());
 
   /* Create avahi client */
   priv->avahi = melo_avahi_new ();
@@ -204,4 +240,90 @@ melo_airplay_set_port (MeloAirplay *air, int port)
     melo_airplay_update_service (priv);
 
   return TRUE;
+}
+
+static gboolean
+melo_airplay_init_apple_response (MeloRTSPClient *client, guchar *hw_addr,
+                                  RSA *pkey)
+{
+  const gchar *challenge;
+  gchar *rsa_response;
+  gchar *response;
+  gchar *decoded;
+  guchar tmp[32];
+  gsize len;
+
+  /* Get Apple challenge */
+  challenge = melo_rtsp_get_header (client, "Apple-Challenge");
+  if (!challenge)
+    return FALSE;
+
+  /* Copy string and padd with '=' if missing */
+  strcpy (tmp, challenge);
+  if (tmp[22] == '\0') {
+    tmp[22] = '=';
+    tmp[23] = '=';
+  } else if (tmp[23] == '\0')
+    tmp[23] = '=';
+
+  /* Decode base64 string */
+  g_base64_decode_inplace (tmp, &len);
+  if (len < 16)
+    return FALSE;
+
+  /* Make the response */
+  memcpy (tmp + 16, melo_rtsp_get_server_ip (client), 4);
+  memcpy (tmp + 20, hw_addr, 6);
+  memset (tmp + 26, 0, 6);
+
+  /* Sign response with private key */
+  len = RSA_size (pkey);
+  rsa_response = g_slice_alloc (len);
+  RSA_private_encrypt (32, tmp, (unsigned char *) rsa_response, pkey,
+                       RSA_PKCS1_PADDING);
+
+  /* Encode response in base64 */
+  response = g_base64_encode (rsa_response, len);
+  g_slice_free1 (len, rsa_response);
+  len = strlen (response);
+
+  /* Remove '=' at end */
+  if (response[len-2] == '=')
+    response[len-2] = '\0';
+  else if (response[len-1] == '=')
+    response[len-1] = '\0';
+
+  /* Add Apple-response to RTSP response */
+  melo_rtsp_add_header (client, "Apple-Response", response);
+  g_free (response);
+
+  return TRUE;
+}
+
+static void
+melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
+                              const gchar *url, gpointer user_data,
+                              gpointer *data)
+{
+  MeloAirplayPrivate *priv = (MeloAirplayPrivate *) user_data;
+
+  /* Prepare response */
+  melo_rtsp_init_response (client, 200, "OK");
+  melo_airplay_init_apple_response (client, priv->hw_addr, priv->pkey);
+
+  /* Set common headers */
+  melo_rtsp_add_header (client, "Server", "Melo/1.0"); \
+  melo_rtsp_add_header (client, "CSeq", melo_rtsp_get_header (client, "CSeq"));
+
+  /* Parse method */
+  switch (method) {
+    case MELO_RTSP_METHOD_OPTIONS:
+      /* Set available methods */
+      melo_rtsp_add_header (client, "Public", "ANNOUNCE, SETUP, RECORD, PAUSE,"
+                                              "FLUSH, TEARDOWN, OPTIONS, "
+                                              "GET_PARAMETER, SET_PARAMETER");
+      break;
+    default:
+     ;
+  }
 }
