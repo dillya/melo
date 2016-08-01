@@ -20,6 +20,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include <gio/gio.h>
 
@@ -70,6 +71,8 @@ struct _MeloRTSPClient {
   GDestroyNotify packet_free;
   /* User data */
   gpointer user_data;
+  /* Digest auth */
+  gchar *nonce;
 };
 
 struct _MeloRTSPPrivate {
@@ -277,6 +280,9 @@ melo_rtsp_client_close (MeloRTSPClient *client)
   g_slice_free1 (client->buffer_size, client->buffer);
   if (client->packet && client->packet_free)
     client->packet_free (client->packet);
+
+  /* Free nonce */
+  g_free (client->nonce);
 
   /* Free client hostname */
   g_free (client->hostname);
@@ -793,6 +799,191 @@ melo_rtsp_set_packet (MeloRTSPClient *client, guchar *buffer, gsize len,
   client->packet = buffer;
   client->packet_len = len;
   client->packet_free = free;
+
+  return TRUE;
+}
+
+/* Authentication part */
+gboolean
+melo_rtsp_basic_auth_check (MeloRTSPClient *client, const gchar *username,
+                            const gchar *password)
+{
+  gboolean ret = FALSE;
+  const gchar *auth;
+  gchar *uname;
+  gchar *pass;
+  gsize len;
+
+  g_return_val_if_fail (client, NULL);
+
+  /* Get authorization header */
+  auth = melo_rtsp_get_header (client, "Authorization");
+  if (!auth)
+    return FALSE;
+
+  /* Check if basic authentication */
+  if (!g_str_has_prefix (auth, "Basic "))
+    return FALSE;
+
+  /* Decode string */
+  uname = g_base64_decode (auth + 6, &len);
+
+  /* Find password */
+  pass = strchr (uname, ':');
+  if (pass) {
+    *pass++ = '\0';
+    /* Check username and password */
+    ret = (username && g_strcmp0 (uname, username)) ||
+          g_strcmp0 (pass, password);
+  }
+
+  /* Free decoded string */
+  g_free (uname);
+
+  return ret;
+}
+
+gboolean
+melo_rtsp_basic_auth_response (MeloRTSPClient *client, const gchar *realm)
+{
+  gchar buffer[256];
+
+  g_return_val_if_fail (client, FALSE);
+
+  /* Generate response */
+  melo_rtsp_init_response (client, 401, "Unauthorized");
+  g_snprintf (buffer, 255, "Basic realm=\"%s\"", realm);
+  melo_rtsp_add_header (client, "WWW-Authenticate", buffer);
+
+  return TRUE;
+}
+
+static gchar *
+melo_rtsp_digest_get_sub_value (const gchar *str, const gchar *name)
+{
+  gchar *str_end;
+  gchar *value, *end;
+  gsize len;
+
+  /* Get length */
+  str_end = (gchar *) str + strlen (str);
+  len = strlen (name);
+
+  /* Find name */
+  value = (gchar *) str;
+  do {
+    value = strstr (value, name);
+    if (!value || value + 2 >= str_end)
+      return NULL;
+  } while (value[len] != '=' || value[len+1] != '\"');
+  value += len + 2;
+
+  /* Find next '"' */
+  end = strchr (value, '\"');
+  if (!end)
+    return NULL;
+
+  /* Copy string */
+  return g_strndup (value, end - value);
+}
+
+gboolean
+melo_rtsp_digest_auth_check (MeloRTSPClient *client, const gchar *username,
+                             const gchar *password, const gchar *realm)
+{
+  GChecksum *checksum;
+  gchar *ha1, *ha2, *response;
+  gchar *uname = NULL;
+  gchar *resp = NULL;
+  const gchar *auth;
+  gboolean ret = FALSE;
+
+  /* Can't check without a nonce */
+  if (!client->nonce)
+    return FALSE;
+
+  /* Get auth header */
+  auth = melo_rtsp_get_header (client, "Authorization");
+  if (!auth || strncmp (auth, "Digest ", 7))
+    return FALSE;
+
+  /* Use provided username if NULL */
+  if (!username) {
+    uname = melo_rtsp_digest_get_sub_value (auth, "username");
+    if (!uname)
+      return FALSE;
+    username = uname;
+  }
+
+  /* Calculate HA1 */
+  checksum = g_checksum_new (G_CHECKSUM_MD5);
+  g_checksum_update (checksum, (guchar *) username, strlen (username));
+  g_checksum_update (checksum, (guchar *) ":", 1);
+  g_checksum_update (checksum, (guchar *) realm, strlen (realm));
+  g_checksum_update (checksum, (guchar *) ":", 1);
+  g_checksum_update (checksum, (guchar *) password, strlen (password));
+  ha1 = g_ascii_strup (g_checksum_get_string (checksum), -1);
+  g_checksum_free (checksum);
+  g_free (uname);
+
+  /* Calculate HA2 */
+  checksum = g_checksum_new (G_CHECKSUM_MD5);
+  g_checksum_update (checksum, (guchar *) client->method_name,
+                     strlen (client->method_name));
+  g_checksum_update (checksum, (guchar *) ":", 1);
+  g_checksum_update (checksum, (guchar *) client->url, strlen (client->url));
+  ha2 = g_ascii_strup (g_checksum_get_string (checksum), -1);
+  g_checksum_free (checksum);
+
+  /* Calculate response */
+  checksum = g_checksum_new (G_CHECKSUM_MD5);
+  g_checksum_update (checksum, (guchar *) ha1, strlen (ha1));
+  g_checksum_update (checksum, (guchar *) ":", 1);
+  g_checksum_update (checksum, (guchar *) client->nonce,
+                     strlen (client->nonce));
+  g_checksum_update (checksum, (guchar *) ":", 1);
+  g_checksum_update (checksum, (guchar *) ha2, strlen (ha2));
+  response = g_ascii_strup (g_checksum_get_string (checksum), -1);
+  g_checksum_free (checksum);
+  g_free (ha1);
+  g_free (ha2);
+
+  /* Check response */
+  resp = melo_rtsp_digest_get_sub_value (auth, "response");
+  if (resp && !g_strcmp0 (resp, response))
+    ret = TRUE;
+  g_free (response);
+  g_free (resp);
+
+  return ret;
+}
+
+gboolean
+melo_rtsp_digest_auth_response (MeloRTSPClient *client, const gchar *realm,
+                                const gchar *opaque, gint signal_stale)
+{
+  gchar buffer[256];
+  gint i;
+
+  g_return_val_if_fail (client, FALSE);
+
+  /* Generate a nonce */
+  if (!client->nonce) {
+    /* Create a random sequence: need to be improved! */
+    srand (time (NULL));
+    for (i = 0; i < 32; i++)
+      buffer[i] = (rand() * 256) / RAND_MAX;
+
+    /* Convert it into md5 string */
+    client->nonce = g_compute_checksum_for_data (G_CHECKSUM_MD5, buffer, 32);
+  }
+
+  /* Create response */
+  melo_rtsp_init_response (client, 401, "Unauthorized");
+  g_snprintf (buffer, 255, "Digest realm=\"%s\",nonce=\"%s\",opaque=\"%s\"%s",
+              realm, client->nonce, opaque,
+              signal_stale ? ",stale=\"true\"" : "");
+  melo_rtsp_add_header (client, "WWW-Authenticate", buffer);
 
   return TRUE;
 }

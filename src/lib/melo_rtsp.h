@@ -107,6 +107,21 @@ gboolean melo_rtsp_set_response (MeloRTSPClient *client, const gchar *response);
 gboolean melo_rtsp_set_packet (MeloRTSPClient *client, guchar *buffer,
                                gsize len, GDestroyNotify free);
 
+/* Authentication part */
+gboolean melo_rtsp_basic_auth_check (MeloRTSPClient *client,
+                                     const gchar *username,
+                                     const gchar *password);
+gboolean melo_rtsp_basic_auth_response (MeloRTSPClient *client,
+                                        const gchar *realm);
+gboolean melo_rtsp_digest_auth_check (MeloRTSPClient *client,
+                                      const gchar *username,
+                                      const gchar *password,
+                                      const gchar *realm);
+gboolean melo_rtsp_digest_auth_response (MeloRTSPClient *client,
+                                         const gchar *realm,
+                                         const gchar *opaque,
+                                         gint signal_stale);
+
 G_END_DECLS
 
 #endif /* __MELO_RTSP_H__ */
