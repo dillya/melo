@@ -233,6 +233,15 @@ melo_playlist_remove (MeloPlaylist *playlist, const gchar *path)
   return pclass->remove (playlist, path);
 }
 
+void
+melo_playlist_empty (MeloPlaylist *playlist)
+{
+  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
+
+  if (pclass->empty)
+    pclass->empty (playlist);
+}
+
 MeloPlaylistItem *
 melo_playlist_item_new (const gchar *name, const gchar *full_name,
                         const gchar *path)

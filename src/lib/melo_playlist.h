@@ -61,6 +61,7 @@ struct _MeloPlaylistClass {
   gchar *(*get_next) (MeloPlaylist *playlist, gboolean set);
   gboolean (*play) (MeloPlaylist *playlist, const gchar *name);
   gboolean (*remove) (MeloPlaylist *playlist, const gchar *name);
+  void (*empty) (MeloPlaylist *playlist);
 };
 
 struct _MeloPlaylistItem {
@@ -90,6 +91,7 @@ gchar *melo_playlist_get_prev (MeloPlaylist *playlist, gboolean set);
 gchar *melo_playlist_get_next (MeloPlaylist *playlist, gboolean set);
 gboolean melo_playlist_play (MeloPlaylist *playlist, const gchar *name);
 gboolean melo_playlist_remove (MeloPlaylist *playlist, const gchar *name);
+void melo_playlist_empty (MeloPlaylist *playlist);
 
 MeloPlaylistItem *melo_playlist_item_new (const gchar *name,
                                           const gchar *full_name,
