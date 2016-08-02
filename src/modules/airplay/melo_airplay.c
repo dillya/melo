@@ -24,6 +24,8 @@
 #include <ifaddrs.h>
 #include <net/if.h>
 
+#include <gst/sdp/sdp.h>
+
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -34,6 +36,8 @@
 
 #include "melo_airplay.h"
 #include "melo_airplay_pkey.h"
+
+#include "melo_player_airplay.h"
 
 /* Module airplay info */
 static MeloModuleInfo melo_airplay_info = {
@@ -51,6 +55,28 @@ static void melo_airplay_request_handler (MeloRTSPClient *client,
                                           const gchar *url,
                                           gpointer user_data,
                                           gpointer *data);
+static void melo_airplay_read_handler (MeloRTSPClient *client, guchar *buffer,
+                                       gsize size, gboolean last,
+                                       gpointer user_data, gpointer *data);
+static void melo_airplay_close_handler (MeloRTSPClient *client,
+                                        gpointer user_data, gpointer *data);
+
+typedef struct {
+  /* Format */
+  MeloAirplayCodec codec;
+  gchar *format;
+  /* AES key and IV */
+  guchar *key;
+  gsize key_len;
+  guchar iv[16];
+  /* RAOP configuration */
+  MeloAirplayTransport transport;
+  guint port;
+  guint control_port;
+  guint timing_port;
+  /* Airplay player */
+  MeloPlayer *player;
+} MeloAirplayClient;
 
 struct _MeloAirplayPrivate {
   GMutex mutex;
@@ -201,7 +227,9 @@ melo_airplay_init (MeloAirplay *self)
   /* Create RTSP server */
   priv->rtsp = melo_rtsp_new ();
   melo_rtsp_set_request_callback (priv->rtsp, melo_airplay_request_handler,
-                                  priv);
+                                  self);
+  melo_rtsp_set_read_callback (priv->rtsp, melo_airplay_read_handler, self);
+  melo_rtsp_set_close_callback (priv->rtsp, melo_airplay_close_handler, self);
 
   /* Start RTSP server */
   melo_rtsp_start (priv->rtsp, port);
@@ -328,12 +356,96 @@ melo_airplay_init_apple_response (MeloRTSPClient *client, guchar *hw_addr,
   return TRUE;
 }
 
+static gboolean
+melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
+                            MeloAirplay *air)
+{
+  const gchar *header, *h;
+  gchar *transport;
+  gchar *id;
+
+  /* Get Transport header */
+  header = melo_rtsp_get_header (client, "Transport");
+  if (!header)
+    return FALSE;
+
+  /* Get transport type */
+  if (strstr (header, "TCP"))
+    aclient->transport = MELO_AIRPLAY_TRANSPORT_TCP;
+  else
+    aclient->transport = MELO_AIRPLAY_TRANSPORT_UDP;
+
+  /* Get control port */
+  h = strstr (header, "control_port=");
+  if (h)
+    aclient->control_port = strtoul (h + 13, NULL, 10);
+
+  /* Get timing port */
+  h = strstr (header, "timing_port=");
+  if (h)
+    aclient->timing_port = strtoul (h + 12, NULL, 10);
+
+  /* Generate a unique ID for its player */
+  id = g_strdup_printf ("airplay_%s", melo_rtsp_get_header (client, "DACP-ID"));
+
+  /* Create a new player */
+  aclient->player = melo_player_new (MELO_TYPE_PLAYER_AIRPLAY, id);
+  melo_module_register_player (MELO_MODULE (air), aclient->player);
+  g_free (id);
+
+  /* Setup player */
+  aclient->port = 6000;
+  if (!melo_player_airplay_setup (MELO_PLAYER_AIRPLAY (aclient->player),
+                                   aclient->transport, &aclient->port)) {
+    melo_rtsp_init_response (client, 500, "Internal error");
+    return FALSE;
+  }
+
+  /* Prepare response */
+  melo_rtsp_add_header (client, "Audio-Jack-Status", "connected; type=analog");
+  transport = g_strdup_printf ("%s;server_port=%d;", header, aclient->port);
+  melo_rtsp_add_header (client, "Transport", transport);
+  melo_rtsp_add_header (client, "Session", "1");
+  g_free (transport);
+
+  return TRUE;
+}
+
+static void
+melo_airplay_get_rtp_info (MeloRTSPClient *client, guint *seq, guint *timestamp)
+{
+  const gchar *header, *h;
+
+  header = melo_rtsp_get_header (client, "RTP-Info");
+  if (!header)
+    return;
+
+  /* Get next sequence number */
+  h = strstr (header, "seq=");
+  if (h && seq)
+    *seq = strtoul (h + 4, NULL, 10);
+
+  /* Get next timestamp */
+  h = strstr(header, "rtptime=");
+  if (h && timestamp)
+    *timestamp = strtoul (h + 8, NULL, 10);
+}
+
 static void
 melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
                               const gchar *url, gpointer user_data,
                               gpointer *data)
 {
-  MeloAirplayPrivate *priv = (MeloAirplayPrivate *) user_data;
+  MeloAirplay *air = (MeloAirplay *) user_data;
+  MeloAirplayPrivate *priv = air->priv;
+  MeloAirplayClient *aclient = (MeloAirplayClient *) *data;
+  guint seq;
+
+  /* Create new client */
+  if (!*data) {
+    aclient = g_slice_new0 (MeloAirplayClient);
+    *data = aclient;
+  }
 
   /* Lock mutex */
   g_mutex_lock (&priv->mutex);
@@ -364,7 +476,178 @@ melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
                                               "FLUSH, TEARDOWN, OPTIONS, "
                                               "GET_PARAMETER, SET_PARAMETER");
       break;
+    case MELO_RTSP_METHOD_SETUP:
+      /* Setup client and player */
+      melo_airplay_request_setup (client, aclient, air);
+      break;
+    case MELO_RTSP_METHOD_RECORD:
+      /* Get first RTP sequence number */
+      melo_airplay_get_rtp_info (client, &seq, NULL);
+      break;
+    case MELO_RTSP_METHOD_TEARDOWN:
+      if (aclient->player) {
+        const gchar *id = melo_player_get_id (MELO_PLAYER (aclient->player));
+        melo_module_unregister_player (MELO_MODULE (air), id);
+        g_object_unref (aclient->player);
+        aclient->player = NULL;
+      }
+      break;
+    case MELO_RTSP_METHOD_UNKNOWN:
+      if (!g_strcmp0 (melo_rtsp_get_method_name (client), "FLUSH")) {
+        /* Get RTP flush sequence number */
+        melo_airplay_get_rtp_info (client, &seq, NULL);
+      }
+      break;
     default:
      ;
   }
+}
+
+static gboolean
+melo_airplay_read_announce (guchar *buffer, gsize size,
+                            MeloAirplayPrivate *priv,
+                            MeloAirplayClient *aclient)
+{
+  const GstSDPMedia *media = NULL;
+  GstSDPMessage *sdp;
+  const char *rtpmap = NULL;
+  const gchar *val;
+  gboolean ret = FALSE;
+  guint i, count;
+  gsize len;
+
+  /* Init SDP message */
+  gst_sdp_message_new (&sdp);
+  gst_sdp_message_init (sdp);
+
+  /* Parse SDP packet */
+  if (gst_sdp_message_parse_buffer (buffer, size, sdp) != GST_SDP_OK)
+    goto end;
+
+  /* Get audio media */
+  count = gst_sdp_message_medias_len (sdp);
+  for (i = 0; i < count; i++) {
+    const GstSDPMedia *m = gst_sdp_message_get_media (sdp, i);
+    if (!g_strcmp0 (gst_sdp_media_get_media (m), "audio")) {
+      media = m;
+      break;
+    }
+  }
+  if (!media)
+    goto end;
+
+  /* Parse all attributes */
+  count = gst_sdp_media_attributes_len (media);
+  for (i = 0; i < count; i++) {
+    const GstSDPAttribute *attr = gst_sdp_media_get_attribute (media, i);
+
+    /* Find rtpmap, ftmp, rsaaeskey and aesiv */
+    if (!g_strcmp0 (attr->key, "rtpmap")) {
+      /* Get codec */
+      rtpmap = attr->key;
+      const gchar *codec = attr->value + 3;
+
+      /* Find codec */
+      if (!g_strcmp0 (codec, "L16"))
+        aclient->codec = MELO_AIRPLAY_CODEC_PCM;
+      else if (!g_strcmp0 (codec, "AppleLossless"))
+        aclient->codec = MELO_AIRPLAY_CODEC_ALAC;
+      else if (!g_strcmp0 (codec, "mpeg4-generic"))
+        aclient->codec = MELO_AIRPLAY_CODEC_AAC;
+      else
+        goto end;
+    } else if (!g_strcmp0 (attr->key, "fmtp")) {
+      /* Get format string */
+      g_free (aclient->format);
+      aclient->format = g_strdup (attr->value);
+    } else if (!g_strcmp0 (attr->key, "rsaaeskey")) {
+      gchar *key;
+
+      /* Decode AES key from base64 */
+      key = g_base64_decode (attr->value, &len);
+
+      /* Allocate new AES key */
+      aclient->key_len = RSA_size (priv->pkey);
+      if (!aclient->key)
+        aclient->key = g_slice_alloc (aclient->key_len);
+      if (!aclient->key) {
+        g_free (key);
+        goto end;
+      }
+
+      /* Decrypt AES key */
+      if (!RSA_private_decrypt (len, (unsigned char *) key,
+                                (unsigned char *) aclient->key, priv->pkey,
+                                RSA_PKCS1_OAEP_PADDING)) {
+        g_free (key);
+        goto end;
+      }
+      g_free (key);
+    } else if (!g_strcmp0 (attr->key, "aesiv")) {
+      /* Get AES IV */
+      gchar *iv = g_base64_decode (attr->value, &len);
+      memcpy (aclient->iv, iv, 16);
+      g_free (iv);
+    }
+  }
+
+  /* Add a pseudo format for PCM */
+  if (aclient->codec == MELO_AIRPLAY_CODEC_PCM && !aclient->format)
+    aclient->format = g_strdup (rtpmap);
+
+  /* A format and a key has been found */
+  if (aclient->format && aclient->key)
+    ret = TRUE;
+end:
+  /* Free SDP message */
+  gst_sdp_message_free (sdp);
+
+  return ret;
+}
+
+static void
+melo_airplay_read_handler (MeloRTSPClient *client, guchar *buffer, gsize size,
+                           gboolean last, gpointer user_data, gpointer *data)
+{
+  MeloAirplay *air = (MeloAirplay *) user_data;
+  MeloAirplayPrivate *priv = air->priv;
+  MeloAirplayClient *aclient = (MeloAirplayClient *) *data;
+
+  /* Parse method */
+  switch (melo_rtsp_get_method (client)) {
+    case MELO_RTSP_METHOD_ANNOUNCE:
+      melo_airplay_read_announce (buffer, size, priv, aclient);
+      break;
+    default:
+     ;
+  }
+}
+
+static void
+melo_airplay_close_handler (MeloRTSPClient *client, gpointer user_data,
+                            gpointer *data)
+{
+  MeloAirplay *air = (MeloAirplay *) user_data;
+  MeloAirplayPrivate *priv = air->priv;
+  MeloAirplayClient *aclient = (MeloAirplayClient *) *data;
+
+  if (!aclient)
+    return;
+
+  /* Remove player */
+  if (aclient->player) {
+    const gchar *id = melo_player_get_id (MELO_PLAYER (aclient->player));
+    melo_module_unregister_player (MELO_MODULE (air), id);
+    g_object_unref (aclient->player);
+  }
+
+  /* Free AES key */
+  if (aclient->key)
+    g_slice_free1 (aclient->key_len, aclient->key);
+
+  /* Free format */
+  g_free (aclient->format);
+
+  /* Free stream */
+  g_slice_free (MeloAirplayClient, aclient);
 }

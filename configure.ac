@@ -66,6 +66,13 @@ PKG_CHECK_MODULES([GST_TAG],
     AC_MSG_ERROR(Gstreamer-tag $GST_REQ or later is required)
   ])
 
+dnl Check for Gstreamer sdp
+PKG_CHECK_MODULES([GST_SDP],
+  gstreamer-sdp-1.0 >= $GST_REQ, [],
+  [
+    AC_MSG_ERROR(Gstreamer-sdp $GST_REQ or later is required)
+  ])
+
 dnl Check for Avahi gobject
 AVAHI_GOBJECT_REQ=0.6.31
 PKG_CHECK_MODULES([AVAHI_GOBJECT],
