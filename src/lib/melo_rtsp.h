@@ -91,6 +91,7 @@ MeloRTSPMethod melo_rtsp_get_method (MeloRTSPClient *client);
 const gchar *melo_rtsp_get_method_name (MeloRTSPClient *client);
 
 const gchar *melo_rtsp_get_header (MeloRTSPClient *client, const gchar *name);
+gsize melo_rtsp_get_content_length (MeloRTSPClient *client);
 
 const guchar *melo_rtsp_get_ip (MeloRTSPClient *client);
 guint melo_rtsp_get_port (MeloRTSPClient *client);

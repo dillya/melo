@@ -50,6 +50,7 @@ struct _MeloRTSPClient {
   GHashTable *headers;
   guint seq;
   gsize content_length;
+  gsize body_size;
   /* Server address */
   guchar server_ip[4];
   guint server_port;
@@ -412,6 +413,7 @@ melo_rtsp_handle_client (GSocket *sock, GIOCondition condition,
       buf = g_hash_table_lookup (client->headers, "Content-Length");
       if (buf)
         client->content_length = strtoul (buf, NULL, 10);
+      client->body_size = client->content_length;
 
       /* Call request callback */
       if (priv->request_cb)
@@ -701,6 +703,12 @@ const gchar *
 melo_rtsp_get_header (MeloRTSPClient *client, const gchar *name)
 {
   return g_hash_table_lookup (client->headers, name);
+}
+
+gsize
+melo_rtsp_get_content_length (MeloRTSPClient *client)
+{
+  return client->body_size;
 }
 
 const guchar *
