@@ -62,6 +62,12 @@ static void melo_airplay_close_handler (MeloRTSPClient *client,
                                         gpointer user_data, gpointer *data);
 
 typedef struct {
+  /* Content type */
+  gchar *type;
+  /* Cover art */
+  guchar *img;
+  gsize img_size;
+  gsize img_len;
   /* Format */
   MeloAirplayCodec codec;
   gchar *format;
@@ -396,7 +402,8 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   /* Setup player */
   aclient->port = 6000;
   if (!melo_player_airplay_setup (MELO_PLAYER_AIRPLAY (aclient->player),
-                                   aclient->transport, &aclient->port)) {
+                                   aclient->transport, &aclient->port,
+                                   aclient->codec, aclient->format)) {
     melo_rtsp_init_response (client, 500, "Internal error");
     return FALSE;
   }
@@ -483,6 +490,9 @@ melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
     case MELO_RTSP_METHOD_RECORD:
       /* Get first RTP sequence number */
       melo_airplay_get_rtp_info (client, &seq, NULL);
+
+      /* Start player */
+      melo_player_airplay_record (MELO_PLAYER_AIRPLAY (aclient->player), seq);
       break;
     case MELO_RTSP_METHOD_TEARDOWN:
       if (aclient->player) {
@@ -496,7 +506,15 @@ melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
       if (!g_strcmp0 (melo_rtsp_get_method_name (client), "FLUSH")) {
         /* Get RTP flush sequence number */
         melo_airplay_get_rtp_info (client, &seq, NULL);
+
+        /* Pause player */
+        melo_player_airplay_flush (MELO_PLAYER_AIRPLAY (aclient->player), seq);
       }
+      break;
+    case MELO_RTSP_METHOD_SET_PARAMETER:
+      /* Save content type */
+      g_free (aclient->type);
+      aclient->type = g_strdup (melo_rtsp_get_header (client, "Content-Type"));
       break;
     default:
      ;
@@ -605,6 +623,121 @@ end:
   return ret;
 }
 
+static gboolean
+melo_rtsp_read_params (MeloAirplayClient *aclient, guchar *buffer, gsize size)
+{
+  MeloPlayerAirplay *pair = MELO_PLAYER_AIRPLAY (aclient->player);
+  gchar *value;
+
+  /* Check buffer content */
+  if (size > 8 && !strncmp (buffer, "volume: ", 8)) {
+    gdouble volume;
+
+    /* Get volume from buffer */
+    value = g_strndup (buffer + 8, size - 8);
+    volume = g_strtod (value, NULL);
+    g_free (value);
+
+    /* Set volume */
+    melo_player_airplay_set_volume (pair, volume);
+  } else if (size > 10 && !strncmp (buffer, "progress: ", 10)) {
+    guint start, cur, end;
+    gchar *v;
+
+    /* Get RTP time values */
+    value = g_strndup (buffer + 10, size - 10);
+    start = strtoul (value, &v, 10);
+    cur = strtoul (v + 1, &v, 10);
+    end = strtoul (v + 1, NULL, 10);
+    g_free (value);
+
+    /* Set position and duration */
+    melo_player_airplay_set_progress (pair, start, cur, end);
+  } else
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+melo_rtsp_read_tags (MeloAirplayClient *aclient, guchar *buffer, gsize size)
+{
+  MeloTags *tags;
+  gsize len;
+
+  /* Skip first header */
+  if (size > 8 && !memcmp (buffer, "mlit", 4)) {
+    buffer += 8;
+    size -= 8;
+  }
+
+  /* Create a new tags */
+  tags = melo_tags_new ();
+  if (!tags)
+    return FALSE;
+
+  /* Parse all buffer */
+  while (size > 8) {
+    /* Get tag length */
+    len = buffer[4] << 24 | buffer[5] << 16 | buffer[6] << 8 | buffer[7];
+
+    /* Get values */
+    if (!memcmp (buffer, "minm", 4)) {
+      g_free (tags->title);
+      tags->title = g_strndup (buffer + 8, len);
+    } else if (!memcmp (buffer, "asar", 4)) {
+      g_free (tags->artist);
+      tags->artist = g_strndup (buffer + 8, len);
+    } else if (!memcmp (buffer, "asal", 4)) {
+      g_free (tags->album);
+      tags->album = g_strndup (buffer + 8, len);
+    }
+
+    /* Go to next block */
+    buffer += len + 8;
+    size -= len + 8;
+  }
+
+  /* Update tags in player */
+  melo_player_play (aclient->player, NULL, NULL, tags, TRUE);
+
+  return TRUE;
+}
+
+static gboolean
+melo_rtsp_read_image (MeloRTSPClient *client, MeloAirplayClient *aclient,
+                      guchar *buffer, gsize size, gboolean last)
+{
+  GBytes *cover;
+
+  /* First packet */
+  if (!aclient->img) {
+    aclient->img_len = 0;
+    aclient->img_size = melo_rtsp_get_content_length (client);
+    aclient->img = g_malloc (aclient->img_size);
+    if (!aclient->img)
+      return FALSE;
+  }
+
+  /* Copy data */
+  memcpy (aclient->img + aclient->img_len, buffer, size);
+  aclient->img_len += size;
+
+  /* Last packet */
+  if (last) {
+    /* Create cover GBytes */
+    cover = g_bytes_new_take (aclient->img, aclient->img_size);
+    aclient->img_size = 0;
+    aclient->img = NULL;
+
+    /* Send final image to player */
+    melo_player_airplay_set_cover (MELO_PLAYER_AIRPLAY (aclient->player),
+                                   cover, aclient->type);
+  }
+
+  return TRUE;
+}
+
 static void
 melo_airplay_read_handler (MeloRTSPClient *client, guchar *buffer, gsize size,
                            gboolean last, gpointer user_data, gpointer *data)
@@ -612,11 +745,29 @@ melo_airplay_read_handler (MeloRTSPClient *client, guchar *buffer, gsize size,
   MeloAirplay *air = (MeloAirplay *) user_data;
   MeloAirplayPrivate *priv = air->priv;
   MeloAirplayClient *aclient = (MeloAirplayClient *) *data;
+  const gchar *type;
 
   /* Parse method */
   switch (melo_rtsp_get_method (client)) {
     case MELO_RTSP_METHOD_ANNOUNCE:
       melo_airplay_read_announce (buffer, size, priv, aclient);
+      break;
+    case MELO_RTSP_METHOD_SET_PARAMETER:
+      /* Get content type */
+      if (!aclient->type)
+        break;
+
+      /* Parse content type */
+      if (!g_strcmp0 (aclient->type, "text/parameters"))
+        /* Get parameters (volume or progress) */
+        melo_rtsp_read_params (aclient, buffer, size);
+      else if (!g_strcmp0 (aclient->type, "application/x-dmap-tagged"))
+        /* Get media tags */
+        melo_rtsp_read_tags (aclient, buffer, size);
+      else if (g_str_has_prefix (aclient->type, "image/"))
+        /* Get cover art */
+        melo_rtsp_read_image (client, aclient, buffer, size, last);
+
       break;
     default:
      ;
@@ -647,6 +798,12 @@ melo_airplay_close_handler (MeloRTSPClient *client, gpointer user_data,
 
   /* Free format */
   g_free (aclient->format);
+
+  /* Free type */
+  g_free (aclient->type);
+
+  /* Free image */
+  g_free (aclient->img);
 
   /* Free stream */
   g_slice_free (MeloAirplayClient, aclient);

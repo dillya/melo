@@ -63,9 +63,18 @@ GType melo_player_airplay_get_type (void);
 
 gboolean melo_player_airplay_setup (MeloPlayerAirplay *pair,
                                     MeloAirplayTransport transport,
-                                    guint *port);
+                                    guint *port, MeloAirplayCodec codec,
+                                    const gchar *format);
+gboolean melo_player_airplay_record (MeloPlayerAirplay *pair, guint seq);
+gboolean melo_player_airplay_flush (MeloPlayerAirplay *pair, guint seq);
 gboolean melo_player_airplay_teardown (MeloPlayerAirplay *pair);
 
+gboolean melo_player_airplay_set_volume (MeloPlayerAirplay *pair,
+                                         gdouble volume);
+gboolean melo_player_airplay_set_progress (MeloPlayerAirplay *pair,
+                                           guint start, guint cur, guint end);
+gboolean melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
+                                        const gchar *cover_type);
 G_END_DECLS
 
 #endif /* __MELO_PLAYER_AIRPLAY_H__ */

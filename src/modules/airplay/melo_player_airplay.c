@@ -43,6 +43,10 @@ struct _MeloPlayerAirplayPrivate {
   /* Gstreamer pipeline */
   GstElement *pipeline;
   guint bus_watch_id;
+
+  /* Format */
+  guint samplerate;
+  guint channel_count;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloPlayerAirplay, melo_player_airplay, MELO_TYPE_PLAYER)
@@ -148,9 +152,8 @@ melo_player_airplay_play (MeloPlayer *player, const gchar *path,
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
-  /* Replace status */
-  melo_player_status_unref (priv->status);
-  priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
+  /* Update tags */
+  melo_player_status_take_tags (priv->status, tags);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
@@ -214,16 +217,13 @@ static gint
 melo_player_airplay_get_pos (MeloPlayer *player, gint *duration)
 {
   MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
-  gint64 pos;
 
   /* Get duration */
   if (duration)
     *duration = priv->status->duration;
 
   /* Get length */
-  pos = 0;
-
-  return pos / 1000000;
+  return priv->status->pos;
 }
 
 static MeloPlayerStatus *
@@ -237,7 +237,6 @@ melo_player_airplay_get_status (MeloPlayer *player)
 
   /* Copy status */
   status = melo_player_status_ref (priv->status);
-  status->pos = melo_player_airplay_get_pos (player, NULL);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
@@ -245,9 +244,74 @@ melo_player_airplay_get_status (MeloPlayer *player)
   return status;
 }
 
+static gboolean
+melo_player_airplay_parse_format (MeloPlayerAirplayPrivate *priv,
+                                  MeloAirplayCodec codec, const gchar *format)
+{
+  guint tmp;
+
+  switch (codec) {
+    case MELO_AIRPLAY_CODEC_ALAC:
+      /* Get payload type */
+      tmp = strtoul (format, &format, 10);
+
+      /* Get ALAC parameters:
+       *  - Max samples per frame (4 bytes)
+       *  - 7a: ? (1 byte)
+       *  - Sample size (4 bytes)
+       *  - Rice historymult (1 byte)
+       *  - Rice initialhistory (1 byte)
+       *  - Rice kmodifier (1 byte)
+       *  - Channel count (1 byte)
+       *  - 80: ? (2 bytes)
+       *  - 82: ? (4 bytes)
+       *  - 86: ? (4 bytes)
+       *  - Sample rate (4 bytes)
+       */
+      tmp = strtoul (format, &format, 10);
+      tmp = strtoul (format, &format, 10);
+      tmp = strtoul (format, &format, 10);
+      tmp = strtoul (format, &format, 10);
+      tmp = strtoul (format, &format, 10);
+      tmp = strtoul (format, &format, 10);
+      priv->channel_count = strtoul (format, &format, 10);
+      tmp = strtoul (format, &format, 10);
+      tmp = strtoul (format, &format, 10);
+      tmp = strtoul (format, &format, 10);
+      priv->samplerate = strtoul (format, &format, 10);
+
+      break;
+    case MELO_AIRPLAY_CODEC_PCM:
+      /* Get payload type */
+      tmp = strtoul (format, &format, 10);
+
+      /* Get bits count */
+      tmp = strtoul (format, &format, 10);
+
+      /* Get samplerate and channel count */
+      priv->samplerate = strtoul (format, &format, 10);
+      priv->channel_count = strtoul (format, &format, 10);
+
+      break;
+    case MELO_AIRPLAY_CODEC_AAC:
+    default:
+      priv->samplerate = 44100;
+      priv->channel_count = 2;
+  }
+
+  /* Set default values if not found */
+  if (!priv->samplerate)
+    priv->samplerate = 44100;
+  if (!priv->channel_count)
+      priv->channel_count = 2;
+
+  return TRUE;
+}
+
 gboolean
 melo_player_airplay_setup (MeloPlayerAirplay *pair,
-                           MeloAirplayTransport transport, guint *port)
+                           MeloAirplayTransport transport, guint *port,
+                           MeloAirplayCodec codec, const gchar *format)
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
   guint max_port = *port + 100;
@@ -257,6 +321,10 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   GstBus *bus;
 
   if (priv->pipeline)
+    return FALSE;
+
+  /* Parse format */
+  if (!melo_player_airplay_parse_format (priv, codec, format))
     return FALSE;
 
   /* Get ID from player */
@@ -302,6 +370,40 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
 }
 
 gboolean
+melo_player_airplay_record (MeloPlayerAirplay *pair, guint seq)
+{
+  MeloPlayerAirplayPrivate *priv = pair->priv;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set playing */
+  priv->status->state = MELO_PLAYER_STATE_PLAYING;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+}
+
+gboolean
+melo_player_airplay_flush (MeloPlayerAirplay *pair, guint seq)
+{
+  MeloPlayerAirplayPrivate *priv = pair->priv;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set playing */
+  priv->status->state = MELO_PLAYER_STATE_PAUSED;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+}
+
+gboolean
 melo_player_airplay_teardown (MeloPlayerAirplay *pair)
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
@@ -319,4 +421,55 @@ melo_player_airplay_teardown (MeloPlayerAirplay *pair)
   g_object_unref (priv->pipeline);
 
   return TRUE;
+}
+
+gboolean
+melo_player_airplay_set_volume (MeloPlayerAirplay *pair, gdouble volume)
+{
+  return TRUE;
+}
+
+gboolean
+melo_player_airplay_set_progress (MeloPlayerAirplay *pair, guint start,
+                                  guint cur, guint end)
+{
+  MeloPlayerAirplayPrivate *priv = pair->priv;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set playing */
+  priv->status->state = MELO_PLAYER_STATE_PLAYING;
+  priv->status->pos = (cur - start) * 1000L / priv->samplerate;
+  priv->status->duration =  (end - start) * 1000L / priv->samplerate;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+}
+
+gboolean
+melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
+                               const gchar *cover_type)
+{
+  MeloPlayerAirplayPrivate *priv = pair->priv;
+  gboolean ret = FALSE;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set cover if not already set */
+  if (!priv->status->tags->cover && !priv->status->tags->cover_type) {
+    priv->status->tags->cover = cover;
+    priv->status->tags->cover_type = g_strdup (cover_type);
+    melo_tags_update (priv->status->tags);
+    ret = TRUE;
+  } else
+    g_bytes_unref (cover);
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return ret;
 }
