@@ -341,19 +341,40 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   priv->pipeline = gst_pipeline_new (pname);
   g_free (pname);
 
+  /* Add a fake sink */
+  sink = gst_element_factory_make ("fakesink", NULL);
+  gst_bin_add_many (GST_BIN (priv->pipeline), sink, NULL);
+
   /* Create source */
-  if (transport == MELO_AIRPLAY_TRANSPORT_UDP)
+  if (transport == MELO_AIRPLAY_TRANSPORT_UDP) {
+    GstElement *rtp, *caps_filter;
+    GstCaps *caps;
+
+    /* Add an UDP source and a RTP jitter buffer to pipeline */
     src = gst_element_factory_make ("udpsrc", NULL);
-  else
+    caps_filter = gst_element_factory_make ("capsfilter", NULL);
+    rtp = gst_element_factory_make ("rtpjitterbuffer", NULL);
+    gst_bin_add_many (GST_BIN (priv->pipeline), src, caps_filter, rtp, NULL);
+
+    /* Set caps for UDP source -> RTP jitter buffer link */
+    caps = gst_caps_new_simple ("application/x-rtp",
+                                "payload", G_TYPE_INT, 96,
+                                "clock-rate", G_TYPE_INT, priv->samplerate,
+                                NULL);
+    g_object_set (G_OBJECT (caps_filter), "caps", caps, NULL);
+    gst_caps_unref (caps);
+
+    /* Link all elements */
+    gst_element_link_many (src, caps_filter, rtp, sink, NULL);
+  } else {
+    /* Add a TCP server and link to sink */
     src = gst_element_factory_make ("tcpserversrc", NULL);
+    gst_bin_add_many (GST_BIN (priv->pipeline), src, NULL);
+    gst_element_link (src, sink);
+  }
 
   /* Set server port */
   g_object_set (src, "port", *port, "reuse", FALSE, NULL);
-
-  /* Add a fake sink and link everything */
-  sink = gst_element_factory_make ("fakesink", NULL);
-  gst_bin_add_many (GST_BIN (priv->pipeline), src, sink, NULL);
-  gst_element_link (src, sink);
 
   /* Add a message handler */
   bus = gst_pipeline_get_bus (GST_PIPELINE (priv->pipeline));
