@@ -148,12 +148,18 @@ melo_player_airplay_play (MeloPlayer *player, const gchar *path,
                           const gchar *name, MeloTags *tags, gboolean insert)
 {
   MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
+  MeloPlayerStatus *status;
 
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
   /* Update tags */
-  melo_player_status_take_tags (priv->status, tags);
+  status = melo_player_status_new (priv->status->state, NULL);
+  status->pos = priv->status->pos;
+  status->duration = priv->status->duration;
+  melo_player_status_take_tags (status, tags);
+  melo_player_status_unref (priv->status);
+  priv->status = status;
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
