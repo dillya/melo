@@ -50,6 +50,9 @@ static MeloModuleInfo melo_airplay_info = {
 static guchar melo_default_hw_addr[6] = {0x00, 0x51, 0x52, 0x53, 0x54, 0x55};
 
 static const MeloModuleInfo *melo_airplay_get_info (MeloModule *module);
+
+static guchar *melo_airplay_base64_decode (const gchar *text, gsize *out_len);
+
 static void melo_airplay_request_handler (MeloRTSPClient *client,
                                           MeloRTSPMethod method,
                                           const gchar *url,
@@ -74,7 +77,8 @@ typedef struct {
   /* AES key and IV */
   guchar *key;
   gsize key_len;
-  guchar iv[16];
+  guchar *iv;
+  gsize iv_len;
   /* RAOP configuration */
   MeloAirplayTransport transport;
   guint port;
@@ -403,7 +407,9 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   aclient->port = 6000;
   if (!melo_player_airplay_setup (MELO_PLAYER_AIRPLAY (aclient->player),
                                    aclient->transport, &aclient->port,
-                                   aclient->codec, aclient->format)) {
+                                   aclient->codec, aclient->format,
+                                   aclient->key, aclient->key_len,
+                                   aclient->iv, aclient->iv_len)) {
     melo_rtsp_init_response (client, 500, "Internal error");
     return FALSE;
   }
@@ -582,7 +588,7 @@ melo_airplay_read_announce (guchar *buffer, gsize size,
       gchar *key;
 
       /* Decode AES key from base64 */
-      key = g_base64_decode (attr->value, &len);
+      key = melo_airplay_base64_decode (attr->value, &len);
 
       /* Allocate new AES key */
       aclient->key_len = RSA_size (priv->pkey);
@@ -603,9 +609,8 @@ melo_airplay_read_announce (guchar *buffer, gsize size,
       g_free (key);
     } else if (!g_strcmp0 (attr->key, "aesiv")) {
       /* Get AES IV */
-      gchar *iv = g_base64_decode (attr->value, &len);
-      memcpy (aclient->iv, iv, 16);
-      g_free (iv);
+      g_free (aclient->iv);
+      aclient->iv = melo_airplay_base64_decode (attr->value, &aclient->iv_len);
     }
   }
 
@@ -795,6 +800,7 @@ melo_airplay_close_handler (MeloRTSPClient *client, gpointer user_data,
   /* Free AES key */
   if (aclient->key)
     g_slice_free1 (aclient->key_len, aclient->key);
+  g_free (aclient->iv);
 
   /* Free format */
   g_free (aclient->format);
@@ -807,4 +813,26 @@ melo_airplay_close_handler (MeloRTSPClient *client, gpointer user_data,
 
   /* Free stream */
   g_slice_free (MeloAirplayClient, aclient);
+}
+
+static guchar *
+melo_airplay_base64_decode (const gchar *text, gsize *out_len)
+{
+  gint state = 0;
+  guint save = 0;
+  guchar *out;
+  gsize len;
+
+  /* Allocate output buffer */
+  len = strlen (text);
+  out = g_malloc ((len * 3 / 4) + 3);
+
+  /* Decode string */
+  len = g_base64_decode_step (text, len, out, &state, &save);
+  while (state)
+    len += g_base64_decode_step ("=", 1, out + len, &state, &save);
+
+  /* Return values */
+  *out_len = len;
+  return out;
 }

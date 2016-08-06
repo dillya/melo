@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include <gst/gst.h>
+#include "gstrtpraopdepay.h"
 
 #include "melo_player_airplay.h"
 
@@ -76,6 +77,9 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   MeloPlayerClass *pclass = MELO_PLAYER_CLASS (klass);
+
+  /* Register RTP RAOP depayloader */
+  gst_rtp_raop_depay_plugin_init (NULL);
 
   /* Control */
   pclass->play = melo_player_airplay_play;
@@ -263,15 +267,15 @@ melo_player_airplay_parse_format (MeloPlayerAirplayPrivate *priv,
 
       /* Get ALAC parameters:
        *  - Max samples per frame (4 bytes)
-       *  - 7a: ? (1 byte)
-       *  - Sample size (4 bytes)
-       *  - Rice historymult (1 byte)
-       *  - Rice initialhistory (1 byte)
-       *  - Rice kmodifier (1 byte)
+       *  - Compatible version (1 byte)
+       *  - Sample size (1 bytes)
+       *  - History mult (1 byte)
+       *  - Initial history (1 byte)
+       *  - Rice param limit (1 byte)
        *  - Channel count (1 byte)
-       *  - 80: ? (2 bytes)
-       *  - 82: ? (4 bytes)
-       *  - 86: ? (4 bytes)
+       *  - Max run (2 bytes)
+       *  - Max coded frame size (4 bytes)
+       *  - Average bitrate (4 bytes)
        *  - Sample rate (4 bytes)
        */
       tmp = strtoul (format, &format, 10);
@@ -317,7 +321,9 @@ melo_player_airplay_parse_format (MeloPlayerAirplayPrivate *priv,
 gboolean
 melo_player_airplay_setup (MeloPlayerAirplay *pair,
                            MeloAirplayTransport transport, guint *port,
-                           MeloAirplayCodec codec, const gchar *format)
+                           MeloAirplayCodec codec, const gchar *format,
+                           const guchar *key, gsize key_len,
+                           const guchar *iv, gsize iv_len)
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
   guint max_port = *port + 100;
@@ -341,35 +347,55 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   priv->pipeline = gst_pipeline_new (pname);
   g_free (pname);
 
-  /* Add a fake sink */
-  sink = gst_element_factory_make ("fakesink", NULL);
-  gst_bin_add_many (GST_BIN (priv->pipeline), sink, NULL);
-
   /* Create source */
   if (transport == MELO_AIRPLAY_TRANSPORT_UDP) {
-    GstElement *rtp, *caps_filter;
+    GstElement *src_caps, *rtp, *rtp_caps, *depay, *dec;
+    gchar *b_key, *b_iv;
     GstCaps *caps;
 
     /* Add an UDP source and a RTP jitter buffer to pipeline */
     src = gst_element_factory_make ("udpsrc", NULL);
-    caps_filter = gst_element_factory_make ("capsfilter", NULL);
+    src_caps = gst_element_factory_make ("capsfilter", NULL);
     rtp = gst_element_factory_make ("rtpjitterbuffer", NULL);
-    gst_bin_add_many (GST_BIN (priv->pipeline), src, caps_filter, rtp, NULL);
+    rtp_caps = gst_element_factory_make ("capsfilter", NULL);
+    depay = gst_element_factory_make ("rtpraopdepay", NULL);
+    dec = gst_element_factory_make ("avdec_alac", NULL);
+    sink = gst_element_factory_make ("autoaudiosink", NULL);
+    gst_bin_add_many (GST_BIN (priv->pipeline), src, src_caps, rtp, rtp_caps,
+                      depay, dec, sink, NULL);
 
     /* Set caps for UDP source -> RTP jitter buffer link */
     caps = gst_caps_new_simple ("application/x-rtp",
                                 "payload", G_TYPE_INT, 96,
                                 "clock-rate", G_TYPE_INT, priv->samplerate,
                                 NULL);
-    g_object_set (G_OBJECT (caps_filter), "caps", caps, NULL);
+    g_object_set (G_OBJECT (src_caps), "caps", caps, NULL);
     gst_caps_unref (caps);
 
+    /* Set caps for RTP jitter -> RTP RAOP depayloader link */
+    caps = gst_caps_new_simple ("application/x-rtp",
+                                "payload", G_TYPE_INT, 96,
+                                "clock-rate", G_TYPE_INT, priv->samplerate,
+                                "config", G_TYPE_STRING, format,
+                                NULL);
+    g_object_set (G_OBJECT (rtp_caps), "caps", caps, NULL);
+    gst_caps_unref (caps);
+
+    /* Set keys into RTP RAOP depayloader */
+    if (key)
+      gst_rtp_raop_depay_set_key (GST_RTP_RAOP_DEPAY (depay), key, key_len,
+                                  iv, iv_len);
+
     /* Link all elements */
-    gst_element_link_many (src, caps_filter, rtp, sink, NULL);
+    gst_element_link_many (src, src_caps, rtp, rtp_caps, depay, dec, sink,
+                           NULL);
   } else {
-    /* Add a TCP server and link to sink */
+    /* Add a TCP server and a fake sink */
     src = gst_element_factory_make ("tcpserversrc", NULL);
-    gst_bin_add_many (GST_BIN (priv->pipeline), src, NULL);
+    sink = gst_element_factory_make ("fakesink", NULL);
+
+    /* Add and link elements */
+    gst_bin_add_many (GST_BIN (priv->pipeline), src, sink, NULL);
     gst_element_link (src, sink);
   }
 
