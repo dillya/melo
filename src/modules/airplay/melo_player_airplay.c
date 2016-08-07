@@ -40,9 +40,11 @@ static MeloPlayerStatus *melo_player_airplay_get_status (MeloPlayer *player);
 struct _MeloPlayerAirplayPrivate {
   GMutex mutex;
   MeloPlayerStatus *status;
+  guint32 start_rtptime;
 
   /* Gstreamer pipeline */
   GstElement *pipeline;
+  GstElement *raop_depay;
   guint bus_watch_id;
 
   /* Format */
@@ -227,13 +229,19 @@ static gint
 melo_player_airplay_get_pos (MeloPlayer *player, gint *duration)
 {
   MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
+  guint32 pos = 0;
 
   /* Get duration */
   if (duration)
     *duration = priv->status->duration;
 
+  /* Get RTP time */
+  if (gst_rtp_raop_depay_query_rtptime (priv->raop_depay, &pos)) {
+    pos = ((pos - priv->start_rtptime) * 1000L) / priv->samplerate;
+  }
+
   /* Get length */
-  return priv->status->pos;
+  return pos;
 }
 
 static MeloPlayerStatus *
@@ -247,6 +255,7 @@ melo_player_airplay_get_status (MeloPlayer *player)
 
   /* Copy status */
   status = melo_player_status_ref (priv->status);
+  priv->status->pos = melo_player_airplay_get_pos (player, NULL);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
@@ -363,6 +372,9 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     sink = gst_element_factory_make ("autoaudiosink", NULL);
     gst_bin_add_many (GST_BIN (priv->pipeline), src, src_caps, rtp, rtp_caps,
                       depay, dec, sink, NULL);
+
+    /* Save RAOP depay element */
+    priv->raop_depay = depay;
 
     /* Set caps for UDP source -> RTP jitter buffer link */
     caps = gst_caps_new_simple ("application/x-rtp",
@@ -494,7 +506,8 @@ melo_player_airplay_set_progress (MeloPlayerAirplay *pair, guint start,
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
-  /* Set playing */
+  /* Set progression */
+  priv->start_rtptime = start;
   priv->status->state = MELO_PLAYER_STATE_PLAYING;
   priv->status->pos = (cur - start) * 1000L / priv->samplerate;
   priv->status->duration =  (end - start) * 1000L / priv->samplerate;

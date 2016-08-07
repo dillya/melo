@@ -61,6 +61,8 @@ gboolean gst_rtp_raop_depay_plugin_init (GstPlugin * plugin);
 
 gboolean gst_rtp_raop_depay_set_key (GstRtpRaopDepay * rtpraopdepay,
     const guchar *key, gsize key_len, const guchar *iv, gsize iv_len);
+gboolean gst_rtp_raop_depay_query_rtptime (GstRtpRaopDepay * rtpraopdepay,
+    guint32 *rtptime);
 
 G_END_DECLS
 

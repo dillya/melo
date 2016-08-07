@@ -49,6 +49,7 @@ struct _GstRtpRaopDepayPrivate {
   gboolean has_key;
   AES_KEY key;
   guchar iv[16];
+  guint32 last_rtptime;
 };
 
 #define gst_rtp_raop_depay_parent_class parent_class
@@ -300,6 +301,9 @@ gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
   /* Map RTP buffer to read header */
   gst_rtp_buffer_map (buf, GST_MAP_READ, &rtp);
 
+  /* Get RTP time */
+  priv->last_rtptime = gst_rtp_buffer_get_timestamp (&rtp);
+
   /* Get packet len */
   payload_len = gst_rtp_buffer_get_payload_len (&rtp);
   GST_DEBUG_OBJECT (depayload, "got RTP packet of size %d", payload_len);
@@ -339,6 +343,18 @@ gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
   gst_rtp_buffer_unmap (&rtp);
 
   return out_buf;
+}
+
+
+gboolean
+gst_rtp_raop_depay_query_rtptime (GstRtpRaopDepay * rtpraopdepay,
+    guint32 *rtptime)
+{
+  if (!rtptime || !rtpraopdepay->priv->last_rtptime)
+   return FALSE;
+
+  *rtptime = rtpraopdepay->priv->last_rtptime;
+  return TRUE;
 }
 
 static GstStateChangeReturn
