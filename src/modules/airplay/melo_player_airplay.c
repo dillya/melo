@@ -386,6 +386,9 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
       gst_rtp_raop_depay_set_key (GST_RTP_RAOP_DEPAY (depay), key, key_len,
                                   iv, iv_len);
 
+    /* FIXME: Disable synchronization on sink */
+    g_object_set (G_OBJECT (sink), "sync", FALSE, NULL);
+
     /* Link all elements */
     gst_element_link_many (src, src_caps, rtp, rtp_caps, depay, dec, sink,
                            NULL);
