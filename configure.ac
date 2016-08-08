@@ -80,6 +80,13 @@ PKG_CHECK_MODULES([GST_RTP],
     AC_MSG_ERROR(Gstreamer-rtp $GST_REQ or later is required)
   ])
 
+dnl Check for Gstreamer net
+PKG_CHECK_MODULES([GST_NET],
+  gstreamer-net-1.0 >= $GST_REQ, [],
+  [
+    AC_MSG_ERROR(Gstreamer-net $GST_REQ or later is required)
+  ])
+
 dnl Check for Avahi gobject
 AVAHI_GOBJECT_REQ=0.6.31
 PKG_CHECK_MODULES([AVAHI_GOBJECT],
