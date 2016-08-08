@@ -236,7 +236,8 @@ melo_player_airplay_get_pos (MeloPlayer *player, gint *duration)
     *duration = priv->status->duration;
 
   /* Get RTP time */
-  if (gst_rtp_raop_depay_query_rtptime (priv->raop_depay, &pos)) {
+  if (gst_rtp_raop_depay_query_rtptime (GST_RTP_RAOP_DEPAY (priv->raop_depay),
+                                        &pos)) {
     pos = ((pos - priv->start_rtptime) * 1000L) / priv->samplerate;
   }
 
@@ -423,7 +424,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   gst_object_unref (bus);
 
   /* Start the pipeline */
-  while (gst_element_set_state (priv->pipeline, GST_STATE_PLAYING) ==
+  while (gst_element_set_state (priv->pipeline, GST_STATE_READY) ==
                                                      GST_STATE_CHANGE_FAILURE) {
     /* Incremnent port until we found a free port */
     *port += 2;
@@ -446,6 +447,7 @@ melo_player_airplay_record (MeloPlayerAirplay *pair, guint seq)
   g_mutex_lock (&priv->mutex);
 
   /* Set playing */
+  gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
   priv->status->state = MELO_PLAYER_STATE_PLAYING;
 
   /* Unlock player mutex */
@@ -479,14 +481,21 @@ melo_player_airplay_teardown (MeloPlayerAirplay *pair)
   if (!priv->pipeline)
     return FALSE;
 
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
   /* Stop pipeline */
   gst_element_set_state (priv->pipeline, GST_STATE_NULL);
+  priv->status->state = MELO_PLAYER_STATE_NONE;
 
   /* Remove message handler */
   g_source_remove (priv->bus_watch_id);
 
   /* Free gstreamer pipeline */
   g_object_unref (priv->pipeline);
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
 
   return TRUE;
 }
