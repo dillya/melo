@@ -263,6 +263,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
   MeloBrowserFilePrivate *priv = bfile->priv;
   GFileEnumerator *dir_enum;
   GFileInfo *info;
+  GList *dir_list = NULL;
   GList *list = NULL;
 
   /* Get details */
@@ -286,6 +287,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
     gchar *name;
     gchar *add = NULL;
     GFileType type;
+    GList **l;
 
     /* Get item type */
     type = g_file_info_get_file_type (info);
@@ -293,14 +295,17 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
       itype = "file";
       name = g_strdup (g_file_info_get_name (info));
       add = g_strdup ("Add to playlist");
+      l = &list;
     } else if (type == G_FILE_TYPE_DIRECTORY) {
       itype = "directory";
       name = g_strdup (g_file_info_get_name (info));
+      l = &dir_list;
     } else if (type == G_FILE_TYPE_SHORTCUT ||
                type == G_FILE_TYPE_MOUNTABLE) {
       const gchar *uri;
       gchar *sha1;
       itype = "directory";
+      l = &dir_list;
       uri = g_file_info_get_attribute_string (info,
                                           G_FILE_ATTRIBUTE_STANDARD_TARGET_URI);
 
@@ -320,18 +325,27 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
       continue;
     }
 
-    /* Create a new browser item and insert in list */
+    /* Create a new browser item */
     item = melo_browser_item_new (NULL, itype);
     item->name = name;
     item->full_name = g_strdup (g_file_info_get_display_name (info));
     item->add = add;
-    list = g_list_insert_sorted (list, item,
-                                 (GCompareFunc) melo_browser_item_cmp);
+
+    /* Insert into list */
+    if (type == G_FILE_TYPE_REGULAR)
+      list = g_list_prepend (list, item);
+    else
+      dir_list = g_list_prepend (dir_list, item);
     g_object_unref (info);
   }
   g_object_unref (dir_enum);
 
-  return list;
+  /* Sort both lists */
+  list = g_list_sort (list, (GCompareFunc) melo_browser_item_cmp);
+  dir_list = g_list_sort (dir_list, (GCompareFunc) melo_browser_item_cmp);
+
+  /* Merge both list */
+  return g_list_concat (dir_list, list);
 }
 
 static GList *
