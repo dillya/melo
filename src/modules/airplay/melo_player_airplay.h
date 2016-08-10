@@ -77,6 +77,9 @@ gboolean melo_player_airplay_set_progress (MeloPlayerAirplay *pair,
                                            guint start, guint cur, guint end);
 gboolean melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
                                         const gchar *cover_type);
+
+void melo_player_airplay_disable_sync (MeloPlayerAirplay *pair, gboolean sync);
+
 G_END_DECLS
 
 #endif /* __MELO_PLAYER_AIRPLAY_H__ */

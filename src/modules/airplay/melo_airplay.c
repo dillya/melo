@@ -370,6 +370,7 @@ static gboolean
 melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
                             MeloAirplay *air)
 {
+  gboolean hack_sync;
   const gchar *header, *h;
   gchar *transport;
   gchar *id;
@@ -402,6 +403,12 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   aclient->player = melo_player_new (MELO_TYPE_PLAYER_AIRPLAY, id);
   melo_module_register_player (MELO_MODULE (air), aclient->player);
   g_free (id);
+
+  /* Get disable sync hack */
+  if (melo_config_get_boolean (air->priv->config, "advanced", "hack_sync",
+                               &hack_sync))
+    melo_player_airplay_disable_sync (MELO_PLAYER_AIRPLAY (aclient->player),
+                                      hack_sync);
 
   /* Setup player */
   aclient->port = 6000;

@@ -46,6 +46,7 @@ struct _MeloPlayerAirplayPrivate {
   GstElement *pipeline;
   GstElement *raop_depay;
   guint bus_watch_id;
+  gboolean disable_sync;
 
   /* Format */
   guint samplerate;
@@ -399,8 +400,9 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
       gst_rtp_raop_depay_set_key (GST_RTP_RAOP_DEPAY (depay), key, key_len,
                                   iv, iv_len);
 
-    /* FIXME: Disable synchronization on sink */
-    g_object_set (G_OBJECT (sink), "sync", FALSE, NULL);
+    /* Disable synchronization on sink */
+    if (priv->disable_sync)
+      g_object_set (G_OBJECT (sink), "sync", FALSE, NULL);
 
     /* Link all elements */
     gst_element_link_many (src, src_caps, rtp, rtp_caps, depay, dec, sink,
@@ -550,4 +552,10 @@ melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
   g_mutex_unlock (&priv->mutex);
 
   return ret;
+}
+
+void
+melo_player_airplay_disable_sync (MeloPlayerAirplay *pair, gboolean sync)
+{
+  pair->priv->disable_sync = sync;
 }

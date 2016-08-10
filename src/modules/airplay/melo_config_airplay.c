@@ -45,13 +45,28 @@ static MeloConfigItem melo_config_general[] = {
   },
 };
 
+static MeloConfigItem melo_config_advanced[] = {
+  {
+    .id = "hack_sync",
+    .name = "[HACK] Disable sync on audio output sink",
+    .type = MELO_CONFIG_TYPE_BOOLEAN,
+    .element = MELO_CONFIG_ELEMENT_CHECKBOX,
+  },
+};
+
 static MeloConfigGroup melo_config_airplay[] = {
   {
     .id = "general",
     .name = "General",
     .items = melo_config_general,
     .items_count = G_N_ELEMENTS (melo_config_general),
-  }
+  },
+  {
+    .id = "advanced",
+    .name = "Advanced",
+    .items = melo_config_advanced,
+    .items_count = G_N_ELEMENTS (melo_config_advanced),
+  },
 };
 
 MeloConfig *
