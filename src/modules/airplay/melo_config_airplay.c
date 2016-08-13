@@ -47,6 +47,13 @@ static MeloConfigItem melo_config_general[] = {
 
 static MeloConfigItem melo_config_advanced[] = {
   {
+    .id = "latency",
+    .name = "Latency of output (in ms)",
+    .type = MELO_CONFIG_TYPE_INTEGER,
+    .element = MELO_CONFIG_ELEMENT_NUMBER,
+    .def._integer = 200,
+  },
+  {
     .id = "hack_sync",
     .name = "[HACK] Disable sync on audio output sink",
     .type = MELO_CONFIG_TYPE_BOOLEAN,
@@ -97,4 +104,17 @@ melo_config_airplay_update (MeloConfigContext *context, gpointer user_data)
   if (melo_config_get_updated_string (context, "password", &new, &old) &&
       g_strcmp0 (new, old))
     melo_airplay_set_password (air, new);
+}
+
+void
+melo_config_airplay_update_advanced (MeloConfigContext *context,
+                                     gpointer user_data)
+{
+  MeloAirplay *air = MELO_AIRPLAY (user_data);
+  gint64 new, old;
+
+  /* Update latency */
+  if (melo_config_get_updated_integer (context, "latency", &new, &old) &&
+      new != old)
+    melo_airplay_set_latency (air, new);
 }

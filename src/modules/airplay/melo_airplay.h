@@ -54,6 +54,8 @@ gboolean melo_airplay_set_name (MeloAirplay *air, const gchar *name);
 gboolean melo_airplay_set_port (MeloAirplay *air, int port);
 void melo_airplay_set_password (MeloAirplay *air, const gchar *password);
 
+void melo_airplay_set_latency (MeloAirplay *air, guint latency);
+
 G_END_DECLS
 
 #endif /* __MELO_AIRPLAY_H__ */

@@ -29,4 +29,7 @@ MeloConfig *melo_config_airplay_new (void);
 void melo_config_airplay_update (MeloConfigContext *context,
                                  gpointer user_data);
 
+void melo_config_airplay_update_advanced (MeloConfigContext *context,
+                                          gpointer user_data);
+
 #endif /* __MELO_CONFIG_AIRPLAY_H__ */

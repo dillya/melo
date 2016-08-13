@@ -102,6 +102,9 @@ struct _MeloAirplayPrivate {
   guchar hw_addr[6];
   gchar *name;
   int port;
+
+  /* Player tunning */
+  guint latency;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloAirplay, melo_airplay, MELO_TYPE_MODULE)
@@ -209,6 +212,7 @@ melo_airplay_init (MeloAirplay *self)
 {
   MeloAirplayPrivate *priv = melo_airplay_get_instance_private (self);
   gint64 port = 5000;
+  gint64 val;
   BIO *temp_bio;
 
   self->priv = priv;
@@ -227,6 +231,10 @@ melo_airplay_init (MeloAirplay *self)
   melo_config_get_integer (priv->config, "general", "port", &port);
   priv->port = port;
   melo_config_get_string (priv->config, "general", "password", &priv->password);
+
+  /* Load advanced settings */
+  if (melo_config_get_integer (priv->config, "advanced", "latency", &val))
+    priv->latency = val;
 
   /* Load RSA private key */
   temp_bio = BIO_new_mem_buf (AIRPORT_PRIVATE_KEY, -1);
@@ -256,6 +264,8 @@ melo_airplay_init (MeloAirplay *self)
   /* Add config handler for update */
   melo_config_set_update_callback (priv->config, "general",
                                    melo_config_airplay_update, self);
+  melo_config_set_update_callback (priv->config, "advanced",
+                                   melo_config_airplay_update_advanced, self);
 }
 
 static const MeloModuleInfo *
@@ -309,6 +319,12 @@ melo_airplay_set_password (MeloAirplay *air, const gchar *password)
 
   /* Unlock mutex */
   g_mutex_unlock (&priv->mutex);
+}
+
+void
+melo_airplay_set_latency (MeloAirplay *air, guint latency)
+{
+  air->priv->latency = latency;
 }
 
 static gboolean
@@ -373,6 +389,7 @@ static gboolean
 melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
                             MeloAirplay *air)
 {
+  MeloAirplayPrivate *priv = air->priv;
   gboolean hack_sync;
   const gchar *header, *h;
   gchar *transport;
@@ -413,8 +430,13 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   melo_module_register_player (MELO_MODULE (air), aclient->player);
   g_free (id);
 
-  /* Get disable sync hack */
-  if (melo_config_get_boolean (air->priv->config, "advanced", "hack_sync",
+  /* Set latency */
+  if (priv->latency)
+    melo_player_airplay_set_latency (MELO_PLAYER_AIRPLAY (aclient->player),
+                                     priv->latency);
+
+  /* Set disable sync hack */
+  if (melo_config_get_boolean (priv->config, "advanced", "hack_sync",
                                &hack_sync))
     melo_player_airplay_disable_sync (MELO_PLAYER_AIRPLAY (aclient->player),
                                       hack_sync);

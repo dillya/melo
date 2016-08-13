@@ -26,6 +26,9 @@
 
 #include "melo_player_airplay.h"
 
+#define MIN_LATENCY 100
+#define DEFAULT_LATENCY 1000
+
 static gboolean melo_player_airplay_play (MeloPlayer *player, const gchar *path,
                                           const gchar *name, MeloTags *tags,
                                           gboolean insert);
@@ -46,6 +49,9 @@ struct _MeloPlayerAirplayPrivate {
   GstElement *pipeline;
   GstElement *raop_depay;
   guint bus_watch_id;
+
+  /* Gstreamer pipeline tunning */
+  guint latency;
   gboolean disable_sync;
 
   /* Format */
@@ -105,6 +111,7 @@ melo_player_airplay_init (MeloPlayerAirplay *self)
                                 melo_player_airplay_get_instance_private (self);
 
   self->priv = priv;
+  priv->latency = DEFAULT_LATENCY;
 
   /* Init player mutex */
   g_mutex_init (&priv->mutex);
@@ -406,6 +413,9 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     if (priv->disable_sync)
       g_object_set (G_OBJECT (sink), "sync", FALSE, NULL);
 
+    if (priv->latency)
+      g_object_set (G_OBJECT (rtp), "latency", priv->latency, NULL);
+
     /* Link all elements */
     gst_element_link_many (src, src_caps, rtp, rtp_caps, depay, dec, sink,
                            NULL);
@@ -554,6 +564,12 @@ melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
   g_mutex_unlock (&priv->mutex);
 
   return ret;
+}
+
+void
+melo_player_airplay_set_latency (MeloPlayerAirplay *pair, guint latency)
+{
+  pair->priv->latency = latency;
 }
 
 void
