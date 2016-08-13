@@ -84,6 +84,9 @@ typedef struct {
   guint port;
   guint control_port;
   guint timing_port;
+  gchar *client_ip;
+  guint client_control_port;
+  guint client_timing_port;
   /* Airplay player */
   MeloPlayer *player;
 } MeloAirplayClient;
@@ -396,6 +399,12 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   if (h)
     aclient->timing_port = strtoul (h + 12, NULL, 10);
 
+  /* Set client IP and ports */
+  g_free (aclient->client_ip);
+  aclient->client_ip = g_strdup (melo_rtsp_get_ip_string (client));
+  aclient->client_control_port = aclient->control_port;
+  aclient->client_timing_port = aclient->timing_port;
+
   /* Generate a unique ID for its player */
   id = g_strdup_printf ("airplay_%s", melo_rtsp_get_header (client, "DACP-ID"));
 
@@ -413,7 +422,10 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   /* Setup player */
   aclient->port = 6000;
   if (!melo_player_airplay_setup (MELO_PLAYER_AIRPLAY (aclient->player),
-                                   aclient->transport, &aclient->port,
+                                   aclient->transport, aclient->client_ip,
+                                   &aclient->port,
+                                   &aclient->control_port,
+                                   &aclient->timing_port,
                                    aclient->codec, aclient->format,
                                    aclient->key, aclient->key_len,
                                    aclient->iv, aclient->iv_len)) {
@@ -423,7 +435,10 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
 
   /* Prepare response */
   melo_rtsp_add_header (client, "Audio-Jack-Status", "connected; type=analog");
-  transport = g_strdup_printf ("%s;server_port=%d;", header, aclient->port);
+  transport = g_strdup_printf ("RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;"
+                               "control_port=%d;timing_port=%d;server_port=%d;",
+                               aclient->control_port, aclient->timing_port,
+                               aclient->port);
   melo_rtsp_add_header (client, "Transport", transport);
   melo_rtsp_add_header (client, "Session", "1");
   g_free (transport);
@@ -808,6 +823,9 @@ melo_airplay_close_handler (MeloRTSPClient *client, gpointer user_data,
   if (aclient->key)
     g_slice_free1 (aclient->key_len, aclient->key);
   g_free (aclient->iv);
+
+  /* Free client IP */
+  g_free (aclient->client_ip);
 
   /* Free format */
   g_free (aclient->format);

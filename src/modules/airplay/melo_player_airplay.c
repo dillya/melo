@@ -331,7 +331,9 @@ melo_player_airplay_parse_format (MeloPlayerAirplayPrivate *priv,
 
 gboolean
 melo_player_airplay_setup (MeloPlayerAirplay *pair,
-                           MeloAirplayTransport transport, guint *port,
+                           MeloAirplayTransport transport,
+                           const gchar *client_ip, guint *port,
+                           guint *control_port, guint *timing_port,
                            MeloAirplayCodec codec, const gchar *format,
                            const guchar *key, gsize key_len,
                            const guchar *iv, gsize iv_len)
@@ -426,7 +428,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   gst_object_unref (bus);
 
   /* Start the pipeline */
-  while (gst_element_set_state (priv->pipeline, GST_STATE_READY) ==
+  while (gst_element_set_state (src, GST_STATE_READY) ==
                                                      GST_STATE_CHANGE_FAILURE) {
     /* Incremnent port until we found a free port */
     *port += 2;

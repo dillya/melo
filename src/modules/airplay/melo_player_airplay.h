@@ -63,7 +63,9 @@ GType melo_player_airplay_get_type (void);
 
 gboolean melo_player_airplay_setup (MeloPlayerAirplay *pair,
                                     MeloAirplayTransport transport,
-                                    guint *port, MeloAirplayCodec codec,
+                                    const gchar *client_ip, guint *port,
+                                    guint *control_port, guint *timing_port,
+                                    MeloAirplayCodec codec,
                                     const gchar *format,
                                     const guchar *key, gsize key_len,
                                     const guchar *iv, gsize iv_len);
