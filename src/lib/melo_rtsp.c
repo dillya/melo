@@ -56,6 +56,7 @@ struct _MeloRTSPClient {
   guint server_port;
   /* Client address */
   gchar *hostname;
+  gchar *ip_string;
   guchar ip[4];
   guint port;
   /* Input buffer */
@@ -287,6 +288,9 @@ melo_rtsp_client_close (MeloRTSPClient *client)
 
   /* Free client hostname */
   g_free (client->hostname);
+
+  /* Free client IP */
+  g_free (client->ip_string);
 
   /* Free client */
   g_slice_free (MeloRTSPClient, client);
@@ -535,8 +539,8 @@ close:
 }
 
 static gboolean
-melo_rtsp_get_address (GSocketAddress *addr, guchar *ip, guint *port,
-                       gchar **name)
+melo_rtsp_get_address (GSocketAddress *addr, guchar *ip, gchar **ip_string,
+                       guint *port, gchar **name)
 {
   GInetSocketAddress *inet_sock_addr;
   GInetAddress *inet_addr;
@@ -554,6 +558,10 @@ melo_rtsp_get_address (GSocketAddress *addr, guchar *ip, guint *port,
   inet_addr = g_inet_socket_address_get_address (inet_sock_addr);
   len = g_inet_address_get_native_size (inet_addr);
   memcpy (ip, g_inet_address_to_bytes (inet_addr), len > 4 ? 4 : len);
+
+  /* Get IP string */
+  if (ip_string)
+    *ip_string = g_inet_address_to_string (inet_addr);
 
   /* Get port */
   *port = g_inet_socket_address_get_port (inet_sock_addr);
@@ -608,12 +616,14 @@ melo_rtsp_accept (GSocket *server_sock, GIOCondition condition, MeloRTSP *rtsp)
 
   /* Get server details */
   addr = g_socket_get_local_address (sock, NULL);
-  melo_rtsp_get_address (addr, client->server_ip, &client->server_port, NULL);
+  melo_rtsp_get_address (addr, client->server_ip, NULL, &client->server_port,
+                         NULL);
   g_object_unref (addr);
 
   /* Get client details */
   addr = g_socket_get_remote_address (sock, NULL);
-  melo_rtsp_get_address (addr, client->ip, &client->port, &client->hostname);
+  melo_rtsp_get_address (addr, client->ip, &client->ip_string, &client->port,
+                         &client->hostname);
   g_object_unref (addr);
 
   /* Allocate buffer */
@@ -716,6 +726,12 @@ melo_rtsp_get_ip (MeloRTSPClient *client)
 {
   g_return_val_if_fail (client, NULL);
   return client->ip;
+}
+
+const gchar *melo_rtsp_get_ip_string (MeloRTSPClient *client)
+{
+  g_return_val_if_fail (client, NULL);
+  return client->ip_string;
 }
 
 guint
