@@ -8,6 +8,7 @@ libmelo_airplay_la_SOURCES = \
 	melo_config_airplay.c \
 	melo_player_airplay.c \
 	gstrtpraopdepay.c \
+	gstrtpraop.c \
 	melo_airplay.c
 
 libmelo_airplay_la_CFLAGS = \
@@ -24,6 +25,7 @@ libmelo_airplay_la_LIBADD = \
 
 noinst_HEADERS = \
 	melo_airplay.h \
+	gstrtpraop.h \
 	gstrtpraopdepay.h \
 	melo_player_airplay.h \
 	melo_config_airplay.h
