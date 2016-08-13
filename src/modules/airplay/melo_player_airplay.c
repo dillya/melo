@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include <gst/gst.h>
+#include "gstrtpraop.h"
 #include "gstrtpraopdepay.h"
 
 #include "melo_player_airplay.h"
@@ -88,6 +89,7 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
   MeloPlayerClass *pclass = MELO_PLAYER_CLASS (klass);
 
   /* Register RTP RAOP depayloader */
+  gst_rtp_raop_plugin_init (NULL);
   gst_rtp_raop_depay_plugin_init (NULL);
 
   /* Control */
@@ -369,20 +371,21 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
 
   /* Create source */
   if (transport == MELO_AIRPLAY_TRANSPORT_UDP) {
-    GstElement *src_caps, *rtp, *rtp_caps, *depay, *dec;
+    GstElement *src_caps, *raop, *rtp, *rtp_caps, *depay, *dec;
     gchar *b_key, *b_iv;
     GstCaps *caps;
 
     /* Add an UDP source and a RTP jitter buffer to pipeline */
     src = gst_element_factory_make ("udpsrc", NULL);
     src_caps = gst_element_factory_make ("capsfilter", NULL);
+    raop = gst_element_factory_make ("rtpraop", NULL);
     rtp = gst_element_factory_make ("rtpjitterbuffer", NULL);
     rtp_caps = gst_element_factory_make ("capsfilter", NULL);
     depay = gst_element_factory_make ("rtpraopdepay", NULL);
     dec = gst_element_factory_make ("avdec_alac", NULL);
     sink = gst_element_factory_make ("autoaudiosink", NULL);
-    gst_bin_add_many (GST_BIN (priv->pipeline), src, src_caps, rtp, rtp_caps,
-                      depay, dec, sink, NULL);
+    gst_bin_add_many (GST_BIN (priv->pipeline), src, src_caps, raop, rtp,
+                      rtp_caps, depay, dec, sink, NULL);
 
     /* Save RAOP depay element */
     priv->raop_depay = depay;
@@ -417,8 +420,64 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
       g_object_set (G_OBJECT (rtp), "latency", priv->latency, NULL);
 
     /* Link all elements */
-    gst_element_link_many (src, src_caps, rtp, rtp_caps, depay, dec, sink,
+    gst_element_link_many (src, src_caps, raop, rtp, rtp_caps, depay, dec, sink,
                            NULL);
+
+    /* Add sync / retransmit support to pipeline */
+    if (*control_port) {
+      GstElement *ctrl_src, *ctrl_sink;
+      GstPad *raop_pad, *udp_pad;
+      guint ctrl_port = *control_port;
+      guint max_control_port = *control_port + 100;
+      GSocket *sock;
+
+      /* Enable retransmit events */
+      g_object_set (G_OBJECT (rtp), "do-retransmission", TRUE, NULL);
+
+      /* Create and add control UDP source and sink */
+      ctrl_src = gst_element_factory_make ("udpsrc", NULL);
+      ctrl_sink = gst_element_factory_make ("udpsink", NULL);
+      gst_bin_add_many (GST_BIN (priv->pipeline), ctrl_src, ctrl_sink, NULL);
+
+      /* Set control port */
+      g_object_set (ctrl_src, "port", *control_port, "reuse", FALSE, NULL);
+      while (gst_element_set_state (ctrl_src, GST_STATE_READY) ==
+                                                     GST_STATE_CHANGE_FAILURE) {
+        /* Retry until a free port is available */
+        *control_port += 2;
+        if (*control_port > max_control_port)
+          return FALSE;
+
+        /* Update UDP source port */
+        g_object_set (ctrl_src, "port", *control_port, NULL);
+      }
+
+      /* Connect UDP source to ROAP control sink */
+      udp_pad = gst_element_get_static_pad (ctrl_src, "src");
+      raop_pad = gst_element_get_request_pad (raop, "sink_ctrl");
+      gst_pad_link (udp_pad, raop_pad);
+      gst_object_unref (raop_pad);
+      gst_object_unref (udp_pad);
+
+      /* Use socket from UDP source on UDP sink in order to get retransmit
+       * replies on UDP source.
+       */
+      g_object_get (ctrl_src, "used-socket", &sock, NULL);
+      g_object_set (ctrl_sink, "socket", sock, NULL);
+      g_object_set (ctrl_sink, "port", ctrl_port, "host", client_ip, NULL);
+
+      /* Disable async state and synchronization since we only send retransmit
+       * requests on this UDP sink, so no need for synchronization..
+       */
+      g_object_set (ctrl_sink, "async", FALSE, "sync", FALSE, NULL);
+
+      /* Connect RAOP control source to UDP sink */
+      raop_pad = gst_element_get_request_pad (raop, "src_ctrl");
+      udp_pad = gst_element_get_static_pad (ctrl_sink, "sink");
+      gst_pad_link (raop_pad, udp_pad);
+      gst_object_unref (raop_pad);
+      gst_object_unref (udp_pad);
+    }
   } else {
     /* Add a TCP server and a fake sink */
     src = gst_element_factory_make ("tcpserversrc", NULL);
