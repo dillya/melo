@@ -54,6 +54,13 @@ static MeloConfigItem melo_config_advanced[] = {
     .def._integer = 200,
   },
   {
+    .id = "rtx_delay",
+    .name = "Minimal delay before retransmit request (in us)",
+    .type = MELO_CONFIG_TYPE_INTEGER,
+    .element = MELO_CONFIG_ELEMENT_NUMBER,
+    .def._integer = 10000,
+  },
+  {
     .id = "hack_sync",
     .name = "[HACK] Disable sync on audio output sink",
     .type = MELO_CONFIG_TYPE_BOOLEAN,
@@ -117,4 +124,9 @@ melo_config_airplay_update_advanced (MeloConfigContext *context,
   if (melo_config_get_updated_integer (context, "latency", &new, &old) &&
       new != old)
     melo_airplay_set_latency (air, new);
+
+  /* Update retransmit delay */
+  if (melo_config_get_updated_integer (context, "rtx_delay", &new, &old) &&
+      new != old)
+    melo_airplay_set_rtx (air, new);
 }
