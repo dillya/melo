@@ -432,7 +432,11 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   aclient->client_timing_port = aclient->timing_port;
 
   /* Generate a unique ID for its player */
-  id = g_strdup_printf ("airplay_%s", melo_rtsp_get_header (client, "DACP-ID"));
+  id = g_strdup_printf ("airplay_%s",
+                        melo_rtsp_get_header (client, "Client-Instance"));
+  if (!id)
+    id = g_strdup_printf ("airplay_%s",
+                          melo_rtsp_get_header (client, "DACP-ID"));
 
   /* Create a new player */
   aclient->player = melo_player_new (MELO_TYPE_PLAYER_AIRPLAY, id);
@@ -458,13 +462,13 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   /* Setup player */
   aclient->port = 6000;
   if (!melo_player_airplay_setup (MELO_PLAYER_AIRPLAY (aclient->player),
-                                   aclient->transport, aclient->client_ip,
-                                   &aclient->port,
-                                   &aclient->control_port,
-                                   &aclient->timing_port,
-                                   aclient->codec, aclient->format,
-                                   aclient->key, aclient->key_len,
-                                   aclient->iv, aclient->iv_len)) {
+                                  aclient->transport, aclient->client_ip,
+                                  &aclient->port,
+                                  &aclient->control_port,
+                                  &aclient->timing_port,
+                                  aclient->codec, aclient->format,
+                                  aclient->key, aclient->key_len,
+                                  aclient->iv, aclient->iv_len)) {
     melo_rtsp_init_response (client, 500, "Internal error");
     return FALSE;
   }
