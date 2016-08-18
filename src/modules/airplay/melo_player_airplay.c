@@ -31,6 +31,7 @@
 #define MIN_LATENCY 100
 #define DEFAULT_LATENCY 1000
 #define DEFAULT_RTX_DELAY 10000
+#define DEFAULT_VOLUME 1.0
 
 static gboolean melo_player_airplay_play (MeloPlayer *player, const gchar *path,
                                           const gchar *name, MeloTags *tags,
@@ -47,10 +48,12 @@ struct _MeloPlayerAirplayPrivate {
   GMutex mutex;
   MeloPlayerStatus *status;
   guint32 start_rtptime;
+  gdouble volume;
 
   /* Gstreamer pipeline */
   GstElement *pipeline;
   GstElement *raop_depay;
+  GstElement *vol;
   guint bus_watch_id;
 
   /* Gstreamer pipeline tunning */
@@ -121,6 +124,7 @@ melo_player_airplay_init (MeloPlayerAirplay *self)
   self->priv = priv;
   priv->latency = DEFAULT_LATENCY;
   priv->rtx_delay = DEFAULT_RTX_DELAY;
+  priv->volume = DEFAULT_VOLUME;
 
   /* Init player mutex */
   g_mutex_init (&priv->mutex);
@@ -356,7 +360,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
   guint max_port = *port + 100;
-  GstElement *src, *sink;
+  GstElement *src, *vol, *sink;
   GstState next_state = GST_STATE_READY;
   const gchar *id;
   gchar *pname;
@@ -390,9 +394,10 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     rtp_caps = gst_element_factory_make ("capsfilter", NULL);
     depay = gst_element_factory_make ("rtpraopdepay", NULL);
     dec = gst_element_factory_make ("avdec_alac", NULL);
+    vol = gst_element_factory_make ("volume", NULL);
     sink = gst_element_factory_make ("autoaudiosink", NULL);
     gst_bin_add_many (GST_BIN (priv->pipeline), src, src_caps, raop, rtp,
-                      rtp_caps, depay, dec, sink, NULL);
+                      rtp_caps, depay, dec, vol, sink, NULL);
 
     /* Save RAOP depay element */
     priv->raop_depay = depay;
@@ -431,8 +436,8 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
       g_object_set (G_OBJECT (rtp), "latency", priv->latency, NULL);
 
     /* Link all elements */
-    gst_element_link_many (src, src_caps, raop, rtp, rtp_caps, depay, dec, sink,
-                           NULL);
+    gst_element_link_many (src, src_caps, raop, rtp, rtp_caps, depay, dec, vol,
+                           sink, NULL);
 
     /* Add sync / retransmit support to pipeline */
     if (*control_port) {
@@ -503,9 +508,10 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     raop = gst_element_factory_make ("tcpraop", NULL);
     depay = gst_element_factory_make ("rtpraopdepay", NULL);
     dec = gst_element_factory_make ("avdec_alac", NULL);
+    vol = gst_element_factory_make ("volume", NULL);
     sink = gst_element_factory_make ("autoaudiosink", NULL);
     gst_bin_add_many (GST_BIN (priv->pipeline), src, rtp_caps, raop, depay, dec,
-                      sink, NULL);
+                      vol, sink, NULL);
 
     /* Save RAOP depay element */
     priv->raop_depay = depay;
@@ -530,8 +536,11 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     next_state = GST_STATE_PLAYING;
 
     /* Link all elements */
-    gst_element_link_many (src, rtp_caps, raop, depay, dec, sink, NULL);
+    gst_element_link_many (src, rtp_caps, raop, depay, dec, vol, sink, NULL);
   }
+
+  /* Save elements */
+  priv->vol = vol;
 
   /* Set server port */
   g_object_set (src, "port", *port, NULL);
@@ -620,7 +629,27 @@ melo_player_airplay_teardown (MeloPlayerAirplay *pair)
 gboolean
 melo_player_airplay_set_volume (MeloPlayerAirplay *pair, gdouble volume)
 {
+  MeloPlayerAirplayPrivate *priv = pair->priv;
+
+  /* Set volume */
+  if (volume > -144.0)
+    priv->volume = (volume + 30.0) / 30.0;
+  else
+    priv->volume = 0.0;
+
+  /* Update volume in pipeline */
+  if (priv->vol)
+    g_object_set (G_OBJECT (priv->vol), "volume", priv->volume, NULL);
+
   return TRUE;
+}
+
+gdouble
+melo_player_airplay_get_volume (MeloPlayerAirplay *pair)
+{
+  if (pair->priv->volume == 0.0)
+    return -144.0;
+  return (pair->priv->volume - 1.0) * 30.0;
 }
 
 gboolean

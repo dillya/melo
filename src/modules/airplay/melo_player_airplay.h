@@ -80,6 +80,8 @@ gboolean melo_player_airplay_set_progress (MeloPlayerAirplay *pair,
 gboolean melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
                                         const gchar *cover_type);
 
+gdouble melo_player_airplay_get_volume (MeloPlayerAirplay *pair);
+
 void melo_player_airplay_set_latency (MeloPlayerAirplay *pair, guint latency);
 void melo_player_airplay_set_rtx (MeloPlayerAirplay *pair, gint rtx_delay);
 void melo_player_airplay_disable_sync (MeloPlayerAirplay *pair, gboolean sync);

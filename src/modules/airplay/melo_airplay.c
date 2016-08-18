@@ -584,6 +584,7 @@ melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
       }
       break;
     case MELO_RTSP_METHOD_SET_PARAMETER:
+    case MELO_RTSP_METHOD_GET_PARAMETER:
       /* Save content type */
       g_free (aclient->type);
       aclient->type = g_strdup (melo_rtsp_get_header (client, "Content-Type"));
@@ -809,6 +810,35 @@ melo_rtsp_read_image (MeloRTSPClient *client, MeloAirplayClient *aclient,
   return TRUE;
 }
 
+static gboolean
+melo_rtsp_write_params (MeloRTSPClient *client, MeloAirplayClient *aclient,
+                        guchar *buffer, gsize size)
+{
+  MeloPlayerAirplay *pair = MELO_PLAYER_AIRPLAY (aclient->player);
+  gchar *value;
+
+  /* Check buffer content */
+  if (size > 6 && !strncmp (buffer, "volume", 6)) {
+    gdouble volume;
+    gchar *packet;
+    gsize len;
+
+    /* Get volume */
+    volume = melo_player_airplay_get_volume (pair);
+
+    /* Add headers for content type and length */
+    melo_rtsp_add_header (client, "Content-Type", "text/parameters");
+
+    /* Create and add response body */
+    packet = g_strdup_printf ("volume: %.6f\r\n", volume);
+    len = strlen (packet);
+    melo_rtsp_set_packet (client, packet, len, (GDestroyNotify) g_free);
+  } else
+    return FALSE;
+
+  return TRUE;
+}
+
 static void
 melo_airplay_read_handler (MeloRTSPClient *client, guchar *buffer, gsize size,
                            gboolean last, gpointer user_data, gpointer *data)
@@ -838,6 +868,16 @@ melo_airplay_read_handler (MeloRTSPClient *client, guchar *buffer, gsize size,
       else if (g_str_has_prefix (aclient->type, "image/"))
         /* Get cover art */
         melo_rtsp_read_image (client, aclient, buffer, size, last);
+
+      break;
+    case MELO_RTSP_METHOD_GET_PARAMETER:
+      /* Get content type */
+      if (!aclient->type)
+        break;
+
+      /* Get volume */
+      if (!g_strcmp0 (aclient->type, "text/parameters"))
+        melo_rtsp_write_params (client, aclient, buffer, size);
 
       break;
     default:
