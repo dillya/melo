@@ -311,7 +311,7 @@ gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
   /* Get payload buffer */
   in_buf = gst_rtp_buffer_get_payload_buffer (&rtp);
 
-  /* Descrypt when a key is available */
+  /* Decrypt when a key is available */
   if (priv->has_key) {
     GstMapInfo in, out;
     guint8 *in_data, *out_data;
@@ -337,14 +337,16 @@ gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
     gst_buffer_unmap (in_buf, &in);
     gst_buffer_unmap (out_buf, &out);
   } else
-    out_buf = in_buf;
+    out_buf = gst_buffer_ref (in_buf);
 
   /* Unmap RTP buffer */
   gst_rtp_buffer_unmap (&rtp);
 
+  /* Free RTP buffer */
+  gst_buffer_unref (in_buf);
+
   return out_buf;
 }
-
 
 gboolean
 gst_rtp_raop_depay_query_rtptime (GstRtpRaopDepay * rtpraopdepay,
