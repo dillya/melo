@@ -510,7 +510,7 @@ melo_rtsp_handle_client (GSocket *sock, GIOCondition condition,
 
         /* Free packet */
         if (client->packet_free)
-          client->packet_free (client->packet_free);
+          client->packet_free (client->packet);
         client->packet_free = NULL;
         client->packet_len = 0;
         client->packet = NULL;
@@ -818,11 +818,17 @@ gboolean
 melo_rtsp_set_packet (MeloRTSPClient *client, guchar *buffer, gsize len,
                       GDestroyNotify free)
 {
+  gchar str[10];
+
   g_return_val_if_fail (client, FALSE);
 
   client->packet = buffer;
   client->packet_len = len;
   client->packet_free = free;
+
+  /* Add content length */
+  g_snprintf (str, sizeof(str), "%u", len);
+  melo_rtsp_add_header (client, "Content-Length", str);
 
   return TRUE;
 }
