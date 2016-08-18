@@ -475,10 +475,14 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
 
   /* Prepare response */
   melo_rtsp_add_header (client, "Audio-Jack-Status", "connected; type=analog");
-  transport = g_strdup_printf ("RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;"
-                               "control_port=%d;timing_port=%d;server_port=%d;",
-                               aclient->control_port, aclient->timing_port,
-                               aclient->port);
+  if (aclient->transport == MELO_AIRPLAY_TRANSPORT_TCP)
+    transport = g_strdup_printf ("RTP/AVP/TCP;unicast;interleaved=0-1;"
+                                 "mode=record;server_port=%d;", aclient->port);
+  else
+    transport = g_strdup_printf ("RTP/AVP/UDP;unicast;interleaved=0-1;"
+                                 "mode=record;control_port=%d;timing_port=%d;"
+                                 "server_port=%d;", aclient->control_port,
+                                 aclient->timing_port, aclient->port);
   melo_rtsp_add_header (client, "Transport", transport);
   melo_rtsp_add_header (client, "Session", "1");
   g_free (transport);

@@ -50,6 +50,7 @@ struct _GstRtpRaopDepayPrivate {
   AES_KEY key;
   guchar iv[16];
   guint32 last_rtptime;
+  gint sample_size;
 };
 
 #define gst_rtp_raop_depay_parent_class parent_class
@@ -169,6 +170,9 @@ gst_rtp_raop_depay_parse_config (GstRtpRaopDepay * rtpraopdepay,
   *((guint32 *) &cfg[28]) = g_ntohl (values[10]);
   *((guint32 *) &cfg[32]) = g_ntohl (values[11]);
 
+  /* Keep sample size */
+  rtpraopdepay->priv->sample_size = cfg[17];
+
   /* Unamp buffer */
   gst_buffer_unmap (buf, &info);
 
@@ -285,6 +289,43 @@ no_clock:
   return FALSE;
 }
 
+static gboolean
+gst_rtp_raop_depay_fix_frame (GstRtpRaopDepay * rtpraopdepay, guint8 * data,
+    gsize len)
+{
+  guint32 size;
+
+  /* This code is to check and fix stream from Pulseaudio RAOP module which
+   * doesn't send the ALAC end tag waited by some ALAC decoders.
+   */
+
+  /* Can only chech when size and uncompressed are set */
+  if (len < 7  || (data[2] & 0x12) != 0x12)
+    return FALSE;
+
+  /* Get samples count */
+  size = data[3] << 23 | data[4] << 15 | data[5] << 7 | data[6] >> 1;
+
+  /* Get bytes count:
+   *  size * channel
+   *  size * sample size
+   */
+  size *= (data[0] & 0xE0) == 0x20 ? 2 : 1;
+  size *= rtpraopdepay->priv->sample_size / 8;
+
+  /* Not enough size in buffer */
+  if (size + 7 > len) {
+    GST_ERROR_OBJECT (rtpraopdepay, "Cannot fix bad ALAC frame...");
+    return FALSE;
+   }
+
+  /* Fix frame (we allocate 1 byte more than len) */
+  data[size + 6] |= 0x01;
+  data[size + 7] = 0xC0;
+
+  return TRUE;
+}
+
 static GstBuffer *
 gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
 {
@@ -323,7 +364,7 @@ gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
     in_data = in.data;
 
     /* Allocate a new buffer */
-    out_buf = gst_buffer_new_allocate (NULL, payload_len, NULL);
+    out_buf = gst_buffer_new_allocate (NULL, payload_len + 1, NULL);
     gst_buffer_map (out_buf, &out, GST_MAP_WRITE);
     out_data = out.data;
 
@@ -332,6 +373,10 @@ gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
     memcpy (iv, priv->iv, sizeof (iv));
     AES_cbc_encrypt (in_data, out_data, aes_len, &priv->key, iv, AES_DECRYPT);
     memcpy (out_data + aes_len, in_data + aes_len, payload_len - aes_len);
+
+    /* Check and fix ALAC frame (Pulseaudio HACK) */
+    if (!gst_rtp_raop_depay_fix_frame (rtpraopdepay, out_data, payload_len))
+      gst_buffer_set_size (out_buf, payload_len);
 
     /* Unmap buffers */
     gst_buffer_unmap (in_buf, &in);

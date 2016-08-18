@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include <gst/gst.h>
+#include "gsttcpraop.h"
 #include "gstrtpraop.h"
 #include "gstrtpraopdepay.h"
 
@@ -89,6 +90,9 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   MeloPlayerClass *pclass = MELO_PLAYER_CLASS (klass);
+
+  /* Register TCP RAOP depayloader */
+  gst_tcp_raop_plugin_init (NULL);
 
   /* Register RTP RAOP depayloader */
   gst_rtp_raop_plugin_init (NULL);
@@ -353,6 +357,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   MeloPlayerAirplayPrivate *priv = pair->priv;
   guint max_port = *port + 100;
   GstElement *src, *sink;
+  GstState next_state = GST_STATE_READY;
   const gchar *id;
   gchar *pname;
   GstBus *bus;
@@ -375,7 +380,6 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   /* Create source */
   if (transport == MELO_AIRPLAY_TRANSPORT_UDP) {
     GstElement *src_caps, *raop, *rtp, *rtp_caps, *depay, *dec;
-    gchar *b_key, *b_iv;
     GstCaps *caps;
 
     /* Add an UDP source and a RTP jitter buffer to pipeline */
@@ -415,10 +419,14 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
       gst_rtp_raop_depay_set_key (GST_RTP_RAOP_DEPAY (depay), key, key_len,
                                   iv, iv_len);
 
+    /* Force UDP source to use a new port */
+    g_object_set (src, "reuse", FALSE, NULL);
+
     /* Disable synchronization on sink */
     if (priv->disable_sync)
       g_object_set (G_OBJECT (sink), "sync", FALSE, NULL);
 
+    /* Set latency in jitter buffer */
     if (priv->latency)
       g_object_set (G_OBJECT (rtp), "latency", priv->latency, NULL);
 
@@ -486,17 +494,47 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
       gst_object_unref (udp_pad);
     }
   } else {
-    /* Add a TCP server and a fake sink */
-    src = gst_element_factory_make ("tcpserversrc", NULL);
-    sink = gst_element_factory_make ("fakesink", NULL);
+    GstElement *rtp_caps, *raop, *depay, *dec;
+    GstCaps *caps;
 
-    /* Add and link elements */
-    gst_bin_add_many (GST_BIN (priv->pipeline), src, sink, NULL);
-    gst_element_link (src, sink);
+    /* Create pipeline for TCP streaming */
+    src = gst_element_factory_make ("tcpserversrc", NULL);
+    rtp_caps = gst_element_factory_make ("capsfilter", NULL);
+    raop = gst_element_factory_make ("tcpraop", NULL);
+    depay = gst_element_factory_make ("rtpraopdepay", NULL);
+    dec = gst_element_factory_make ("avdec_alac", NULL);
+    sink = gst_element_factory_make ("autoaudiosink", NULL);
+    gst_bin_add_many (GST_BIN (priv->pipeline), src, rtp_caps, raop, depay, dec,
+                      sink, NULL);
+
+    /* Save RAOP depay element */
+    priv->raop_depay = depay;
+
+    /* Set caps for TCP source -> TCP RAOP depayloader link */
+    caps = gst_caps_new_simple ("application/x-rtp-stream",
+                                "clock-rate", G_TYPE_INT, priv->samplerate,
+                                "config", G_TYPE_STRING, format,
+                                NULL);
+    g_object_set (G_OBJECT (rtp_caps), "caps", caps, NULL);
+    gst_caps_unref (caps);
+
+    /* Set keys into TCP RAOP decryptor */
+    if (key)
+      gst_rtp_raop_depay_set_key (GST_RTP_RAOP_DEPAY (depay), key, key_len,
+                                  iv, iv_len);
+
+    /* Listen on all interfaces */
+    g_object_set (src, "host", "0.0.0.0", NULL);
+
+    /* To start listening, state muste be set to playing */
+    next_state = GST_STATE_PLAYING;
+
+    /* Link all elements */
+    gst_element_link_many (src, rtp_caps, raop, depay, dec, sink, NULL);
   }
 
   /* Set server port */
-  g_object_set (src, "port", *port, "reuse", FALSE, NULL);
+  g_object_set (src, "port", *port, NULL);
 
   /* Add a message handler */
   bus = gst_pipeline_get_bus (GST_PIPELINE (priv->pipeline));
@@ -504,8 +542,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   gst_object_unref (bus);
 
   /* Start the pipeline */
-  while (gst_element_set_state (src, GST_STATE_READY) ==
-                                                     GST_STATE_CHANGE_FAILURE) {
+  while (gst_element_set_state (src, next_state) == GST_STATE_CHANGE_FAILURE) {
     /* Incremnent port until we found a free port */
     *port += 2;
     if (*port > max_port)
