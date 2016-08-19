@@ -65,6 +65,8 @@ static void melo_airplay_close_handler (MeloRTSPClient *client,
                                         gpointer user_data, gpointer *data);
 
 typedef struct {
+  /* Authentication */
+  gboolean is_auth;
   /* Content type */
   gchar *type;
   /* Cover art */
@@ -538,12 +540,14 @@ melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
   g_mutex_lock (&priv->mutex);
 
   /* Prepare response */
-  if (priv->password && *priv->password != '\0' &&
+  if (!aclient->is_auth && priv->password && *priv->password != '\0' &&
       !melo_rtsp_digest_auth_check (client, NULL, priv->password, priv->name)) {
     melo_rtsp_digest_auth_response (client, priv->name, NULL, 0);
     method = -1;
-  } else
+  } else {
+    aclient->is_auth = TRUE;
     melo_rtsp_init_response (client, 200, "OK");
+  }
 
   /* Unlock mutex */
   g_mutex_unlock (&priv->mutex);
