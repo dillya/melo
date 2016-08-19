@@ -923,6 +923,7 @@ melo_rtsp_digest_auth_check (MeloRTSPClient *client, const gchar *username,
 {
   GChecksum *checksum;
   gchar *ha1, *ha2, *response;
+  gchar *ha1_up, *ha2_up, *response_up;
   gchar *uname = NULL;
   gchar *resp = NULL;
   const gchar *auth;
@@ -952,7 +953,8 @@ melo_rtsp_digest_auth_check (MeloRTSPClient *client, const gchar *username,
   g_checksum_update (checksum, (guchar *) realm, strlen (realm));
   g_checksum_update (checksum, (guchar *) ":", 1);
   g_checksum_update (checksum, (guchar *) password, strlen (password));
-  ha1 = g_ascii_strup (g_checksum_get_string (checksum), -1);
+  ha1 = g_strdup (g_checksum_get_string (checksum));
+  ha1_up = g_ascii_strup (g_checksum_get_string (checksum), -1);
   g_checksum_free (checksum);
   g_free (uname);
 
@@ -962,7 +964,8 @@ melo_rtsp_digest_auth_check (MeloRTSPClient *client, const gchar *username,
                      strlen (client->method_name));
   g_checksum_update (checksum, (guchar *) ":", 1);
   g_checksum_update (checksum, (guchar *) client->url, strlen (client->url));
-  ha2 = g_ascii_strup (g_checksum_get_string (checksum), -1);
+  ha2 = g_strdup (g_checksum_get_string (checksum));
+  ha2_up = g_ascii_strup (g_checksum_get_string (checksum), -1);
   g_checksum_free (checksum);
 
   /* Calculate response */
@@ -973,16 +976,30 @@ melo_rtsp_digest_auth_check (MeloRTSPClient *client, const gchar *username,
                      strlen (client->nonce));
   g_checksum_update (checksum, (guchar *) ":", 1);
   g_checksum_update (checksum, (guchar *) ha2, strlen (ha2));
-  response = g_ascii_strup (g_checksum_get_string (checksum), -1);
+  response = g_strdup (g_checksum_get_string (checksum));
   g_checksum_free (checksum);
   g_free (ha1);
   g_free (ha2);
 
+  /* Calculate response uppercase */
+  checksum = g_checksum_new (G_CHECKSUM_MD5);
+  g_checksum_update (checksum, (guchar *) ha1_up, strlen (ha1_up));
+  g_checksum_update (checksum, (guchar *) ":", 1);
+  g_checksum_update (checksum, (guchar *) client->nonce,
+                     strlen (client->nonce));
+  g_checksum_update (checksum, (guchar *) ":", 1);
+  g_checksum_update (checksum, (guchar *) ha2_up, strlen (ha2_up));
+  response_up = g_ascii_strup (g_checksum_get_string (checksum), -1);
+  g_checksum_free (checksum);
+  g_free (ha1_up);
+  g_free (ha2_up);
+
   /* Check response */
   resp = melo_rtsp_digest_get_sub_value (auth, "response");
-  if (resp && !g_strcmp0 (resp, response))
+  if (resp && (!g_strcmp0 (resp, response) || !g_strcmp0 (resp, response_up)))
     ret = TRUE;
   g_free (response);
+  g_free (response_up);
   g_free (resp);
 
   return ret;
@@ -993,6 +1010,7 @@ melo_rtsp_digest_auth_response (MeloRTSPClient *client, const gchar *realm,
                                 const gchar *opaque, gint signal_stale)
 {
   gchar buffer[256];
+  gsize len;
   gint i;
 
   g_return_val_if_fail (client, FALSE);
@@ -1010,9 +1028,17 @@ melo_rtsp_digest_auth_response (MeloRTSPClient *client, const gchar *realm,
 
   /* Create response */
   melo_rtsp_init_response (client, 401, "Unauthorized");
-  g_snprintf (buffer, 255, "Digest realm=\"%s\",nonce=\"%s\",opaque=\"%s\"%s",
-              realm, client->nonce, opaque,
-              signal_stale ? ",stale=\"true\"" : "");
+  len = g_snprintf (buffer, 255, "Digest realm=\"%s\", nonce=\"%s\"",
+                    realm, client->nonce);
+
+  /* Add opaque if necessary */
+  if (opaque)
+    len += g_snprintf (buffer+len, 255-len, ", opaque=\"%s\"", opaque);
+
+  /* Add stale if necessary */
+  if (signal_stale)
+    len += g_snprintf (buffer+len, 255-len, ", stale=\"true\"");
+
   melo_rtsp_add_header (client, "WWW-Authenticate", buffer);
 
   return TRUE;

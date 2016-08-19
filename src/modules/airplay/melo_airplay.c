@@ -532,7 +532,7 @@ melo_airplay_request_handler (MeloRTSPClient *client, MeloRTSPMethod method,
   /* Prepare response */
   if (priv->password && *priv->password != '\0' &&
       !melo_rtsp_digest_auth_check (client, NULL, priv->password, priv->name)) {
-    melo_rtsp_digest_auth_response (client, priv->name, "", 0);
+    melo_rtsp_digest_auth_response (client, priv->name, NULL, 0);
     method = -1;
   } else
     melo_rtsp_init_response (client, 200, "OK");
