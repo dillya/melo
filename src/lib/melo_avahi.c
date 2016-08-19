@@ -215,10 +215,12 @@ melo_avahi_add (MeloAvahi *avahi, const gchar *name, const gchar *type,
 
 gboolean
 melo_avahi_update (MeloAvahi *avahi, const MeloAvahiService *service,
-                   const gchar *name, const gchar *type, gint port, ...)
+                   const gchar *name, const gchar *type, gint port,
+                   gboolean update_txt, ...)
 {
   MeloAvahiService *s = (MeloAvahiService *) service;
   MeloAvahiPrivate *priv = avahi->priv;
+  va_list va;
 
   /* No service */
   if (!s)
@@ -239,6 +241,14 @@ melo_avahi_update (MeloAvahi *avahi, const MeloAvahiService *service,
   /* Update port */
   if (port && port != s->port)
     s->port = port;
+
+  /* Update string list */
+  if (update_txt) {
+    avahi_string_list_free (s->txt);
+    va_start(va, update_txt);
+    s->txt = avahi_string_list_new_va (va);
+    va_end(va);
+  }
 
   /* Update group */
   return melo_avahi_update_group (melo_avahi_client->avahi_client, priv);

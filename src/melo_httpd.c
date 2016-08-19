@@ -189,7 +189,7 @@ melo_httpd_set_name (MeloHTTPD *httpd, const gchar *name)
 
   /* Update avahi name service */
   if (priv->avahi && priv->http_service)
-    melo_avahi_update (priv->avahi, priv->http_service, name, NULL, 0, NULL);
+    melo_avahi_update (priv->avahi, priv->http_service, name, NULL, 0, FALSE);
 }
 
 void

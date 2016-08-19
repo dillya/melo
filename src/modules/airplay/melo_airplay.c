@@ -202,7 +202,7 @@ melo_airplay_update_service (MeloAirplayPrivate *priv)
                                     "txtvers=1", NULL);
   else
     melo_avahi_update (priv->avahi, priv->service, sname, NULL, priv->port,
-                       NULL);
+                       FALSE);
 
   /* Free service name */
   g_free (sname);

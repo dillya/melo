@@ -65,7 +65,7 @@ const MeloAvahiService *melo_avahi_add (MeloAvahi *avahi, const gchar *name,
                                         const gchar *type, gint port, ...);
 gboolean melo_avahi_update (MeloAvahi *avahi, const MeloAvahiService *service,
                             const gchar *name, const gchar *type, gint port,
-                            ...);
+                            gboolean update_txt, ...);
 void melo_avahi_remove (MeloAvahi *avahi, const MeloAvahiService *service);
 
 G_END_DECLS
