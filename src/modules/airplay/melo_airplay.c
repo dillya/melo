@@ -182,9 +182,14 @@ melo_airplay_set_hardware_address (MeloAirplayPrivate *priv)
   return i ? TRUE : FALSE;
 }
 
+#define RAOP_SERVICE_TXT "tp=TCP,UDP", "sm=false", "sv=false", \
+    "ek=1", "et=0,1", "cn=0,1", "ch=2", "ss=16", "sr=44100", password, "vn=3", \
+    "md=0,1,2", "txtvers=1", NULL
+
 static void
 melo_airplay_update_service (MeloAirplayPrivate *priv)
 {
+  gchar *password;
   gchar *sname;
 
   /* Generate service name */
@@ -192,17 +197,16 @@ melo_airplay_update_service (MeloAirplayPrivate *priv)
                            priv->hw_addr[1], priv->hw_addr[2], priv->hw_addr[3],
                            priv->hw_addr[4], priv->hw_addr[5], priv->name);
 
+  /* Set password */
+  password = priv->password && *priv->password != '\0' ? "pw=true" : "pw=false";
+
   /* Add service */
   if (!priv->service)
     priv->service = melo_avahi_add (priv->avahi, sname, "_raop._tcp",
-                                    priv->port,
-                                    "tp=TCP,UDP", "sm=false", "sv=false",
-                                    "ek=1", "et=0,1", "cn=0,1", "ch=2", "ss=16",
-                                    "sr=44100", "pw=false", "vn=3", "md=0,1,2",
-                                    "txtvers=1", NULL);
+                                    priv->port, RAOP_SERVICE_TXT);
   else
     melo_avahi_update (priv->avahi, priv->service, sname, NULL, priv->port,
-                       FALSE);
+                       TRUE, RAOP_SERVICE_TXT);
 
   /* Free service name */
   g_free (sname);
@@ -322,6 +326,10 @@ melo_airplay_set_password (MeloAirplay *air, const gchar *password)
 
   /* Unlock mutex */
   g_mutex_unlock (&priv->mutex);
+
+  /* Update service */
+  if (priv->avahi)
+    melo_airplay_update_service (priv);
 }
 
 void
