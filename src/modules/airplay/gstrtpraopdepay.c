@@ -19,12 +19,16 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <stdio.h>
 #include <openssl/aes.h>
 
 #include <gst/rtp/gstrtpbuffer.h>
 
 #include <string.h>
 #include "gstrtpraopdepay.h"
+
+/* HACK: force to decode PCM as ALAC stream */
+#define DECODE_PCM_AS_ALAC
 
 GST_DEBUG_CATEGORY_STATIC (rtpraopdepay_debug);
 #define GST_CAT_DEFAULT (rtpraopdepay_debug)
@@ -34,7 +38,8 @@ GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("application/x-rtp, "
-        "clock-rate = (int) [1, MAX ]"
+        "clock-rate = (int) [1, MAX ], "
+        "encoding-name = (string) { L16, ALAC, AAC }"
     )
     );
 
@@ -42,7 +47,7 @@ static GstStaticPadTemplate gst_rtp_raop_depay_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("audio/x-alac")
+    GST_STATIC_CAPS ("audio/x-raw;audio/x-alac;audio/mpeg")
     );
 
 struct _GstRtpRaopDepayPrivate {
@@ -51,6 +56,12 @@ struct _GstRtpRaopDepayPrivate {
   guchar iv[16];
   guint32 last_rtptime;
   gint sample_size;
+};
+
+enum {
+  CODEC_PCM = 0,
+  CODEC_ALAC,
+  CODEC_AAC,
 };
 
 #define gst_rtp_raop_depay_parent_class parent_class
@@ -117,7 +128,18 @@ gst_rtp_raop_depay_finalize (GObject * object)
 }
 
 static gboolean
-gst_rtp_raop_depay_parse_config (GstRtpRaopDepay * rtpraopdepay,
+gst_rtp_raop_depay_parse_pcm_config (GstRtpRaopDepay * rtpraopdepay,
+    const gchar *config, guint *channels)
+{
+  GST_DEBUG_OBJECT (rtpraopdepay, "parse config: %s", config);
+
+  if (channels)
+    return sscanf (config, "%*d L%*d/%*d/%d", channels) == 1 ? TRUE : FALSE;
+  return TRUE;
+}
+
+static gboolean
+gst_rtp_raop_depay_parse_alac_config (GstRtpRaopDepay * rtpraopdepay,
     const gchar *config, GstBuffer * buf)
 {
   guint32 values[12];
@@ -206,8 +228,11 @@ gst_rtp_raop_depay_setcaps (GstRTPBaseDepayload * depayload, GstCaps * caps)
   GstRtpRaopDepay *rtpraopdepay;
   GstBuffer *config_buf;
   GstCaps *srccaps;
+  const gchar *encoding;
   const gchar *config;
   const gchar *b_key;
+  guint codec = CODEC_ALAC;
+  guint channels = 2;
   gint clock_rate;
   gboolean res;
 
@@ -246,31 +271,84 @@ gst_rtp_raop_depay_setcaps (GstRTPBaseDepayload * depayload, GstCaps * caps)
       return FALSE;
   }
 
+  /* Get encoding-name to get codec */
+  encoding = gst_structure_get_string (structure, "encoding-name");
+  if (encoding) {
+    if (!g_strcmp0 (encoding, "L16"))
+      codec = CODEC_PCM;
+    else if (!g_strcmp0 (encoding, "ALAC"))
+      codec = CODEC_ALAC;
+    else if (!g_strcmp0 (encoding, "AAC"))
+      codec = CODEC_AAC;
+  } else
+    GST_WARNING_OBJECT (rtpraopdepay, "No encoding-name provided!");
+
   /* Get config string */
   config = gst_structure_get_string (structure, "config");
   if (!config)
     goto no_config;
 
-  /* Allocate a new buffer for decoder configuration */
-  config_buf = gst_buffer_new_allocate (NULL, 36, NULL);
-  if (!config_buf)
-    goto failed_config_buf;
+  switch (codec) {
+    case CODEC_PCM:
+#ifndef DECODE_PCM_AS_ALAC
+      /* Parse configuration */
+      gst_rtp_raop_depay_parse_pcm_config (rtpraopdepay, config, &channels);
 
-  /* Parse configuration */
-  if (!gst_rtp_raop_depay_parse_config (rtpraopdepay, config, config_buf))
-    goto bad_config;
+      /* Set caps on src pad */
+      srccaps = gst_caps_new_simple ("audio/x-raw",
+                                     "format", G_TYPE_STRING, "S16BE",
+                                     "layout", G_TYPE_STRING, "interleaved",
+                                     "rate", G_TYPE_INT, clock_rate,
+                                     "channels", G_TYPE_INT, channels,
+                                     NULL);
+      res = gst_pad_set_caps (depayload->srcpad, srccaps);
+      gst_caps_unref (srccaps);
+
+      break;
+#else
+      /* On an iPod Touch with iOS 4, when a PCM stream is announced by the
+       * iPod, a standard ALAC stream is send to AirTunes server. However, we
+       * don't have configuration string, so we use a static configuration which
+       * is the standard configuration used for ALAC streams.
+       */
+      config = "96 352 0 16 40 10 14 2 255 0 0 44100";
+#endif
+    case CODEC_ALAC:
+      /* Allocate a new buffer for decoder configuration */
+      config_buf = gst_buffer_new_allocate (NULL, 36, NULL);
+      if (!config_buf)
+        goto failed_config_buf;
+
+      /* Parse configuration */
+      if (!gst_rtp_raop_depay_parse_alac_config (rtpraopdepay, config,
+              config_buf))
+        goto bad_config;
+
+      /* Set caps on src pad */
+      srccaps = gst_caps_new_simple ("audio/x-alac",
+                                     "codec_data", GST_TYPE_BUFFER, config_buf,
+                                     "rate", G_TYPE_INT, clock_rate,
+                                     NULL);
+      res = gst_pad_set_caps (depayload->srcpad, srccaps);
+      gst_caps_unref (srccaps);
+      gst_buffer_unref (config_buf);
+
+      break;
+    case CODEC_AAC:
+      /* Set caps on src pad */
+      srccaps = gst_caps_new_simple ("audio/mpeg",
+                                     "mpegversion", G_TYPE_STRING, "4",
+                                     "stream-format", G_TYPE_STRING, "raw",
+                                     "rate", G_TYPE_INT, clock_rate,
+                                     NULL);
+      res = gst_pad_set_caps (depayload->srcpad, srccaps);
+      gst_caps_unref (srccaps);
+
+      break;
+  }
 
   /* Configure element */
   depayload->clock_rate = clock_rate;
-
-  /* set caps on pad and on header */
-  srccaps = gst_caps_new_simple ("audio/x-alac",
-                                 "codec_data", GST_TYPE_BUFFER, config_buf,
-                                 "rate", G_TYPE_INT, clock_rate,
-                                 NULL);
-  res = gst_pad_set_caps (depayload->srcpad, srccaps);
-  gst_caps_unref (srccaps);
-  gst_buffer_unref (config_buf);
 
   return res;
 

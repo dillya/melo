@@ -19,6 +19,7 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include <gst/gst.h>
@@ -287,16 +288,19 @@ melo_player_airplay_get_status (MeloPlayer *player)
 
 static gboolean
 melo_player_airplay_parse_format (MeloPlayerAirplayPrivate *priv,
-                                  MeloAirplayCodec codec, const gchar *format)
+                                  MeloAirplayCodec codec, const gchar *format,
+                                  const gchar **encoding)
 {
+  gboolean ret = TRUE;
   guint tmp;
 
   switch (codec) {
     case MELO_AIRPLAY_CODEC_ALAC:
-      /* Get payload type */
-      tmp = strtoul (format, &format, 10);
+      /* Set encoding */
+      *encoding = "ALAC";
 
       /* Get ALAC parameters:
+       *  - Payload type
        *  - Max samples per frame (4 bytes)
        *  - Compatible version (1 byte)
        *  - Sample size (1 bytes)
@@ -309,32 +313,24 @@ melo_player_airplay_parse_format (MeloPlayerAirplayPrivate *priv,
        *  - Average bitrate (4 bytes)
        *  - Sample rate (4 bytes)
        */
-      tmp = strtoul (format, &format, 10);
-      tmp = strtoul (format, &format, 10);
-      tmp = strtoul (format, &format, 10);
-      tmp = strtoul (format, &format, 10);
-      tmp = strtoul (format, &format, 10);
-      tmp = strtoul (format, &format, 10);
-      priv->channel_count = strtoul (format, &format, 10);
-      tmp = strtoul (format, &format, 10);
-      tmp = strtoul (format, &format, 10);
-      tmp = strtoul (format, &format, 10);
-      priv->samplerate = strtoul (format, &format, 10);
+      if (sscanf (format, "%*d %*d %*d %*d %*d %*d %*d %d %*d %*d %*d %d",
+                  &priv->channel_count, &priv->samplerate) != 2)
+        ret = FALSE;
 
       break;
     case MELO_AIRPLAY_CODEC_PCM:
-      /* Get payload type */
-      tmp = strtoul (format, &format, 10);
-
-      /* Get bits count */
-      tmp = strtoul (format, &format, 10);
+      /* Set encoding */
+      *encoding = "L16";
 
       /* Get samplerate and channel count */
-      priv->samplerate = strtoul (format, &format, 10);
-      priv->channel_count = strtoul (format, &format, 10);
+      if (sscanf (format, "%*d L%*d/%d/%d", &priv->samplerate,
+                  &priv->channel_count) != 2)
+        ret = FALSE;
 
       break;
     case MELO_AIRPLAY_CODEC_AAC:
+      /* Set encoding */
+      *encoding = "AAC";
     default:
       priv->samplerate = 44100;
       priv->channel_count = 2;
@@ -346,7 +342,7 @@ melo_player_airplay_parse_format (MeloPlayerAirplayPrivate *priv,
   if (!priv->channel_count)
       priv->channel_count = 2;
 
-  return TRUE;
+  return ret;
 }
 
 gboolean
@@ -362,6 +358,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   guint max_port = *port + 100;
   GstElement *src, *vol, *sink;
   GstState next_state = GST_STATE_READY;
+  const gchar *encoding;
   const gchar *id;
   gchar *pname;
   GstBus *bus;
@@ -370,7 +367,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     return FALSE;
 
   /* Parse format */
-  if (!melo_player_airplay_parse_format (priv, codec, format))
+  if (!melo_player_airplay_parse_format (priv, codec, format, &encoding))
     return FALSE;
 
   /* Get ID from player */
@@ -393,7 +390,10 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     rtp = gst_element_factory_make ("rtpjitterbuffer", NULL);
     rtp_caps = gst_element_factory_make ("capsfilter", NULL);
     depay = gst_element_factory_make ("rtpraopdepay", NULL);
-    dec = gst_element_factory_make ("avdec_alac", NULL);
+    if (codec == MELO_AIRPLAY_CODEC_AAC)
+      dec = gst_element_factory_make ("avdec_aac", NULL);
+    else
+      dec = gst_element_factory_make ("avdec_alac", NULL);
     vol = gst_element_factory_make ("volume", NULL);
     sink = gst_element_factory_make ("autoaudiosink", NULL);
     gst_bin_add_many (GST_BIN (priv->pipeline), src, src_caps, raop, rtp,
@@ -414,6 +414,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     caps = gst_caps_new_simple ("application/x-rtp",
                                 "payload", G_TYPE_INT, 96,
                                 "clock-rate", G_TYPE_INT, priv->samplerate,
+                                "encoding-name", G_TYPE_STRING, encoding,
                                 "config", G_TYPE_STRING, format,
                                 NULL);
     g_object_set (G_OBJECT (rtp_caps), "caps", caps, NULL);
@@ -519,6 +520,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     /* Set caps for TCP source -> TCP RAOP depayloader link */
     caps = gst_caps_new_simple ("application/x-rtp-stream",
                                 "clock-rate", G_TYPE_INT, priv->samplerate,
+                                "encoding-name", G_TYPE_STRING, "ALAC",
                                 "config", G_TYPE_STRING, format,
                                 NULL);
     g_object_set (G_OBJECT (rtp_caps), "caps", caps, NULL);
