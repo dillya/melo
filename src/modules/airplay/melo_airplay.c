@@ -647,15 +647,15 @@ melo_airplay_read_announce (guchar *buffer, gsize size,
     /* Find rtpmap, ftmp, rsaaeskey and aesiv */
     if (!g_strcmp0 (attr->key, "rtpmap")) {
       /* Get codec */
-      rtpmap = attr->key;
+      rtpmap = attr->value;
       const gchar *codec = attr->value + 3;
 
       /* Find codec */
-      if (!g_strcmp0 (codec, "L16"))
+      if (!strncmp (codec, "L16", 3))
         aclient->codec = MELO_AIRPLAY_CODEC_PCM;
-      else if (!g_strcmp0 (codec, "AppleLossless"))
+      else if (!strncmp (codec, "AppleLossless", 13))
         aclient->codec = MELO_AIRPLAY_CODEC_ALAC;
-      else if (!g_strcmp0 (codec, "mpeg4-generic"))
+      else if (!strncmp (codec, "mpeg4-generic", 13))
         aclient->codec = MELO_AIRPLAY_CODEC_AAC;
       else
         goto end;
