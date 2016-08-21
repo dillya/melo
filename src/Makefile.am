@@ -25,7 +25,8 @@ melo_LDADD = \
 melo_LDADD += \
 	modules/airplay/libmelo_airplay.la \
 	modules/file/libmelo_file.la \
-	modules/radio/libmelo_radio.la
+	modules/radio/libmelo_radio.la \
+	modules/upnp/libmelo_upnp.la
 
 noinst_HEADERS = \
 	melo_config_main.h \

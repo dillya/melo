@@ -32,8 +32,9 @@
 #include "melo_config_main.h"
 
 #include "modules/airplay/melo_airplay.h"
-#include "modules/radio/melo_radio.h"
 #include "modules/file/melo_file.h"
+#include "modules/radio/melo_radio.h"
+#include "modules/upnp/melo_upnp.h"
 
 #include "melo_config_jsonrpc.h"
 #include "melo_module_jsonrpc.h"
@@ -122,6 +123,7 @@ main (int argc, char *argv[])
   melo_module_register (MELO_TYPE_FILE, "file");
   melo_module_register (MELO_TYPE_RADIO, "radio");
   melo_module_register (MELO_TYPE_AIRPLAY, "airplay");
+  melo_module_register (MELO_TYPE_UPNP, "upnp");
 
   /* Create and start HTTP server */
   context.server = melo_httpd_new ();
@@ -163,6 +165,7 @@ end:
   g_object_unref (context.server);
 
   /* Unregister built-in modules */
+  melo_module_unregister ("upnp");
   melo_module_unregister ("airplay");
   melo_module_unregister ("radio");
   melo_module_unregister ("file");
