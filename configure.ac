@@ -96,6 +96,13 @@ PKG_CHECK_MODULES([LIBSSL],
     AC_MSG_ERROR(OpenSSL $LIBSSL_REQ or later is required)
   ])
 
+dnl Check for Rygel renderer
+PKG_CHECK_MODULES([RYGEL],
+  rygel-renderer-gst-2.4, [],
+  [
+    AC_MSG_ERROR(Rygel renderer is required)
+  ])
+
 dnl Generate CFLAGS and LIBS for libraries
 MELO_ALL_CFLAGS="-I\$(top_srcdir)/src/lib \$(GLIB_CFLAGS) \$(GST_CFLAGS) \$(GST_TAG_CFLAGS) \$(AVAHI_GOBJECT_CFLAGS) \$(LIBJSON_GLIB_CFLAGS)"
 MELO_ALL_LIBS="\$(GLIB_LIBS) \$(GST_LIBS) \$(GST_TAG_LIBS) \$(AVAHI_GOBJECT_LIBS) \$(LIBJSON_GLIB_LIBS)"
@@ -120,6 +127,7 @@ src/modules/Makefile
 src/modules/airplay/Makefile
 src/modules/file/Makefile
 src/modules/radio/Makefile
+src/modules/upnp/Makefile
 tests/Makefile
 www/Makefile
 )

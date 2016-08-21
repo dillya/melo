@@ -1,4 +1,5 @@
 SUBDIRS = \
 	airplay \
 	file \
-	radio
+	radio \
+	upnp
