@@ -410,9 +410,9 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
 {
   MeloAirplayPrivate *priv = air->priv;
   gboolean hack_sync;
-  const gchar *header, *h;
+  const gchar *header, *h, *id;
   gchar *transport;
-  gchar *id;
+  gchar *player_id;
 
   /* Get Transport header */
   header = melo_rtsp_get_header (client, "Transport");
@@ -442,16 +442,18 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   aclient->client_timing_port = aclient->timing_port;
 
   /* Generate a unique ID for its player */
-  id = g_strdup_printf ("airplay_%s",
-                        melo_rtsp_get_header (client, "Client-Instance"));
+  id = melo_rtsp_get_header (client, "Client-Instance");
   if (!id)
-    id = g_strdup_printf ("airplay_%s",
-                          melo_rtsp_get_header (client, "DACP-ID"));
+    id = melo_rtsp_get_header (client, "DACP-ID");
+  if (id)
+    player_id = g_strdup_printf ("airplay_%s", id);
+  else
+    player_id = g_strdup_printf ("airplay_%d", g_random_int_range (1000, 9999));
 
   /* Create a new player */
-  aclient->player = melo_player_new (MELO_TYPE_PLAYER_AIRPLAY, id);
+  aclient->player = melo_player_new (MELO_TYPE_PLAYER_AIRPLAY, player_id);
   melo_module_register_player (MELO_MODULE (air), aclient->player);
-  g_free (id);
+  g_free (player_id);
 
   /* Set latency */
   if (priv->latency)
