@@ -55,7 +55,8 @@ gboolean melo_airplay_set_port (MeloAirplay *air, int port);
 void melo_airplay_set_password (MeloAirplay *air, const gchar *password);
 
 void melo_airplay_set_latency (MeloAirplay *air, guint latency);
-void melo_airplay_set_rtx (MeloAirplay *air, gint rtx_delay);
+void melo_airplay_set_rtx (MeloAirplay *air, gint rtx_delay,
+                           gint rtx_retry_period);
 
 G_END_DECLS
 

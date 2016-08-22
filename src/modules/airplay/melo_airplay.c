@@ -108,6 +108,7 @@ struct _MeloAirplayPrivate {
   /* Player tunning */
   guint latency;
   gint rtx_delay;
+  gint rtx_retry_period;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloAirplay, melo_airplay, MELO_TYPE_MODULE)
@@ -341,9 +342,10 @@ melo_airplay_set_latency (MeloAirplay *air, guint latency)
 }
 
 void
-melo_airplay_set_rtx (MeloAirplay *air, gint rtx_delay)
+melo_airplay_set_rtx (MeloAirplay *air, gint rtx_delay, gint rtx_retry_period)
 {
   air->priv->rtx_delay = rtx_delay;
+  air->priv->rtx_retry_period = rtx_retry_period;
 }
 
 static gboolean
@@ -463,7 +465,7 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   /* Set retransmit delay */
   if (priv->rtx_delay > 0)
     melo_player_airplay_set_rtx (MELO_PLAYER_AIRPLAY (aclient->player),
-                                 priv->rtx_delay);
+                                 priv->rtx_delay, priv->rtx_retry_period);
 
   /* Set disable sync hack */
   if (melo_config_get_boolean (priv->config, "advanced", "hack_sync",

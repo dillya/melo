@@ -31,7 +31,8 @@
 
 #define MIN_LATENCY 100
 #define DEFAULT_LATENCY 1000
-#define DEFAULT_RTX_DELAY 10000
+#define DEFAULT_RTX_DELAY 500
+#define DEFAULT_RTX_RETRY_PERIOD 100
 #define DEFAULT_VOLUME 1.0
 
 static gboolean melo_player_airplay_play (MeloPlayer *player, const gchar *path,
@@ -60,6 +61,7 @@ struct _MeloPlayerAirplayPrivate {
   /* Gstreamer pipeline tunning */
   guint latency;
   gint rtx_delay;
+  gint rtx_retry_period;
   gboolean disable_sync;
 
   /* Format */
@@ -125,6 +127,7 @@ melo_player_airplay_init (MeloPlayerAirplay *self)
   self->priv = priv;
   priv->latency = DEFAULT_LATENCY;
   priv->rtx_delay = DEFAULT_RTX_DELAY;
+  priv->rtx_retry_period = DEFAULT_RTX_RETRY_PERIOD;
   priv->volume = DEFAULT_VOLUME;
 
   /* Init player mutex */
@@ -455,6 +458,11 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
       if (priv->rtx_delay > 0)
         g_object_set (G_OBJECT (rtp), "rtx-delay", priv->rtx_delay, NULL);
 
+      /* Set RTX retry period */
+      if (priv->rtx_retry_period > 0)
+        g_object_set (G_OBJECT (rtp), "rtx-retry-period",
+                      priv->rtx_retry_period, NULL);
+
       /* Create and add control UDP source and sink */
       ctrl_src = gst_element_factory_make ("udpsrc", NULL);
       ctrl_sink = gst_element_factory_make ("udpsink", NULL);
@@ -707,9 +715,11 @@ melo_player_airplay_set_latency (MeloPlayerAirplay *pair, guint latency)
 }
 
 void
-melo_player_airplay_set_rtx (MeloPlayerAirplay *pair, gint rtx_delay)
+melo_player_airplay_set_rtx (MeloPlayerAirplay *pair, gint rtx_delay,
+                             gint rtx_retry_period)
 {
   pair->priv->rtx_delay = rtx_delay;
+  pair->priv->rtx_retry_period = rtx_retry_period;
 }
 
 void

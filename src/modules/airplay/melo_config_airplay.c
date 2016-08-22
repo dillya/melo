@@ -51,14 +51,21 @@ static MeloConfigItem melo_config_advanced[] = {
     .name = "Latency of output (in ms)",
     .type = MELO_CONFIG_TYPE_INTEGER,
     .element = MELO_CONFIG_ELEMENT_NUMBER,
-    .def._integer = 200,
+    .def._integer = 1000,
   },
   {
     .id = "rtx_delay",
-    .name = "Minimal delay before retransmit request (in us)",
+    .name = "Delay before retransmit request (in ms)",
     .type = MELO_CONFIG_TYPE_INTEGER,
     .element = MELO_CONFIG_ELEMENT_NUMBER,
-    .def._integer = 10000,
+    .def._integer = 500,
+  },
+  {
+    .id = "rtx_retry_period",
+    .name = "Delay between two retransmit request (in ms)",
+    .type = MELO_CONFIG_TYPE_INTEGER,
+    .element = MELO_CONFIG_ELEMENT_NUMBER,
+    .def._integer = 100,
   },
   {
     .id = "hack_sync",
@@ -118,7 +125,9 @@ melo_config_airplay_update_advanced (MeloConfigContext *context,
                                      gpointer user_data)
 {
   MeloAirplay *air = MELO_AIRPLAY (user_data);
+  gint64 delay, period;
   gint64 new, old;
+  gboolean ret;
 
   /* Update latency */
   if (melo_config_get_updated_integer (context, "latency", &new, &old) &&
@@ -126,7 +135,10 @@ melo_config_airplay_update_advanced (MeloConfigContext *context,
     melo_airplay_set_latency (air, new);
 
   /* Update retransmit delay */
-  if (melo_config_get_updated_integer (context, "rtx_delay", &new, &old) &&
-      new != old)
-    melo_airplay_set_rtx (air, new);
+  ret = melo_config_get_updated_integer (context, "rtx_delay", &delay, &old) &&
+        delay != old;
+  ret |= melo_config_get_updated_integer (context, "rtx_retry_period", &period,
+                                         &old) && period != old;
+  if (ret)
+    melo_airplay_set_rtx (air, delay, period);
 }
