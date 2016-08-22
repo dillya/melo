@@ -41,6 +41,7 @@ struct _MeloPlayerUpnpPrivate {
   GMutex status_mutex;
   GMutex player_mutex;
   MeloPlayerStatus *status;
+  SoupSession *session;
 
   /* UPnP / DLNA Renderer */
   GUPnPContextManager *manager;
@@ -66,6 +67,9 @@ melo_player_upnp_finalize (GObject *gobject)
 
   /* Free status */
   melo_player_status_unref (priv->status);
+
+  /* Free Soup session */
+  g_object_unref (priv->session);
 
   /* Clear mutex */
   g_mutex_clear (&priv->player_mutex);
@@ -121,6 +125,11 @@ melo_player_upnp_init (MeloPlayerUpnp *self)
                     (GCallback) on_context_available, priv);
   g_signal_connect (priv->manager, "context-unavailable",
                     (GCallback) on_context_unavailable, priv);
+
+  /* Create a new Soup session */
+  priv->session = soup_session_new_with_options (
+                                SOUP_SESSION_USER_AGENT, "Melo",
+                                NULL);
 }
 
 static MeloPlayerState
@@ -300,10 +309,40 @@ on_context_unavailable (GUPnPContextManager *manager, GUPnPContext *context,
 }
 
 static void
+on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
+{
+  MeloPlayerUpnpPrivate *priv = (MeloPlayerUpnpPrivate *) user_data;
+  const gchar *type;
+  GBytes *img;
+
+  /* Get content type */
+  type = soup_message_headers_get (msg->response_headers, "Content-Type");
+
+  /* Get image */
+  img = g_bytes_new (msg->response_body->data, msg->response_body->length);
+
+  /* Lock status */
+  g_mutex_lock (&priv->status_mutex);
+
+  /* Set cover in tags */
+  g_free (priv->status->tags->cover_type);
+  priv->status->tags->cover_type = g_strdup (type);
+  if (priv->status->tags->cover)
+    g_bytes_unref (priv->status->tags->cover);
+  priv->status->tags->cover = img;
+  melo_tags_update (priv->status->tags);
+
+  /* Unlock status */
+  g_mutex_unlock (&priv->status_mutex);
+}
+
+static void
 on_object_available (GUPnPDIDLLiteParser *parser, GUPnPDIDLLiteObject *object,
                      gpointer user_data)
 {
   MeloPlayerUpnpPrivate *priv = (MeloPlayerUpnpPrivate *) user_data;
+  const gchar *img;
+  SoupMessage *msg;
   MeloTags *tags;
 
   /* Generate a new tags */
@@ -319,6 +358,13 @@ on_object_available (GUPnPDIDLLiteParser *parser, GUPnPDIDLLiteObject *object,
 
   /* Update tags in status */
   melo_player_status_take_tags (priv->status, tags);
+
+  /* Get image */
+  img = gupnp_didl_lite_object_get_album_art (object);
+  if (img) {
+    msg = soup_message_new ("GET", img);
+    soup_session_queue_message (priv->session, msg, on_request_done, priv);
+  }
 }
 
 static void
