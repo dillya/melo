@@ -693,14 +693,8 @@ melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
-  /* Set cover if not already set */
-  if (!priv->status->tags->cover && !priv->status->tags->cover_type) {
-    priv->status->tags->cover = cover;
-    priv->status->tags->cover_type = g_strdup (cover_type);
-    melo_tags_update (priv->status->tags);
-    ret = TRUE;
-  } else
-    g_bytes_unref (cover);
+  /* Set cover */
+  melo_tags_take_cover (priv->status->tags, cover, cover_type);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);

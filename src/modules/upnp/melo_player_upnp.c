@@ -316,7 +316,7 @@ on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
   GBytes *img;
 
   /* Get content type */
-  type = soup_message_headers_get (msg->response_headers, "Content-Type");
+  type = soup_message_headers_get_one (msg->response_headers, "Content-Type");
 
   /* Get image */
   img = g_bytes_new (msg->response_body->data, msg->response_body->length);
@@ -325,12 +325,7 @@ on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
   g_mutex_lock (&priv->status_mutex);
 
   /* Set cover in tags */
-  g_free (priv->status->tags->cover_type);
-  priv->status->tags->cover_type = g_strdup (type);
-  if (priv->status->tags->cover)
-    g_bytes_unref (priv->status->tags->cover);
-  priv->status->tags->cover = img;
-  melo_tags_update (priv->status->tags);
+  melo_tags_take_cover (priv->status->tags, img, type);
 
   /* Unlock status */
   g_mutex_unlock (&priv->status_mutex);

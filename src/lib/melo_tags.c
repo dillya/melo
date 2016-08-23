@@ -25,6 +25,16 @@
 
 #include "melo_tags.h"
 
+struct _MeloTagsPrivate {
+  GMutex mutex;
+  gint64 timestamp;
+  gint ref_count;
+
+  /* Cover data */
+  GBytes *cover;
+  gchar *cover_type;
+};
+
 MeloTags *
 melo_tags_new (void)
 {
@@ -35,11 +45,21 @@ melo_tags_new (void)
   if (!tags)
     return NULL;
 
+  /* Allocate private */
+  tags->priv = g_slice_new0 (MeloTagsPrivate);
+  if (!tags->priv) {
+    g_slice_free (MeloTags, tags);
+    return NULL;
+  }
+
+  /* Init private mutex */
+  g_mutex_init (&tags->priv->mutex);
+
   /* Set reference counter to 1 */
-  tags->ref_count = 1;
+  tags->priv->ref_count = 1;
 
   /* Set initial timestamp */
-  tags->timestamp = g_get_monotonic_time ();
+  melo_tags_update (tags);
 
   return tags;
 }
@@ -47,14 +67,96 @@ melo_tags_new (void)
 void
 melo_tags_update (MeloTags *tags)
 {
-  tags->timestamp = g_get_monotonic_time ();
+  tags->priv->timestamp = g_get_monotonic_time ();
+}
+
+gboolean
+melo_tags_updated (MeloTags *tags, gint64 timestamp)
+{
+  return tags->priv->timestamp > timestamp;
 }
 
 MeloTags *
 melo_tags_ref (MeloTags *tags)
 {
-  tags->ref_count++;
+  tags->priv->ref_count++;
   return tags;
+}
+
+void
+melo_tags_set_cover (MeloTags *tags, GBytes *cover, const gchar *type)
+{
+  if (cover)
+    g_bytes_ref (cover);
+  melo_tags_take_cover (tags, cover, type);
+}
+
+void
+melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type)
+{
+  MeloTagsPrivate *priv = tags->priv;
+
+  /* Lock cover access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Free previous cover */
+  if (priv->cover)
+    g_bytes_unref (priv->cover);
+  g_free (priv->cover_type);
+
+  /* Set cover */
+  priv->cover = cover;
+  priv->cover_type = g_strdup (type);
+
+  /* Update timestamp */
+  melo_tags_update (tags);
+
+  /* Unlock cover access */
+  g_mutex_unlock (&priv->mutex);
+}
+
+GBytes *
+melo_tags_get_cover (MeloTags *tags, gchar **type)
+{
+  MeloTagsPrivate *priv = tags->priv;
+  GBytes *cover = NULL;
+
+  /* Lock cover access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get cover */
+  if (priv->cover) {
+    /* Take a reference of cover */
+    cover = g_bytes_ref (priv->cover);
+
+    /* Set cover type */
+    if (type)
+      *type = g_strdup (priv->cover_type);
+  }
+
+  /* Unlock cover access */
+  g_mutex_unlock (&priv->mutex);
+
+  return cover;
+}
+
+gchar *
+melo_tags_get_cover_type (MeloTags *tags)
+{
+  MeloTagsPrivate *priv = tags->priv;
+  gchar *type = NULL;
+
+  /* Lock cover access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get cover */
+  if (priv->cover)
+      type = g_strdup (priv->cover_type);
+
+  /* Unlock cover access */
+  g_mutex_unlock (&priv->mutex);
+
+  return type;
 }
 
 MeloTags *
@@ -159,11 +261,11 @@ melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
         gst_buffer_extract_dup (buffer, 0, size, &data, &dsize);
 
         /* Create a new GBytes with data */
-        tags->cover = g_bytes_new_take (data, dsize);
+        tags->priv->cover = g_bytes_new_take (data, dsize);
 
         /* Copy type string */
-        tags->cover_type = gst_caps_to_string (caps);
-        c = g_strstr_len (tags->cover_type, -1, ",");
+        tags->priv->cover_type = gst_caps_to_string (caps);
+        c = g_strstr_len (tags->priv->cover_type, -1, ",");
         if (c)
           *c = '\0';
         gst_sample_unref (final_sample);
@@ -222,7 +324,7 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
     return;
 
   /* Set timestamp in any case */
-  json_object_set_int_member (obj, "timestamp", tags->timestamp);
+  json_object_set_int_member (obj, "timestamp", tags->priv->timestamp);
 
   /* Fill object */
   if (fields & MELO_TAGS_FIELDS_TITLE)
@@ -241,19 +343,29 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
     json_object_set_int_member (obj, "tracks", tags->tracks);
 
   /* Convert image to base64 */
-  if (fields & MELO_TAGS_FIELDS_COVER && tags->cover) {
-    const guchar *data;
-    gsize size;
-    gchar *cover;
+  if (fields & MELO_TAGS_FIELDS_COVER) {
+    MeloTagsPrivate *priv = tags->priv;
 
-    /* Get data and encode */
-    data = g_bytes_get_data (tags->cover, &size);
-    cover = g_base64_encode (data, size);
+    /* Lock cover */
+    g_mutex_lock (&priv->mutex);
 
-    /* Add to object */
-    json_object_set_string_member (obj, "cover", cover);
-    json_object_set_string_member (obj, "cover_type", tags->cover_type);
-    g_free (cover);
+    if (priv->cover) {
+      const guchar *data;
+      gsize size;
+      gchar *cover;
+
+      /* Get data and encode */
+      data = g_bytes_get_data (priv->cover, &size);
+      cover = g_base64_encode (data, size);
+
+      /* Add to object */
+      json_object_set_string_member (obj, "cover", cover);
+      json_object_set_string_member (obj, "cover_type", priv->cover_type);
+      g_free (cover);
+    }
+
+    /* Unlock cover */
+    g_mutex_unlock (&priv->mutex);
   }
 }
 
@@ -276,8 +388,8 @@ melo_tags_to_json_object (MeloTags *tags, MeloTagsFields fields)
 void
 melo_tags_unref (MeloTags *tags)
 {
-  tags->ref_count--;
-  if (tags->ref_count)
+  tags->priv->ref_count--;
+  if (tags->priv->ref_count)
     return;
 
   /* Free tags */
@@ -285,7 +397,9 @@ melo_tags_unref (MeloTags *tags)
   g_free (tags->artist);
   g_free (tags->album);
   g_free (tags->genre);
-  g_bytes_unref (tags->cover);
-  g_free (tags->cover_type);
+  g_bytes_unref (tags->priv->cover);
+  g_free (tags->priv->cover_type);
+  g_mutex_clear (&tags->priv->mutex);
+  g_slice_free (MeloTagsPrivate, tags->priv);
   g_slice_free (MeloTags, tags);
 }

@@ -27,6 +27,7 @@
 #include <json-glib/json-glib.h>
 
 typedef struct _MeloTags MeloTags;
+typedef struct _MeloTagsPrivate MeloTagsPrivate;
 typedef enum _MeloTagsFields MeloTagsFields;
 
 struct _MeloTags {
@@ -37,11 +38,9 @@ struct _MeloTags {
   gint date;
   guint track;
   guint tracks;
-  GBytes *cover;
-  gchar *cover_type;
 
-  gint64 timestamp;
-  gint ref_count;
+  /*< private >*/
+  MeloTagsPrivate *priv;
 };
 
 enum _MeloTagsFields {
@@ -60,8 +59,13 @@ enum _MeloTagsFields {
 
 MeloTags *melo_tags_new (void);
 void melo_tags_update (MeloTags *tags);
+gboolean melo_tags_updated (MeloTags *tags, gint64 timestamp);
 MeloTags *melo_tags_ref (MeloTags *tags);
 void melo_tags_unref (MeloTags *tags);
+
+void melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type);
+GBytes *melo_tags_get_cover (MeloTags *tags, gchar **type);
+gchar *melo_tags_get_cover_type (MeloTags *tags);
 
 /* Gstreamer helper */
 MeloTags *melo_tags_new_from_gst_tag_list (GstTagList *tlist,

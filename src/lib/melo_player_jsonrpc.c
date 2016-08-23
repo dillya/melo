@@ -164,9 +164,8 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
     json_object_set_int_member (obj, "pos", status->pos);
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_DURATION)
     json_object_set_int_member (obj, "duration", status->duration);
-  if (fields & MELO_PLAYER_JSONRPC_FIELDS_TAGS) {
-    if (tags_timestamp <= 0 ||
-        (status->tags && status->tags->timestamp > tags_timestamp))
+  if (fields & MELO_PLAYER_JSONRPC_FIELDS_TAGS && status->tags) {
+    if (tags_timestamp <= 0 || melo_tags_updated (status->tags, tags_timestamp))
       json_object_set_object_member (obj, "tags",
                                      melo_tags_to_json_object (status->tags,
                                                                tags_fields));
