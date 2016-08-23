@@ -313,6 +313,7 @@ on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
 {
   MeloPlayerUpnpPrivate *priv = (MeloPlayerUpnpPrivate *) user_data;
   const gchar *type;
+  MeloTags *tags;
   GBytes *img;
 
   /* Get content type */
@@ -324,8 +325,14 @@ on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
   /* Lock status */
   g_mutex_lock (&priv->status_mutex);
 
+  /* Get tags from status */
+  tags = melo_player_status_get_tags (priv->status);
+
   /* Set cover in tags */
-  melo_tags_take_cover (priv->status->tags, img, type);
+  if (tags) {
+    melo_tags_take_cover (tags, img, type);
+    melo_tags_unref (tags);
+  }
 
   /* Unlock status */
   g_mutex_unlock (&priv->status_mutex);

@@ -689,12 +689,19 @@ melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
   gboolean ret = FALSE;
+  MeloTags *tags;
 
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
+  /* Get tags */
+  tags = melo_player_status_get_tags (priv->status);
+
   /* Set cover */
-  melo_tags_take_cover (priv->status->tags, cover, cover_type);
+  if (tags) {
+    melo_tags_take_cover (tags, cover, cover_type);
+    melo_tags_unref (tags);
+  }
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);

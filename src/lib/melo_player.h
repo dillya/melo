@@ -42,6 +42,7 @@ typedef struct _MeloPlayerPrivate MeloPlayerPrivate;
 
 typedef struct _MeloPlayerInfo MeloPlayerInfo;
 typedef struct _MeloPlayerStatus MeloPlayerStatus;
+typedef struct _MeloPlayerStatusPrivate MeloPlayerStatusPrivate;
 
 typedef enum {
   MELO_PLAYER_STATE_NONE,
@@ -96,9 +97,9 @@ struct _MeloPlayerStatus {
   gchar *name;
   gint pos;
   gint duration;
-  MeloTags *tags;
 
-  gint ref_count;
+  /*< private >*/
+  MeloPlayerStatusPrivate *priv;
 };
 
 GType melo_player_get_type (void);
@@ -136,6 +137,7 @@ MeloPlayerStatus *melo_player_status_ref (MeloPlayerStatus *status);
 void melo_player_status_unref (MeloPlayerStatus *status);
 void melo_player_status_set_tags (MeloPlayerStatus *status, MeloTags *tags);
 void melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags);
+MeloTags *melo_player_status_get_tags (const MeloPlayerStatus *status);
 
 /* MeloPlayerState helpers */
 const gchar *melo_player_state_to_string (MeloPlayerState state);

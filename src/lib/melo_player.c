@@ -26,6 +26,14 @@ G_LOCK_DEFINE_STATIC (melo_player_mutex);
 static GHashTable *melo_player_hash = NULL;
 static GList *melo_player_list = NULL;
 
+struct _MeloPlayerStatusPrivate {
+  GMutex mutex;
+  gint ref_count;
+
+  /* Tags */
+  MeloTags *tags;
+};
+
 struct _MeloPlayerPrivate {
   gchar *id;
   MeloPlayerInfo info;
@@ -307,15 +315,22 @@ melo_player_status_new (MeloPlayerState state, const gchar *name)
   if (!status)
     return NULL;
 
+  /* Allocate private data */
+  status->priv = g_slice_new0 (MeloPlayerStatusPrivate);
+  if (!status->priv) {
+    g_slice_free (MeloPlayerStatus, status);
+    return NULL;
+  }
+
+  /* Init private mutex */
+  g_mutex_init (&status->priv->mutex);
+
   /* Init reference counter */
-  status->ref_count = 1;
+  status->priv->ref_count = 1;
 
   /* Set state and name */
   status->state = state;
   status->name = g_strdup (name);
-
-  /* Allocate a new tags */
-  status->tags = NULL;
 
   return status;
 }
@@ -323,9 +338,20 @@ melo_player_status_new (MeloPlayerState state, const gchar *name)
 void
 melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags)
 {
-  if (status->tags)
-    melo_tags_unref (status->tags);
-  status->tags = tags;
+  MeloPlayerStatusPrivate *priv = status->priv;
+
+  /* Lock tags access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Free previous tags */
+  if (priv->tags)
+    melo_tags_unref (priv->tags);
+
+  /* Set new tags */
+  priv->tags = tags;
+
+  /* Unlock tags access */
+  g_mutex_unlock (&priv->mutex);
 }
 
 void
@@ -336,25 +362,46 @@ melo_player_status_set_tags (MeloPlayerStatus *status, MeloTags *tags)
   melo_player_status_take_tags (status, tags);
 }
 
+MeloTags *
+melo_player_status_get_tags (const MeloPlayerStatus *status)
+{
+  MeloPlayerStatusPrivate *priv = status->priv;
+  MeloTags *tags = NULL;
+
+  /* Lock tags access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get a reference to tags */
+  if (priv->tags)
+    tags = melo_tags_ref (priv->tags);
+
+  /* Unlock tags access */
+  g_mutex_unlock (&priv->mutex);
+
+  return tags;
+}
+
 MeloPlayerStatus *
 melo_player_status_ref (MeloPlayerStatus *status)
 {
-  status->ref_count++;
+  status->priv->ref_count++;
   return status;
 }
 
 void
 melo_player_status_unref (MeloPlayerStatus *status)
 {
-  status->ref_count--;
-  if (status->ref_count)
+  status->priv->ref_count--;
+  if (status->priv->ref_count)
     return;
 
   /* Free status */
   g_free (status->error);
   g_free (status->name);
-  if (status->tags)
-    melo_tags_unref (status->tags);
+  if (status->priv->tags)
+    melo_tags_unref (status->priv->tags);
+  g_mutex_clear (&status->priv->mutex);
+  g_slice_free (MeloPlayerStatusPrivate, status->priv);
   g_slice_free (MeloPlayerStatus, status);
 }
 
