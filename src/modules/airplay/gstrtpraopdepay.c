@@ -367,11 +367,19 @@ no_clock:
   return FALSE;
 }
 
-static gboolean
+static gsize
 gst_rtp_raop_depay_fix_frame (GstRtpRaopDepay * rtpraopdepay, guint8 * data,
     gsize len)
 {
   guint32 size;
+
+  /* On iOS 4, it seems packets bigger than 1408 are missing 4 bytes so we
+   * add 4 bytes set to 0xFF in order to avoid ALAC decoding errors.
+   */
+  if (len == 1408) {
+    memset (data + len, 0xff, 4);
+    return len + 4;
+  }
 
   /* This code is to check and fix stream from Pulseaudio RAOP module which
    * doesn't send the ALAC end tag waited by some ALAC decoders.
@@ -379,7 +387,7 @@ gst_rtp_raop_depay_fix_frame (GstRtpRaopDepay * rtpraopdepay, guint8 * data,
 
   /* Can only chech when size and uncompressed are set */
   if (len < 7  || (data[2] & 0x12) != 0x12)
-    return FALSE;
+    return len;
 
   /* Get samples count */
   size = data[3] << 23 | data[4] << 15 | data[5] << 7 | data[6] >> 1;
@@ -394,14 +402,14 @@ gst_rtp_raop_depay_fix_frame (GstRtpRaopDepay * rtpraopdepay, guint8 * data,
   /* Not enough size in buffer */
   if (size + 7 > len) {
     GST_ERROR_OBJECT (rtpraopdepay, "Cannot fix bad ALAC frame...");
-    return FALSE;
+    return len;
    }
 
   /* Fix frame (we allocate 1 byte more than len) */
   data[size + 6] |= 0x01;
   data[size + 7] = 0xC0;
 
-  return TRUE;
+  return len + 1;
 }
 
 static GstBuffer *
@@ -442,7 +450,7 @@ gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
     in_data = in.data;
 
     /* Allocate a new buffer */
-    out_buf = gst_buffer_new_allocate (NULL, payload_len + 1, NULL);
+    out_buf = gst_buffer_new_allocate (NULL, payload_len + 4, NULL);
     gst_buffer_map (out_buf, &out, GST_MAP_WRITE);
     out_data = out.data;
 
@@ -452,9 +460,10 @@ gst_rtp_raop_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
     AES_cbc_encrypt (in_data, out_data, aes_len, &priv->key, iv, AES_DECRYPT);
     memcpy (out_data + aes_len, in_data + aes_len, payload_len - aes_len);
 
-    /* Check and fix ALAC frame (Pulseaudio HACK) */
-    if (!gst_rtp_raop_depay_fix_frame (rtpraopdepay, out_data, payload_len))
-      gst_buffer_set_size (out_buf, payload_len);
+    /* Check and fix ALAC frame (Pulseaudio HACK and iOS 4) */
+    payload_len = gst_rtp_raop_depay_fix_frame (rtpraopdepay, out_data,
+                      payload_len);
+    gst_buffer_set_size (out_buf, payload_len);
 
     /* Unmap buffers */
     gst_buffer_unmap (in_buf, &in);
