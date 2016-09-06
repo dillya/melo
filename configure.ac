@@ -5,7 +5,7 @@ dnl Initialize Autoconf for Melo
 AC_INIT([Melo], [0.0.1], [http://www.sparod.com/melo/], [melo])
 
 dnl Initialize Automake
-AM_INIT_AUTOMAKE()
+AM_INIT_AUTOMAKE([subdir-objects])
 
 dnl Set up macro directory
 AC_CONFIG_MACRO_DIR([m4])

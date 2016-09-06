@@ -12,6 +12,11 @@ libmelo_airplay_la_SOURCES = \
 	gsttcpraop.c \
 	melo_airplay.c
 
+libmelo_airplay_la_SOURCES += \
+	ext/gstrtpjitterbuffer.c \
+	ext/rtpjitterbuffer.c \
+	ext/rtpstats.c
+
 libmelo_airplay_la_CFLAGS = \
 	$(LIBSSL_CFLAGS) \
 	$(GST_SDP_CFLAGS) \
@@ -31,3 +36,10 @@ noinst_HEADERS = \
 	gstrtpraopdepay.h \
 	melo_player_airplay.h \
 	melo_config_airplay.h
+
+noinst_HEADERS += \
+	ext/gstrtpjitterbuffer.h \
+	ext/gstrtpdefs.h \
+	ext/gst-compat.h \
+	ext/rtpjitterbuffer.h \
+	ext/rtpstats.h
