@@ -220,7 +220,6 @@ gst_rtp_raop_src_event (GstPad * pad,  GstObject * parent, GstEvent * event)
         break;
       }
 
-      GST_OBJECT_LOCK (raop);
       if (priv->ctrl_srcpad) {
         /* get retransmission request */
         req = gst_event_get_structure (event);
@@ -241,7 +240,6 @@ gst_rtp_raop_src_event (GstPad * pad,  GstObject * parent, GstEvent * event)
         /* send retransmit request on control source pad */
         gst_pad_push (priv->ctrl_srcpad, buf);
       }
-      GST_OBJECT_UNLOCK (raop);
       gst_event_unref (event);
       break;
     }
