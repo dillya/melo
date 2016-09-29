@@ -3,6 +3,7 @@ melolib_LTLIBRARIES = libmelo.la
 
 # Main library
 libmelo_la_SOURCES = \
+	melo_plugin.c \
 	melo_config.c \
 	melo_module.c \
 	melo_browser.c \
@@ -23,6 +24,7 @@ libmelo_la_LIBADD = $(MELO_ALL_LIBS)
 
 meloincludedir = $(includedir)/melo
 meloinclude_HEADERS = \
+	melo_plugin.h \
 	melo_config.h \
 	melo_module.h \
 	melo_browser.h \

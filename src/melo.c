@@ -29,6 +29,7 @@
 #endif
 
 #include "melo.h"
+#include "melo_plugin.h"
 #include "melo_config_main.h"
 
 #include "modules/airplay/melo_airplay.h"
@@ -125,6 +126,9 @@ main (int argc, char *argv[])
   melo_module_register (MELO_TYPE_AIRPLAY, "airplay");
   melo_module_register (MELO_TYPE_UPNP, "upnp");
 
+  /* Load plugins */
+  melo_plugin_load_all (TRUE);
+
   /* Create and start HTTP server */
   context.server = melo_httpd_new ();
   if (!melo_httpd_start (context.server, port, name))
@@ -163,6 +167,9 @@ end:
   /* Stop and Free HTTP server */
   melo_httpd_stop (context.server);
   g_object_unref (context.server);
+
+  /* Unload plugins */
+  melo_plugin_unload_all ();
 
   /* Unregister built-in modules */
   melo_module_unregister ("upnp");
