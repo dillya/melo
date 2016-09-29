@@ -32,7 +32,6 @@
 #include "melo_plugin.h"
 #include "melo_config_main.h"
 
-#include "modules/airplay/melo_airplay.h"
 #include "modules/file/melo_file.h"
 #include "modules/radio/melo_radio.h"
 #include "modules/upnp/melo_upnp.h"
@@ -123,7 +122,6 @@ main (int argc, char *argv[])
   /* Register built-in modules */
   melo_module_register (MELO_TYPE_FILE, "file");
   melo_module_register (MELO_TYPE_RADIO, "radio");
-  melo_module_register (MELO_TYPE_AIRPLAY, "airplay");
   melo_module_register (MELO_TYPE_UPNP, "upnp");
 
   /* Load plugins */
@@ -173,7 +171,6 @@ end:
 
   /* Unregister built-in modules */
   melo_module_unregister ("upnp");
-  melo_module_unregister ("airplay");
   melo_module_unregister ("radio");
   melo_module_unregister ("file");
 

@@ -23,7 +23,6 @@ melo_LDADD = \
 
 # Built in modules
 melo_LDADD += \
-	modules/airplay/libmelo_airplay.la \
 	modules/file/libmelo_file.la \
 	modules/radio/libmelo_radio.la \
 	modules/upnp/libmelo_upnp.la
