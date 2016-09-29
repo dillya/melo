@@ -123,6 +123,7 @@ AC_CONFIG_FILES(
 Makefile
 src/Makefile
 src/lib/Makefile
+src/lib/libmelo.pc
 src/modules/Makefile
 src/modules/airplay/Makefile
 src/modules/file/Makefile

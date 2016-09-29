@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: Melo library
+Description: Main library for Melo project
+Version: @VERSION@
+Libs: -L${libdir}/melo -lmelo
+Cflags: -I${includedir}/melo
+Requires: gio-2.0 json-glib-1.0 gstreamer-tag-1.0 avahi-gobject

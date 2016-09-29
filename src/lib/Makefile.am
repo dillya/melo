@@ -37,3 +37,7 @@ meloinclude_HEADERS = \
 	melo_avahi.h \
 	melo_rtsp.h \
 	melo_jsonrpc.h
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libmelo.pc
+EXTRA_DIST = libmelo.pc.in
