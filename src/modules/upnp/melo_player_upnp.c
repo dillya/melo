@@ -266,13 +266,14 @@ on_context_available (GUPnPContextManager *manager, GUPnPContext *context,
 
   /* Get interface and add to list */
   iface = gssdp_client_get_interface (client);
-  if (!g_list_find_custom (priv->ifaces, iface, g_str_equal))
+  if (!g_list_find_custom (priv->ifaces, iface, (GCompareFunc) g_strcmp0)) {
     priv->ifaces = g_list_prepend (priv->ifaces, (gpointer *) iface);
 
-  /* Add interface to renderer */
-  if (priv->renderer)
-    rygel_media_device_add_interface (RYGEL_MEDIA_DEVICE (priv->renderer),
-                                      iface);
+    /* Add interface to renderer */
+    if (priv->renderer)
+      rygel_media_device_add_interface (RYGEL_MEDIA_DEVICE (priv->renderer),
+                                        iface);
+  }
 
   /* Unlock renderer access */
   g_mutex_unlock (&priv->player_mutex);
@@ -293,16 +294,17 @@ on_context_unavailable (GUPnPContextManager *manager, GUPnPContext *context,
   /* Get interface and remove from list */
   iface = gssdp_client_get_interface (client);
   for (l = priv->ifaces; l != NULL; l = l->next) {
-    if (g_strcmp0 ((const gchar *) l->data, iface)) {
+    if (!g_strcmp0 ((const gchar *) l->data, iface)) {
+      /* Remove interface to renderer */
+      if (priv->renderer)
+        rygel_media_device_remove_interface (
+                                            RYGEL_MEDIA_DEVICE (priv->renderer),
+                                            iface);
+      /* Free interface */
       priv->ifaces = g_list_delete_link (priv->ifaces, l);
       break;
     }
   }
-
-  /* Remove interface to renderer */
-  if (priv->renderer)
-    rygel_media_device_remove_interface (RYGEL_MEDIA_DEVICE (priv->renderer),
-                                         iface);
 
   /* Unlock renderer access */
   g_mutex_unlock (&priv->player_mutex);
