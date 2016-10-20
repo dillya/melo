@@ -147,7 +147,8 @@ melo_config_jsonrpc_gen_array (MeloConfigContext *context, gpointer user_data)
 }
 
 static gboolean
-melo_config_jsonrpc_update_items (MeloConfigContext *context, JsonArray *array)
+melo_config_jsonrpc_update_items (MeloConfigContext *context, JsonArray *array,
+                                  gchar **error)
 {
   MeloConfigItem *item;
   JsonObject *obj;
@@ -168,16 +169,25 @@ melo_config_jsonrpc_update_items (MeloConfigContext *context, JsonArray *array)
 
     /* Get item ID */
     id = json_object_get_string_member (obj, "id");
-    if (!id)
+    if (!id) {
+      if (error)
+        *error = g_strdup ("No item ID provided!");
       return FALSE;
+    }
 
     /* Find item */
-    if (!melo_config_find_item (context, id, &item, NULL))
+    if (!melo_config_find_item (context, id, &item, NULL)) {
+      if (error)
+        *error = g_strdup_printf ("Item '%s' doesn't exist!", id);
       return FALSE;
+    }
 
     /* Read only item */
-    if (item->flags & MELO_CONFIG_FLAGS_READ_ONLY)
+    if (item->flags & MELO_CONFIG_FLAGS_READ_ONLY) {
+      if (error)
+        *error = g_strdup_printf ("Item '%s' is read only!", id);
       return FALSE;
+    }
 
     /* Update value */
     switch (item->type) {
@@ -205,8 +215,9 @@ melo_config_jsonrpc_update_items (MeloConfigContext *context, JsonArray *array)
   return TRUE;
 }
 
-static gpointer
-melo_config_jsonrpc_update (MeloConfigContext *context, gpointer user_data)
+static gboolean
+melo_config_jsonrpc_update (MeloConfigContext *context, gpointer user_data,
+                            gchar **error)
 {
   JsonObject *obj = (JsonObject *) user_data;
   JsonArray *array, *list;
@@ -216,36 +227,41 @@ melo_config_jsonrpc_update (MeloConfigContext *context, gpointer user_data)
   /* Get groups list */
   array = json_object_get_array_member (obj, "list");
   if (!array)
-    return GINT_TO_POINTER (FALSE);
+    goto bad_request;
 
   /* Get groups count */
   count = json_array_get_length (array);
   if (!count)
-    return GINT_TO_POINTER (TRUE);
+    return TRUE;
 
   /* Parse all groups */
   for (i = 0; i < count; i++) {
     /* Get group object */
     obj = json_array_get_object_element (array, i);
     if (!obj)
-      return GINT_TO_POINTER (FALSE);
+      return FALSE;
 
     /* Get group ID and item list */
     id = json_object_get_string_member (obj, "id");
     list = json_object_get_array_member (obj, "list");
     if (!id || !list)
-      return GINT_TO_POINTER (FALSE);
+      goto bad_request;
 
     /* Find group */
     if (!melo_config_find_group (context, id, NULL, NULL))
-      return GINT_TO_POINTER (FALSE);
+      goto bad_request;
 
     /* Parse item list */
-    if (!melo_config_jsonrpc_update_items (context, list))
-      return GINT_TO_POINTER (FALSE);
+    if (!melo_config_jsonrpc_update_items (context, list, error))
+      return FALSE;
   }
 
-  return GINT_TO_POINTER (TRUE);
+  return TRUE;
+
+bad_request:
+  if (error)
+    *error = g_strdup ("Bad JSON-RPC request!");
+  return FALSE;
 }
 
 /* Method callbacks */
@@ -296,6 +312,7 @@ melo_config_jsonrpc_set (const gchar *method,
                          JsonNode **result, JsonNode **error,
                          gpointer user_data)
 {
+  gchar *err_str = NULL;
   MeloConfig *cfg;
   JsonObject *obj;
   gboolean ret;
@@ -311,13 +328,20 @@ melo_config_jsonrpc_set (const gchar *method,
     return;
 
   /* Convert config to JSON */
-  ret = melo_config_update (cfg, melo_config_jsonrpc_update, (gpointer) obj);
+  ret = melo_config_update (cfg, melo_config_jsonrpc_update, (gpointer) obj,
+                            &err_str);
   json_object_unref (obj);
   g_object_unref (cfg);
 
   /* Create response */
   obj = json_object_new ();
   json_object_set_boolean_member (obj, "done", ret);
+
+  /* Set error message */
+  if (err_str) {
+    json_object_set_string_member (obj, "error", err_str);
+    g_free (err_str);
+  }
 
   /* Return result */
   *result = json_node_new (JSON_NODE_OBJECT);

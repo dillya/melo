@@ -694,8 +694,8 @@ melo_config_parse (MeloConfig *config, MeloConfigFunc callback,
 }
 
 gboolean
-melo_config_update (MeloConfig *config, MeloConfigFunc callback,
-                    gpointer user_data)
+melo_config_update (MeloConfig *config, MeloConfigUpFunc callback,
+                    gpointer user_data, gchar **error)
 {
   MeloConfigPrivate *priv = config->priv;
   MeloConfigContext context = {
@@ -715,14 +715,14 @@ melo_config_update (MeloConfig *config, MeloConfigFunc callback,
   }
 
   /* Call the callback */
-  if (callback && !callback (&context, user_data))
+  if (callback && !callback (&context, user_data, error))
     goto failed;
 
   /* Check new values */
   context.group_idx = 0;
   while (melo_config_next_group (&context, NULL, NULL)) {
     if (context.values->check_cb &&
-        !context.values->check_cb (&context, context.values->check_data))
+        !context.values->check_cb (&context, context.values->check_data, error))
       goto failed;
   }
 

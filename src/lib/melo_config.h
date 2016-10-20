@@ -142,7 +142,7 @@ gboolean melo_config_set_string (MeloConfig *config, const gchar *group,
                                  const gchar *id, const gchar *value);
 
 typedef gboolean (*MeloConfigCheckFunc) (MeloConfigContext *context,
-                                         gpointer user_data);
+                                         gpointer user_data, gchar **error);
 typedef void (*MeloConfigUpdateFunc) (MeloConfigContext *context,
                                       gpointer user_data);
 void melo_config_set_check_callback (MeloConfig *config, const gchar *group,
@@ -155,10 +155,12 @@ void melo_config_set_update_callback (MeloConfig *config, const gchar *group,
 /* Advanced functions */
 typedef gpointer (*MeloConfigFunc) (MeloConfigContext *context,
                                     gpointer user_data);
+typedef gboolean (*MeloConfigUpFunc) (MeloConfigContext *context,
+                                      gpointer user_data, gchar **error);
 gpointer melo_config_parse (MeloConfig *config, MeloConfigFunc callback,
                             gpointer user_data);
-gboolean melo_config_update (MeloConfig *config, MeloConfigFunc callback,
-                             gpointer user_data);
+gboolean melo_config_update (MeloConfig *config, MeloConfigUpFunc callback,
+                             gpointer user_data, gchar **error);
 
 gint melo_config_get_group_count (MeloConfigContext *context);
 gboolean melo_config_next_group (MeloConfigContext *context,

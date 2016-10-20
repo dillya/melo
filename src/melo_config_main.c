@@ -107,7 +107,8 @@ melo_config_main_new (void)
 
 /* General section */
 gboolean
-melo_config_main_check_general (MeloConfigContext *context, gpointer user_data)
+melo_config_main_check_general (MeloConfigContext *context, gpointer user_data,
+                                gchar **error)
 {
   return TRUE;
 }
@@ -150,7 +151,8 @@ melo_config_main_load_http (MeloConfig *config, MeloHTTPD *server)
 }
 
 gboolean
-melo_config_main_check_http (MeloConfigContext *context, gpointer user_data)
+melo_config_main_check_http (MeloConfigContext *context, gpointer user_data,
+                             gchar **error)
 {
   MeloHTTPD *server = user_data;
   const gchar *pass_old = NULL;
@@ -184,6 +186,8 @@ melo_config_main_check_http (MeloConfigContext *context, gpointer user_data)
       if ((pass_cur && g_strcmp0 (pass_old, pass_cur)) ||
           g_strcmp0 (pass, pass_new)) {
         g_free (pass_cur);
+        if (error)
+          *error = g_strdup ("Wrong old password or new passwords mismatch!");
         return FALSE;
       }
       g_free (pass_cur);
