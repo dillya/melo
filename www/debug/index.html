@@ -54,6 +54,14 @@
       margin: 1px;
       height: 8px;
     }
+
+    .error_ok {
+      background-color: #6bbd4c;
+      color: #fff;
+    }
+    .error_msg {
+      background-color: #ff3a3a;
+    }
   </style>
 
   <script src="../jquery-3.0.0.min.js"></script>
@@ -112,6 +120,7 @@
       </div>
       <div class="block">
         <h2>Config</h2>
+        <div id="config_error" class='error_ok'></div>
         <div id="config"></div>
       </div>
     </div>

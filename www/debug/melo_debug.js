@@ -640,6 +640,18 @@ function melo_set_config(id, group_id, items, form) {
     if (response.error || !response.result)
       return;
 
+    /* Update error */
+    if (response.result.done == false) {
+      if (response.result.error)
+        $("#config_error").text(response.result.error);
+      else
+        $("#config_error").text("An error occured!");
+      $('#config_error').toggleClass("error_msg", true);
+    } else {
+      $("#config_error").text("Configuration updated sucessfuly");
+      $('#config_error').toggleClass("error_msg", false);
+    }
+
     /* Update */
     melo_get_config(id);
   });
