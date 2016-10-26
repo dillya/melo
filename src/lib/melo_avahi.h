@@ -56,12 +56,15 @@ struct _MeloAvahiService {
   gchar *type;
   int port;
   AvahiStringList *txt;
+  unsigned char ip[4];
+  int iface;
 };
 
 GType melo_avahi_get_type (void);
 
 MeloAvahi *melo_avahi_new (void);
 
+/* Service publisher */
 const MeloAvahiService *melo_avahi_add_service (MeloAvahi *avahi,
                                                 const gchar *name,
                                                 const gchar *type, gint port,
@@ -73,6 +76,13 @@ gboolean melo_avahi_update_service (MeloAvahi *avahi,
 void melo_avahi_remove_service (MeloAvahi *avahi,
                                 const MeloAvahiService *service);
 
+/* Service browser */
+gboolean melo_avahi_add_browser (MeloAvahi *avahi, const gchar *type);
+GList *melo_avahi_list_services (MeloAvahi *avahi);
+void melo_avahi_remove_browser (MeloAvahi *avahi, const gchar *type);
+
+gchar *melo_avahi_service_get_txt (const MeloAvahiService *s, const gchar *key);
+MeloAvahiService *melo_avahi_service_copy (const MeloAvahiService *s);
 void melo_avahi_service_free (MeloAvahiService *s);
 
 
