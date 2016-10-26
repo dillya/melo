@@ -61,12 +61,20 @@ struct _MeloAvahiService {
 GType melo_avahi_get_type (void);
 
 MeloAvahi *melo_avahi_new (void);
-const MeloAvahiService *melo_avahi_add (MeloAvahi *avahi, const gchar *name,
-                                        const gchar *type, gint port, ...);
-gboolean melo_avahi_update (MeloAvahi *avahi, const MeloAvahiService *service,
-                            const gchar *name, const gchar *type, gint port,
-                            gboolean update_txt, ...);
-void melo_avahi_remove (MeloAvahi *avahi, const MeloAvahiService *service);
+
+const MeloAvahiService *melo_avahi_add_service (MeloAvahi *avahi,
+                                                const gchar *name,
+                                                const gchar *type, gint port,
+                                                ...);
+gboolean melo_avahi_update_service (MeloAvahi *avahi,
+                                    const MeloAvahiService *service,
+                                    const gchar *name, const gchar *type,
+                                    gint port, gboolean update_txt, ...);
+void melo_avahi_remove_service (MeloAvahi *avahi,
+                                const MeloAvahiService *service);
+
+void melo_avahi_service_free (MeloAvahiService *s);
+
 
 G_END_DECLS
 

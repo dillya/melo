@@ -37,8 +37,6 @@ struct _MeloAvahiPrivate {
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloAvahi, melo_avahi, G_TYPE_OBJECT)
 
-static void melo_avahi_service_free (MeloAvahiService *s);
-
 static void
 melo_avahi_finalize (GObject *gobject)
 {
@@ -156,19 +154,19 @@ melo_avahi_update_group (AvahiClient *client, MeloAvahiPrivate *priv)
   }
 
   /* Commit new group */
-  if (avahi_entry_group_commit(priv->group) < 0)
+  if (avahi_entry_group_commit (priv->group) < 0)
     return FALSE;
 
   return TRUE;
 }
 
 static int
-melo_avahi_service_cmp (MeloAvahiService *a, MeloAvahiService *b)
+melo_avahi_service_cmp (const MeloAvahiService *a, const MeloAvahiService *b)
 {
   return g_strcmp0 (a->name, b->name) || g_strcmp0 (a->type, b->type);
 }
 
-static void
+void
 melo_avahi_service_free (MeloAvahiService *s)
 {
   g_free (s->name);
@@ -178,8 +176,8 @@ melo_avahi_service_free (MeloAvahiService *s)
 }
 
 const MeloAvahiService *
-melo_avahi_add (MeloAvahi *avahi, const gchar *name, const gchar *type,
-                gint port, ...)
+melo_avahi_add_service (MeloAvahi *avahi, const gchar *name, const gchar *type,
+                        gint port, ...)
 {
   MeloAvahiService service = { .name = (gchar *) name, .type = (gchar *) type };
   MeloAvahiPrivate *priv = avahi->priv;
@@ -214,9 +212,9 @@ melo_avahi_add (MeloAvahi *avahi, const gchar *name, const gchar *type,
 }
 
 gboolean
-melo_avahi_update (MeloAvahi *avahi, const MeloAvahiService *service,
-                   const gchar *name, const gchar *type, gint port,
-                   gboolean update_txt, ...)
+melo_avahi_update_service (MeloAvahi *avahi, const MeloAvahiService *service,
+                           const gchar *name, const gchar *type, gint port,
+                           gboolean update_txt, ...)
 {
   MeloAvahiService *s = (MeloAvahiService *) service;
   MeloAvahiPrivate *priv = avahi->priv;
@@ -255,7 +253,7 @@ melo_avahi_update (MeloAvahi *avahi, const MeloAvahiService *service,
 }
 
 void
-melo_avahi_remove (MeloAvahi *avahi, const MeloAvahiService *service)
+melo_avahi_remove_service (MeloAvahi *avahi, const MeloAvahiService *service)
 {
   MeloAvahiPrivate *priv = avahi->priv;
 

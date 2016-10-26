@@ -163,8 +163,8 @@ melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name)
 
   /* Add avahi service */
   if (priv->avahi)
-    priv->http_service = melo_avahi_add (priv->avahi, name, "_http._tcp", port,
-                                         NULL);
+    priv->http_service = melo_avahi_add_service (priv->avahi, name,
+                                                 "_http._tcp", port, NULL);
 
   return TRUE;
 }
@@ -179,7 +179,7 @@ melo_httpd_stop (MeloHTTPD *httpd)
 
   /* Remove avahi service */
   if (priv->avahi)
-    melo_avahi_remove (priv->avahi, priv->http_service);
+    melo_avahi_remove_service (priv->avahi, priv->http_service);
 }
 
 void
@@ -189,7 +189,8 @@ melo_httpd_set_name (MeloHTTPD *httpd, const gchar *name)
 
   /* Update avahi name service */
   if (priv->avahi && priv->http_service)
-    melo_avahi_update (priv->avahi, priv->http_service, name, NULL, 0, FALSE);
+    melo_avahi_update_service (priv->avahi, priv->http_service, name, NULL, 0,
+                               FALSE);
 }
 
 void
