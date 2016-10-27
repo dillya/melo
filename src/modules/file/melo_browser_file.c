@@ -21,6 +21,7 @@
 
 #include <string.h>
 #include <gio/gio.h>
+#include <gst/pbutils/pbutils.h>
 
 #include "melo_browser_file.h"
 
@@ -44,6 +45,9 @@ static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static GList *melo_browser_file_get_list (MeloBrowser *browser,
                                           const gchar *path, gint offset,
                                           gint count);
+static MeloTags *melo_browser_file_get_tags (MeloBrowser *browser,
+                                             const gchar *path,
+                                             MeloTagsFields fields);
 static gboolean melo_browser_file_add (MeloBrowser *browser, const gchar *path);
 static gboolean melo_browser_file_play (MeloBrowser *browser,
                                         const gchar *path);
@@ -98,6 +102,7 @@ melo_browser_file_class_init (MeloBrowserFileClass *klass)
 
   bclass->get_info = melo_browser_file_get_info;
   bclass->get_list = melo_browser_file_get_list;
+  bclass->get_tags = melo_browser_file_get_tags;
   bclass->add = melo_browser_file_add;
   bclass->play = melo_browser_file_play;
   bclass->remove = melo_browser_file_remove;
@@ -715,6 +720,50 @@ melo_browser_file_get_uri (MeloBrowser *browser, const gchar *path)
     return NULL;
 
   return uri;
+}
+
+static MeloTags *
+melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
+                            MeloTagsFields fields)
+{
+  GstDiscovererInfo *info;
+  GstDiscoverer *disco;
+  MeloTags *tags = NULL;
+  gchar *uri;
+
+  /* Get URI from path */
+  uri = melo_browser_file_get_uri (browser, path);
+  if (!uri)
+    return NULL;
+
+  /* Create a new discoverer */
+  disco = gst_discoverer_new (GST_SECOND, NULL);
+  if (!disco) {
+    g_free (uri);
+    return NULL;
+  }
+
+  /* Get tags from URI */
+  info = gst_discoverer_discover_uri (disco, uri, NULL);
+  if (info) {
+    const GstTagList *gtags;
+
+    /* Get GstTagLsit */
+    gtags = gst_discoverer_info_get_tags (info);
+
+    /* Convert to MeloTags */
+    if (gtags)
+      tags = melo_tags_new_from_gst_tag_list (gtags, MELO_TAGS_FIELDS_FULL);
+
+    /* Free info */
+    g_object_unref (info);
+  }
+
+  /* Free discoverer */
+  gst_object_unref (disco);
+  g_free (uri);
+
+  return tags;
 }
 
 static gboolean

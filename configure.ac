@@ -66,6 +66,13 @@ PKG_CHECK_MODULES([GST_TAG],
     AC_MSG_ERROR(Gstreamer-tag $GST_REQ or later is required)
   ])
 
+dnl Check for Gstreamer Base Utils
+PKG_CHECK_MODULES([GST_PBUTILS],
+  gstreamer-pbutils-1.0 >= $GST_REQ, [],
+  [
+    AC_MSG_ERROR(Gstreamer-pbutils $GST_REQ or later is required)
+  ])
+
 dnl Check for Avahi gobject
 AVAHI_GOBJECT_REQ=0.6.31
 PKG_CHECK_MODULES([AVAHI_GOBJECT],
@@ -82,8 +89,8 @@ PKG_CHECK_MODULES([RYGEL],
   ])
 
 dnl Generate CFLAGS and LIBS for libraries
-MELO_ALL_CFLAGS="-I\$(top_srcdir)/src/lib \$(GLIB_CFLAGS) \$(GST_CFLAGS) \$(GST_TAG_CFLAGS) \$(AVAHI_GOBJECT_CFLAGS) \$(LIBJSON_GLIB_CFLAGS)"
-MELO_ALL_LIBS="\$(GLIB_LIBS) \$(GST_LIBS) \$(GST_TAG_LIBS) \$(AVAHI_GOBJECT_LIBS) \$(LIBJSON_GLIB_LIBS)"
+MELO_ALL_CFLAGS="-I\$(top_srcdir)/src/lib \$(GLIB_CFLAGS) \$(GST_CFLAGS) \$(GST_TAG_CFLAGS) \$(GST_PBUTILS_CFLAGS) \$(AVAHI_GOBJECT_CFLAGS) \$(LIBJSON_GLIB_CFLAGS)"
+MELO_ALL_LIBS="\$(GLIB_LIBS) \$(GST_LIBS) \$(GST_TAG_LIBS) \$(GST_PBUTILS_LIBS) \$(AVAHI_GOBJECT_LIBS) \$(LIBJSON_GLIB_LIBS)"
 AC_SUBST(MELO_ALL_CFLAGS)
 AC_SUBST(MELO_ALL_LIBS)
 
