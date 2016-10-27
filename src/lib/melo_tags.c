@@ -160,7 +160,7 @@ melo_tags_get_cover_type (MeloTags *tags)
 }
 
 MeloTags *
-melo_tags_new_from_gst_tag_list (GstTagList *tlist, MeloTagsFields fields)
+melo_tags_new_from_gst_tag_list (const GstTagList *tlist, MeloTagsFields fields)
 {
   MeloTags *tags;
 

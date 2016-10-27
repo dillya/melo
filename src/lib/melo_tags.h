@@ -68,7 +68,7 @@ GBytes *melo_tags_get_cover (MeloTags *tags, gchar **type);
 gchar *melo_tags_get_cover_type (MeloTags *tags);
 
 /* Gstreamer helper */
-MeloTags *melo_tags_new_from_gst_tag_list (GstTagList *tlist,
+MeloTags *melo_tags_new_from_gst_tag_list (const GstTagList *tlist,
                                            MeloTagsFields fields);
 
 /* JSON-RPC helper */
