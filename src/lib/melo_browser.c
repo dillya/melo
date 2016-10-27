@@ -195,6 +195,17 @@ melo_browser_get_list (MeloBrowser *browser, const gchar *path, gint offset,
   return bclass->get_list (browser, path, offset, count);
 }
 
+MeloTags *
+melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
+                       MeloTagsFields fields)
+{
+  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
+
+  g_return_val_if_fail (bclass->get_tags, NULL);
+
+  return bclass->get_tags (browser, path, fields);
+}
+
 gboolean
 melo_browser_add (MeloBrowser *browser, const gchar *path)
 {
