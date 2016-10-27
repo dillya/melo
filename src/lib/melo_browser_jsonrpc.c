@@ -191,6 +191,56 @@ melo_browser_jsonrpc_get_list (const gchar *method,
 }
 
 static void
+melo_browser_jsonrpc_get_tags (const gchar *method,
+                               JsonArray *s_params, JsonNode *params,
+                               JsonNode **result, JsonNode **error,
+                               gpointer user_data)
+{
+  MeloTagsFields fields = MELO_TAGS_FIELDS_FULL;
+  MeloTags *tags = NULL;
+  MeloBrowser *bro;
+  JsonArray *array;
+  JsonObject *obj;
+  const gchar *path;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get browser from ID */
+  bro = melo_browser_jsonrpc_get_browser (obj, error);
+  if (!bro) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get path */
+  path = json_object_get_string_member (obj, "path");
+
+  /* Get fields */
+  if (json_object_has_member (obj, "fields")) {
+    /* Get tags fields array */
+    array = json_object_get_array_member (obj, "fields");
+    if (array)
+      fields = melo_tags_get_fields_from_json_array (array);
+  }
+
+  /* Get tags from path */
+  tags = melo_browser_get_tags (bro, path, fields);
+  json_object_unref (obj);
+  g_object_unref (bro);
+
+  /* Parse list and create array */
+  obj = melo_tags_to_json_object (tags, fields);
+  melo_tags_unref (tags);
+
+  /* Return object */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
+static void
 melo_browser_jsonrpc_item_action (const gchar *method,
                                   JsonArray *s_params, JsonNode *params,
                                   JsonNode **result, JsonNode **error,
@@ -268,6 +318,20 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"array\"}",
     .callback = melo_browser_jsonrpc_get_list,
+    .user_data = NULL,
+  },
+  {
+    .method = "get_tags",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"path\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_browser_jsonrpc_get_tags,
     .user_data = NULL,
   },
   {
