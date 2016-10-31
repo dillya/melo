@@ -206,6 +206,15 @@ function melo_get_browser_list(id, path, off, count) {
         });
       }
 
+      /* Add a link to display tags */
+      if (response.result[i].type == "file") {
+        item.append(' [<a class="tags_link" href="#">+</a>]<div class="tags"></div>');
+        item.children("a.tags_link").click([id, fpath, item], function(e) {
+          melo_browser_get_tags(e.data[0], e.data[1], e.data[2]);
+          return false;
+        });
+      }
+
       /* Add item */
       $('#browser_list').append(item);
     }
@@ -222,6 +231,46 @@ function melo_browser_action(action, id, path, update) {
     if (update)
       melo_get_browser_list(melo_browser_current_id, melo_browser_current_path,
                             melo_browser_current_off, melo_browser_current_count);
+  });
+}
+
+function melo_browser_get_tags(id, path, item) {
+  jsonrpc_call("browser.get_tags", JSON.parse('["' + id + '","' + path + '",["full"]]'),
+               function(response) {
+    item.children("a.tags_link").text("-");
+    item.children("a.tags_link").unbind().click([id, path, item], function(e) {
+      e.data[2].children("a.tags_link").text("+");
+      e.data[2].children("div.tags").text("");
+      item.children("a.tags_link").unbind().click([id, path, item], function(e) {
+        melo_browser_get_tags(e.data[0], e.data[1], e.data[2]);
+        return false;
+      });
+      return false;
+    });
+
+    if (response.error || !response.result) {
+      item.children("div.tags").html("Error!");
+      return;
+    }
+
+    var tags = response.result;
+    var img_src = "";
+
+    /* Create img src for cover */
+    if (tags.cover != null)
+      img_src = "data:" + tags.cover_type + ";base64," + tags.cover;
+
+    /* Update item */
+    item.children("div.tags").html(
+      '<img src="' + img_src + '" alt="cover" class="tags_cover">' +
+      '<div>' +
+        'Title: <span class="ttitle">' + tags.title  + '</span><br>' +
+        'Artist: <span class="artist">' + tags.artist + '</span><br>' +
+        'Alnum: <span class="album">' + tags.album + '</span><br>' +
+        'Genre: <span class="genre">' + tags.genre + '</span><br>' +
+        'Date: <span class="date">' + tags.date + '</span><br>' +
+        'Track: <span class="track">' + tags.track + '/' + tags.tracks + '</span>' +
+      '</div>');
   });
 }
 
