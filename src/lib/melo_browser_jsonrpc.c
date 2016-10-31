@@ -94,6 +94,75 @@ melo_browser_jsonrpc_info_to_object (const gchar *id,
   return obj;
 }
 
+MeloBrowserJSONRPCListFields
+melo_browser_jsonrpc_get_list_fields (JsonObject *obj)
+{
+  MeloBrowserJSONRPCListFields fields = MELO_BROWSER_JSONRPC_LIST_FIELDS_NONE;
+  const gchar *field;
+  JsonArray *array;
+  guint count, i;
+
+  /* Check if fields is available */
+  if (!json_object_has_member (obj, "fields"))
+    return MELO_BROWSER_JSONRPC_LIST_FIELDS_DEFAULT;
+
+  /* Get fields array */
+  array = json_object_get_array_member (obj, "fields");
+  if (!array)
+    return fields;
+
+  /* Parse array */
+  count = json_array_get_length (array);
+  for (i = 0; i < count; i++) {
+    field = json_array_get_string_element (array, i);
+    if (!field)
+      break;
+    if (!g_strcmp0 (field, "none")) {
+      fields = MELO_BROWSER_JSONRPC_LIST_FIELDS_NONE;
+      break;
+    } else if (!g_strcmp0 (field, "full")) {
+      fields = MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL;
+      break;
+    } else if (!g_strcmp0 (field, "name"))
+      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME;
+    else if (!g_strcmp0 (field, "full_name"))
+      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL_NAME;
+    else if (!g_strcmp0 (field, "type"))
+      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE;
+    else if (!g_strcmp0 (field, "cmds"))
+      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_CMDS;
+  }
+
+  return fields;
+}
+
+JsonArray *
+melo_browser_jsonrpc_list_to_object (const GList *list,
+                                     MeloBrowserJSONRPCListFields fields)
+{
+  JsonArray *array;
+  const GList *l;
+
+  /* Parse list and create array */
+  array = json_array_new ();
+  for (l = list; l != NULL; l = l->next) {
+    MeloBrowserItem *item = (MeloBrowserItem *) l->data;
+    JsonObject *obj = json_object_new ();
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME)
+      json_object_set_string_member (obj, "name", item->name);
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL_NAME)
+      json_object_set_string_member (obj, "full_name", item->full_name);
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE)
+      json_object_set_string_member (obj, "type", item->type);
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_CMDS) {
+      json_object_set_string_member (obj, "add", item->add);
+      json_object_set_string_member (obj, "remove", item->remove);
+    }
+    json_array_add_object_element (array, obj);
+  }
+  return array;
+}
+
 /* Method callbacks */
 static void
 melo_browser_jsonrpc_get_info (const gchar *method,
@@ -138,6 +207,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
                                JsonNode **result, JsonNode **error,
                                gpointer user_data)
 {
+  MeloBrowserJSONRPCListFields fields;
   MeloBrowser *bro;
   JsonArray *array;
   JsonObject *obj;
@@ -160,6 +230,9 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   /* Get path */
   path = json_object_get_string_member (obj, "path");
 
+  /* Get fields */
+  fields = melo_browser_jsonrpc_get_list_fields (obj);
+
   /* Get list position */
   offset = json_object_get_int_member (obj, "offset");
   count = json_object_get_int_member (obj, "count");
@@ -169,18 +242,8 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   json_object_unref (obj);
   g_object_unref (bro);
 
-  /* Parse list and create array */
-  array = json_array_new ();
-  for (l = list; l != NULL; l = l->next) {
-    MeloBrowserItem *item = (MeloBrowserItem *) l->data;
-    obj = json_object_new ();
-    json_object_set_string_member (obj, "name", item->name);
-    json_object_set_string_member (obj, "full_name", item->full_name);
-    json_object_set_string_member (obj, "type", item->type);
-    json_object_set_string_member (obj, "add", item->add);
-    json_object_set_string_member (obj, "remove", item->remove);
-    json_array_add_object_element (array, obj);
-  }
+  /* Create list */
+  array = melo_browser_jsonrpc_list_to_object (list, fields);
 
   /* Free item list */
   g_list_free_full (list, (GDestroyNotify) melo_browser_item_free);
