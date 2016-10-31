@@ -42,6 +42,8 @@ typedef struct _MeloBrowserPrivate MeloBrowserPrivate;
 typedef struct _MeloBrowserInfo MeloBrowserInfo;
 typedef struct _MeloBrowserItem MeloBrowserItem;
 
+typedef enum _MeloBrowserTagsMode MeloBrowserTagsMode;
+
 struct _MeloBrowser {
   GObject parent_instance;
 
@@ -58,7 +60,8 @@ struct _MeloBrowserClass {
 
   const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
   GList *(*get_list) (MeloBrowser *browser, const gchar *path,  gint offset,
-                      gint count);
+                      gint count, MeloBrowserTagsMode tags_mode,
+                      MeloTagsFields tags_fields);
   MeloTags *(*get_tags) (MeloBrowser *browser, const gchar *path,
                          MeloTagsFields fields);
   gboolean (*add) (MeloBrowser *browser, const gchar *path);
@@ -69,6 +72,8 @@ struct _MeloBrowserClass {
 struct _MeloBrowserInfo {
   const gchar *name;
   const gchar *description;
+  gboolean tags_support;
+  gboolean tags_cache_support;
 };
 
 struct _MeloBrowserItem {
@@ -77,6 +82,15 @@ struct _MeloBrowserItem {
   gchar *type;
   gchar *add;
   gchar *remove;
+  MeloTags *tags;
+};
+
+enum _MeloBrowserTagsMode {
+  MELO_BROWSER_TAGS_MODE_NONE = 0,
+  MELO_BROWSER_TAGS_MODE_NONE_CACHED,
+  MELO_BROWSER_TAGS_MODE_CACHED,
+  MELO_BROWSER_TAGS_MODE_FULL_CACHED,
+  MELO_BROWSER_TAGS_MODE_FULL,
 };
 
 GType melo_browser_get_type (void);
@@ -90,7 +104,9 @@ void melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player);
 MeloPlayer *melo_browser_get_player (MeloBrowser *browser);
 
 GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path,
-                              gint offset, gint count);
+                              gint offset, gint count,
+                              MeloBrowserTagsMode tags_mode,
+                              MeloTagsFields tags_fields);
 MeloTags *melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
                                  MeloTagsFields fields);
 gboolean melo_browser_add (MeloBrowser *browser, const gchar *path);

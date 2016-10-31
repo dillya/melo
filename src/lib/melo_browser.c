@@ -186,13 +186,15 @@ melo_browser_get_player (MeloBrowser *browser)
 
 GList *
 melo_browser_get_list (MeloBrowser *browser, const gchar *path, gint offset,
-                       gint count)
+                       gint count, MeloBrowserTagsMode tags_mode,
+                       MeloTagsFields tags_fields)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
   g_return_val_if_fail (bclass->get_list, NULL);
 
-  return bclass->get_list (browser, path, offset, count);
+  return bclass->get_list (browser, path, offset, count, tags_mode,
+                           tags_fields);
 }
 
 MeloTags *
@@ -270,5 +272,7 @@ melo_browser_item_free (MeloBrowserItem *item)
     g_free (item->type);
   if (item->remove)
     g_free (item->remove);
+  if (item->tags)
+    melo_tags_unref (item->tags);
   g_slice_free (MeloBrowserItem, item);
 }

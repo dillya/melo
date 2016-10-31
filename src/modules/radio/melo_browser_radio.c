@@ -30,13 +30,17 @@
 static MeloBrowserInfo melo_browser_radio_info = {
   .name = "Browse radios",
   .description = "Navigate though more than 30,000 radio and webradio",
+  .tags_support = TRUE,
+  .tags_cache_support = FALSE,
 };
 
 static const MeloBrowserInfo *melo_browser_radio_get_info (
                                                           MeloBrowser *browser);
 static GList *melo_browser_radio_get_list (MeloBrowser *browser,
                                            const gchar *path, gint offset,
-                                           gint count);
+                                           gint count,
+                                           MeloBrowserTagsMode tags_mode,
+                                           MeloTagsFields tags_fields);
 static gboolean melo_browser_radio_play (MeloBrowser *browser,
                                          const gchar *path);
 
@@ -103,7 +107,9 @@ melo_browser_radio_get_info (MeloBrowser *browser)
 
 static GList *
 melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
-                             gint offset, gint count)
+                             gint offset, gint count,
+                             MeloBrowserTagsMode tags_mode,
+                             MeloTagsFields tags_fields)
 {
   MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
   SoupMessage *msg;

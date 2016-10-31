@@ -131,6 +131,8 @@ melo_browser_jsonrpc_get_list_fields (JsonObject *obj)
       fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE;
     else if (!g_strcmp0 (field, "cmds"))
       fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_CMDS;
+    else if (!g_strcmp0 (field, "tags"))
+      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS;
   }
 
   return fields;
@@ -138,7 +140,8 @@ melo_browser_jsonrpc_get_list_fields (JsonObject *obj)
 
 JsonArray *
 melo_browser_jsonrpc_list_to_object (const GList *list,
-                                     MeloBrowserJSONRPCListFields fields)
+                                     MeloBrowserJSONRPCListFields fields,
+                                     MeloTagsFields tags_fields)
 {
   JsonArray *array;
   const GList *l;
@@ -158,9 +161,53 @@ melo_browser_jsonrpc_list_to_object (const GList *list,
       json_object_set_string_member (obj, "add", item->add);
       json_object_set_string_member (obj, "remove", item->remove);
     }
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS) {
+      JsonObject *tags = melo_tags_to_json_object (item->tags, tags_fields);
+      json_object_set_object_member (obj, "tags", tags);
+    }
     json_array_add_object_element (array, obj);
   }
   return array;
+}
+
+static void
+melo_browser_jsonrpc_get_tags_mode (JsonObject *obj, MeloBrowserTagsMode *mode,
+                                    MeloTagsFields *fields)
+{
+  const gchar *mod;
+
+  /* Check if tags node is available */
+  if (!json_object_has_member (obj, "tags"))
+    return;
+
+  /* Get object node */
+  obj = json_object_get_object_member (obj, "tags");
+  if (!obj)
+    return;
+
+  /* Get tags mode string */
+  mod = json_object_get_string_member (obj, "mode");
+  if (!mod)
+    return;
+
+  /* Convert to MeloBrowserTagsMode */
+  if (!g_strcmp0 (mod, "none_cached"))
+    *mode = MELO_BROWSER_TAGS_MODE_NONE_CACHED;
+  else if (!g_strcmp0 (mod, "cached"))
+    *mode = MELO_BROWSER_TAGS_MODE_CACHED;
+  else if (!g_strcmp0 (mod, "full_cached"))
+    *mode = MELO_BROWSER_TAGS_MODE_FULL_CACHED;
+  else if (!g_strcmp0 (mod, "full"))
+    *mode = MELO_BROWSER_TAGS_MODE_FULL;
+  else
+    *mode = MELO_BROWSER_TAGS_MODE_NONE;
+
+  /* Get tags fieldsi and convert */
+  if (json_object_has_member (obj, "fields")) {
+    JsonArray *array = json_object_get_array_member (obj, "fields");
+    if (array)
+      *fields = melo_tags_get_fields_from_json_array (array);
+  }
 }
 
 /* Method callbacks */
@@ -208,6 +255,8 @@ melo_browser_jsonrpc_get_list (const gchar *method,
                                gpointer user_data)
 {
   MeloBrowserJSONRPCListFields fields;
+  MeloBrowserTagsMode tags_mode = MELO_BROWSER_TAGS_MODE_NONE;
+  MeloTagsFields tags_fields = MELO_TAGS_FIELDS_NONE;
   MeloBrowser *bro;
   JsonArray *array;
   JsonObject *obj;
@@ -237,13 +286,18 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   offset = json_object_get_int_member (obj, "offset");
   count = json_object_get_int_member (obj, "count");
 
+  /* Get tags if needed */
+  if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS)
+    melo_browser_jsonrpc_get_tags_mode (obj, &tags_mode, &tags_fields);
+
   /* Get list */
-  list = melo_browser_get_list (bro, path, offset, count);
+  list = melo_browser_get_list (bro, path, offset, count, tags_mode,
+                                tags_fields);
   json_object_unref (obj);
   g_object_unref (bro);
 
   /* Create list */
-  array = melo_browser_jsonrpc_list_to_object (list, fields);
+  array = melo_browser_jsonrpc_list_to_object (list, fields, tags_fields);
 
   /* Free item list */
   g_list_free_full (list, (GDestroyNotify) melo_browser_item_free);
@@ -377,6 +431,10 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "  },"
               "  {"
               "    \"name\": \"sort\", \"type\": \"object\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"tags\", \"type\": \"object\","
               "    \"required\": false"
               "  }"
               "]",

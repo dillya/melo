@@ -32,6 +32,8 @@
 static MeloBrowserInfo melo_browser_file_info = {
   .name = "Browse files",
   .description = "Navigate though local and remote filesystems",
+  .tags_support = TRUE,
+  .tags_cache_support = FALSE,
 };
 
 static gint vms_cmp (GObject *a, GObject *b);
@@ -44,7 +46,9 @@ static void melo_browser_file_set_id (GObject *obj,
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static GList *melo_browser_file_get_list (MeloBrowser *browser,
                                           const gchar *path, gint offset,
-                                          gint count);
+                                          gint count,
+                                          MeloBrowserTagsMode tags_mode,
+                                          MeloTagsFields tags_fields);
 static MeloTags *melo_browser_file_get_tags (MeloBrowser *browser,
                                              const gchar *path,
                                              MeloTagsFields fields);
@@ -628,7 +632,9 @@ melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path)
 
 static GList *
 melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
-                            gint offset, gint count)
+                            gint offset, gint count,
+                            MeloBrowserTagsMode tags_mode,
+                            MeloTagsFields tags_fields)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   GList *list = NULL;
