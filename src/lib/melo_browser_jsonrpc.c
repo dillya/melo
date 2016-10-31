@@ -233,7 +233,8 @@ melo_browser_jsonrpc_get_tags (const gchar *method,
 
   /* Parse list and create array */
   obj = melo_tags_to_json_object (tags, fields);
-  melo_tags_unref (tags);
+  if (tags)
+    melo_tags_unref (tags);
 
   /* Return object */
   *result = json_node_new (JSON_NODE_OBJECT);
