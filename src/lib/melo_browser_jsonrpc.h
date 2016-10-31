@@ -26,17 +26,18 @@
 #include "melo_jsonrpc.h"
 
 typedef enum {
-  MELO_BROWSER_JSONRPC_FIELDS_NONE = 0,
-  MELO_BROWSER_JSONRPC_FIELDS_NAME = 1,
-  MELO_BROWSER_JSONRPC_FIELDS_DESCRIPTION = 2,
-  MELO_BROWSER_JSONRPC_FIELDS_FULL = 255,
-} MeloBrowserJSONRPCFields;
+  MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE = 0,
+  MELO_BROWSER_JSONRPC_INFO_FIELDS_NAME = 1,
+  MELO_BROWSER_JSONRPC_INFO_FIELDS_DESCRIPTION = 2,
+  MELO_BROWSER_JSONRPC_INFO_FIELDS_FULL = 255,
+} MeloBrowserJSONRPCInfoFields;
 
-MeloBrowserJSONRPCFields melo_browser_jsonrpc_get_fields (JsonObject *obj);
+MeloBrowserJSONRPCInfoFields melo_browser_jsonrpc_get_info_fields (
+                                                               JsonObject *obj);
 JsonObject *melo_browser_jsonrpc_info_to_object (
-                                               const gchar *id,
-                                               const MeloBrowserInfo *info,
-                                               MeloBrowserJSONRPCFields fields);
+                                           const gchar *id,
+                                           const MeloBrowserInfo *info,
+                                           MeloBrowserJSONRPCInfoFields fields);
 
 /* JSON-RPC methods */
 void melo_browser_register_methods (void);

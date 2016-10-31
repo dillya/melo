@@ -195,7 +195,7 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
                                       JsonNode **result, JsonNode **error,
                                       gpointer user_data)
 {
-  MeloBrowserJSONRPCFields fields = MELO_BROWSER_JSONRPC_FIELDS_NONE;
+  MeloBrowserJSONRPCInfoFields fields = MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE;
   const MeloBrowserInfo *info = NULL;
   MeloBrowser *bro;
   MeloModule *mod;
@@ -217,7 +217,7 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
   }
 
   /* Get fields */
-  fields = melo_browser_jsonrpc_get_fields (obj);
+  fields = melo_browser_jsonrpc_get_info_fields (obj);
 
   /* Get browser list */
   list = melo_module_get_browser_list (mod);
@@ -229,7 +229,7 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
   for (l = list; l != NULL; l = l->next) {
     bro = (MeloBrowser *) l->data;
     id = melo_browser_get_id (bro);
-    if (fields != MELO_BROWSER_JSONRPC_FIELDS_NONE)
+    if (fields != MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE)
       info = melo_browser_get_info (bro);
     obj = melo_browser_jsonrpc_info_to_object (id, info, fields);
     json_array_add_object_element (array, obj);
