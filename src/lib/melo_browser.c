@@ -30,6 +30,17 @@ struct _MeloBrowserPrivate {
   gchar *id;
 };
 
+enum {
+  PROP_0,
+  PROP_ID,
+  PROP_LAST
+};
+
+static void melo_browser_set_property (GObject *object, guint property_id,
+                                       const GValue *value, GParamSpec *pspec);
+static void melo_browser_get_property (GObject *object, guint property_id,
+                                       GValue *value, GParamSpec *pspec);
+
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloBrowser, melo_browser, G_TYPE_OBJECT)
 
 static void
@@ -66,6 +77,14 @@ melo_browser_class_init (MeloBrowserClass *klass)
 
   /* Add custom finalize() function */
   object_class->finalize = melo_browser_finalize;
+  object_class->set_property = melo_browser_set_property;
+  object_class->get_property = melo_browser_get_property;
+
+  /* Install ID property */
+  g_object_class_install_property (object_class, PROP_ID,
+      g_param_spec_string ("id", "ID", "Browser ID", NULL,
+                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                           G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -77,20 +96,44 @@ melo_browser_init (MeloBrowser *self)
   priv->id = NULL;
 }
 
-static void
-melo_browser_set_id (MeloBrowser *browser, const gchar *id)
-{
-  MeloBrowserPrivate *priv = browser->priv;
-
-  if (priv->id)
-    g_free (priv->id);
-  priv->id = g_strdup (id);
-}
-
 const gchar *
 melo_browser_get_id (MeloBrowser *browser)
 {
   return browser->priv->id;
+}
+
+static void
+melo_browser_set_property (GObject *object, guint property_id,
+                           const GValue *value, GParamSpec *pspec)
+{
+  MeloBrowser *browser = MELO_BROWSER (object);
+
+  switch (property_id)
+    {
+    case PROP_ID:
+      g_free (browser->priv->id);
+      browser->priv->id = g_value_dup_string (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+    }
+}
+
+static void
+melo_browser_get_property (GObject *object, guint property_id, GValue *value,
+                           GParamSpec *pspec)
+{
+  MeloBrowser *browser = MELO_BROWSER (object);
+
+  switch (property_id)
+    {
+    case PROP_ID:
+      g_value_set_string (value, melo_browser_get_id (browser));
+      break;
+
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+    }
 }
 
 const MeloBrowserInfo *
@@ -146,12 +189,9 @@ melo_browser_new (GType type, const gchar *id)
     goto failed;
 
   /* Create a new instance of browser */
-  bro = g_object_new (type, NULL);
+  bro = g_object_new (type, "id", id, NULL);
   if (!bro)
     goto failed;
-
-  /* Set ID */
-  melo_browser_set_id (bro, id);
 
   /* Add new browser instance to browser list */
   g_hash_table_insert (melo_browser_hash, g_strdup (id), bro);

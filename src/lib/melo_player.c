@@ -39,6 +39,17 @@ struct _MeloPlayerPrivate {
   MeloPlayerInfo info;
 };
 
+enum {
+  PROP_0,
+  PROP_ID,
+  PROP_LAST
+};
+
+static void melo_player_set_property (GObject *object, guint property_id,
+                                      const GValue *value, GParamSpec *pspec);
+static void melo_player_get_property (GObject *object, guint property_id,
+                                      GValue *value, GParamSpec *pspec);
+
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloPlayer, melo_player, G_TYPE_OBJECT)
 
 static void
@@ -75,6 +86,14 @@ melo_player_class_init (MeloPlayerClass *klass)
 
   /* Add custom finalize() function */
   object_class->finalize = melo_player_finalize;
+  object_class->set_property = melo_player_set_property;
+  object_class->get_property = melo_player_get_property;
+
+  /* Install ID property */
+  g_object_class_install_property (object_class, PROP_ID,
+      g_param_spec_string ("id", "ID", "Player ID", NULL,
+                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                           G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -87,19 +106,44 @@ melo_player_init (MeloPlayer *self)
   priv->info.playlist_id = NULL;
 }
 
-static void
-melo_player_set_id (MeloPlayer *player, const gchar *id)
-{
-  MeloPlayerPrivate *priv = player->priv;
-
-  g_free (priv->id);
-  priv->id = g_strdup (id);
-}
-
 const gchar *
 melo_player_get_id (MeloPlayer *player)
 {
   return player->priv->id;
+}
+
+static void
+melo_player_set_property (GObject *object, guint property_id,
+                          const GValue *value, GParamSpec *pspec)
+{
+  MeloPlayer *player = MELO_PLAYER (object);
+
+  switch (property_id)
+    {
+    case PROP_ID:
+      g_free (player->priv->id);
+      player->priv->id = g_value_dup_string (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+    }
+}
+
+static void
+melo_player_get_property (GObject *object, guint property_id, GValue *value,
+                          GParamSpec *pspec)
+{
+  MeloPlayer *player = MELO_PLAYER (object);
+
+  switch (property_id)
+    {
+    case PROP_ID:
+      g_value_set_string (value, melo_player_get_id (player));
+      break;
+
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+    }
 }
 
 const MeloPlayerInfo *
@@ -161,12 +205,9 @@ melo_player_new (GType type, const gchar *id)
     goto failed;
 
   /* Create a new instance of player */
-  play = g_object_new (type, NULL);
+  play = g_object_new (type, "id", id, NULL);
   if (!play)
     goto failed;
-
-  /* Set ID */
-  melo_player_set_id (play, id);
 
   /* Add new player instance to player list */
   g_hash_table_insert (melo_player_hash, g_strdup (id), play);

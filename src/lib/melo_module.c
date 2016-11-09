@@ -38,6 +38,17 @@ struct _MeloModulePrivate {
   GList *player_list;
 };
 
+enum {
+  PROP_0,
+  PROP_ID,
+  PROP_LAST
+};
+
+static void melo_module_set_property (GObject *object, guint property_id,
+                                      const GValue *value, GParamSpec *pspec);
+static void melo_module_get_property (GObject *object, guint property_id,
+                                      GValue *value, GParamSpec *pspec);
+
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloModule, melo_module, G_TYPE_OBJECT)
 
 static void
@@ -68,6 +79,14 @@ melo_module_class_init (MeloModuleClass *klass)
 
   /* Add custom finalize() function */
   object_class->finalize = melo_module_finalize;
+  object_class->set_property = melo_module_set_property;
+  object_class->get_property = melo_module_get_property;
+
+  /* Install ID property */
+  g_object_class_install_property (object_class, PROP_ID,
+      g_param_spec_string ("id", "ID", "Module ID", NULL,
+                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                           G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -87,18 +106,44 @@ melo_module_init (MeloModule *self)
   priv->player_list = NULL;
 }
 
-static void
-melo_module_set_id (MeloModule *self, const gchar *id)
-{
-  if (self->priv->id)
-    g_free (self->priv->id);
-  self->priv->id = g_strdup (id);
-}
-
 const gchar *
 melo_module_get_id (MeloModule *module)
 {
   return module->priv->id;
+}
+
+static void
+melo_module_set_property (GObject *object, guint property_id,
+                          const GValue *value, GParamSpec *pspec)
+{
+  MeloModule *module = MELO_MODULE (object);
+
+  switch (property_id)
+    {
+    case PROP_ID:
+      g_free (module->priv->id);
+      module->priv->id = g_value_dup_string (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+    }
+}
+
+static void
+melo_module_get_property (GObject *object, guint property_id, GValue *value,
+                          GParamSpec *pspec)
+{
+  MeloModule *module = MELO_MODULE (object);
+
+  switch (property_id)
+    {
+    case PROP_ID:
+      g_value_set_string (value, melo_module_get_id (module));
+      break;
+
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+    }
 }
 
 const MeloModuleInfo *
@@ -271,12 +316,9 @@ melo_module_register (GType type, const gchar *id)
     goto failed;
 
   /* Create a new instance of module */
-  mod = g_object_new (type, NULL);
+  mod = g_object_new (type, "id", id, NULL);
   if (!mod)
     goto failed;
-
-  /* Set ID to module */
-  melo_module_set_id (mod, id);
 
   /* Add module instance to modules list */
   g_hash_table_insert (melo_modules_hash, g_strdup (id), mod);
