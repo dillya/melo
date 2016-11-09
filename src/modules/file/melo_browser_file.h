@@ -23,6 +23,7 @@
 #define __MELO_BROWSER_FILE_H__
 
 #include "melo_browser.h"
+#include "melo_file_db.h"
 
 G_BEGIN_DECLS
 
@@ -52,6 +53,8 @@ GType melo_browser_file_get_type (void);
 
 void melo_browser_file_set_local_path (MeloBrowserFile *bfile,
                                        const gchar *path);
+
+void melo_browser_file_set_db (MeloBrowserFile *bfile, MeloFileDB *fdb);
 
 G_END_DECLS
 

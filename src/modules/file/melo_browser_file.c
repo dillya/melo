@@ -65,6 +65,7 @@ struct _MeloBrowserFilePrivate {
   GList *vms;
   GHashTable *ids;
   GHashTable *shortcuts;
+  MeloFileDB *fdb;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloBrowserFile, melo_browser_file, MELO_TYPE_BROWSER)
@@ -162,6 +163,12 @@ melo_browser_file_set_local_path (MeloBrowserFile *bfile, const gchar *path)
 {
   g_free (bfile->priv->local_path);
   bfile->priv->local_path = g_strdup (path);
+}
+
+void
+melo_browser_file_set_db (MeloBrowserFile *bfile, MeloFileDB *fdb)
+{
+  bfile->priv->fdb = fdb;
 }
 
 static const MeloBrowserInfo *
@@ -732,22 +739,36 @@ static MeloTags *
 melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
                             MeloTagsFields fields)
 {
+  MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
+  MeloBrowserFilePrivate *priv = bfile->priv;
   GstDiscovererInfo *info;
   GstDiscoverer *disco;
   MeloTags *tags = NULL;
-  gchar *uri;
+  gchar *uri, *dir, *file;
 
   /* Get URI from path */
   uri = melo_browser_file_get_uri (browser, path);
   if (!uri)
     return NULL;
 
+  /* Get dirname and basename */
+  dir = g_path_get_dirname (uri);
+  file = g_path_get_basename (uri);
+
+  /* Get tags from database */
+  if (priv->fdb) {
+    tags = melo_file_db_find_one_song (priv->fdb, MELO_TAGS_FIELDS_FULL,
+                                       MELO_FILE_DB_FIELDS_PATH, dir,
+                                       MELO_FILE_DB_FIELDS_FILE, file,
+                                       MELO_FILE_DB_FIELDS_END);
+    if (tags)
+      goto end;
+  }
+
   /* Create a new discoverer */
   disco = gst_discoverer_new (GST_SECOND, NULL);
-  if (!disco) {
-    g_free (uri);
-    return NULL;
-  }
+  if (!disco)
+    goto end;
 
   /* Get tags from URI */
   info = gst_discoverer_discover_uri (disco, uri, NULL);
@@ -761,12 +782,21 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
     if (gtags)
       tags = melo_tags_new_from_gst_tag_list (gtags, MELO_TAGS_FIELDS_FULL);
 
+    /* Add file to database if tags are available */
+    if (priv->fdb)
+      melo_file_db_add_tags (priv->fdb, dir, file, 0, tags);
+
     /* Free info */
     g_object_unref (info);
   }
 
   /* Free discoverer */
   gst_object_unref (disco);
+
+end:
+  /* Free uri */
+  g_free (file);
+  g_free (dir);
   g_free (uri);
 
   return tags;

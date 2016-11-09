@@ -134,6 +134,11 @@ melo_file_constructed (GObject *gobject)
   priv->fdb = melo_file_db_new (path);
   g_free (path);
 
+  /* Set database file for browser */
+  if (priv->fdb) {
+    melo_browser_file_set_db (MELO_BROWSER_FILE (priv->files), priv->fdb);
+  }
+
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_file_parent_class)->constructed (gobject);
 }
