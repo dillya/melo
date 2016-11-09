@@ -400,3 +400,10 @@ melo_module_get_module_by_id (const gchar *id)
 
   return mod;
 }
+
+gchar *
+melo_module_build_path (MeloModule *module, const gchar *file)
+{
+  return g_strdup_printf ("%s/melo/%s/%s", g_get_user_data_dir (),
+                          module->priv->id, file);
+}

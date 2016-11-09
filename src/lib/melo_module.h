@@ -86,6 +86,9 @@ GList *melo_module_get_module_list (void);
 /* Get MeloModule by id */
 MeloModule *melo_module_get_module_by_id (const gchar *id);
 
+/* Build a path for a file in module directory */
+gchar *melo_module_build_path (MeloModule *module, const gchar *file);
+
 G_END_DECLS
 
 #endif /* __MELO_MODULE_H__ */
