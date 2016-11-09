@@ -81,6 +81,14 @@ PKG_CHECK_MODULES([AVAHI_GOBJECT],
     AC_MSG_ERROR(Avahi-gobject $AVAHI_OBJECT_REQ or later is required)
   ])
 
+dnl Check for SQLite3
+SQLITE_REQ=3.6.19
+PKG_CHECK_MODULES([SQLITE],
+  sqlite3 >= $SQLITE_REQ, [],
+  [
+    AC_MSG_ERROR(SQLite3 $SQLITE_REQ or later is required)
+  ])
+
 dnl Check for Rygel renderer
 PKG_CHECK_MODULES([RYGEL],
   rygel-renderer-gst-2.4, [],

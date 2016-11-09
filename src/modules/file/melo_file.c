@@ -20,6 +20,7 @@
  */
 
 #include "melo_file.h"
+#include "melo_file_db.h"
 #include "melo_browser_file.h"
 #include "melo_player_file.h"
 #include "melo_playlist_file.h"
@@ -32,9 +33,11 @@ static MeloModuleInfo melo_file_info = {
   .config_id = "file",
 };
 
+static void melo_file_constructed (GObject *gobject);
 static const MeloModuleInfo *melo_file_get_info (MeloModule *module);
 
 struct _MeloFilePrivate {
+  MeloFileDB *fdb;
   MeloBrowser *files;
   MeloPlayer *player;
   MeloPlaylist *playlist;
@@ -61,10 +64,12 @@ melo_file_finalize (GObject *gobject)
     g_object_unref (priv->files);
   }
 
+  if (priv->fdb)
+    g_object_unref (priv->fdb);
+
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_file_parent_class)->finalize (gobject);
 }
-
 
 static void
 melo_file_class_init (MeloFileClass *klass)
@@ -73,6 +78,9 @@ melo_file_class_init (MeloFileClass *klass)
   GObjectClass *oclass = G_OBJECT_CLASS (klass);
 
   mclass->get_info = melo_file_get_info;
+
+  /* Add custom constructed() function */
+  oclass->constructed = melo_file_constructed;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_file_finalize;
@@ -113,6 +121,21 @@ melo_file_init (MeloFile *self)
     melo_browser_file_set_local_path (MELO_BROWSER_FILE (priv->files), path);
     g_free (path);
   }
+}
+
+static void
+melo_file_constructed (GObject *gobject)
+{
+  MeloFilePrivate *priv = melo_file_get_instance_private (MELO_FILE (gobject));
+  gchar *path;
+
+  /* Open media database */
+  path = melo_module_build_path (MELO_MODULE (gobject), "media.db");
+  priv->fdb = melo_file_db_new (path);
+  g_free (path);
+
+  /* Chain up to the parent class */
+  G_OBJECT_CLASS (melo_file_parent_class)->constructed (gobject);
 }
 
 static const MeloModuleInfo *

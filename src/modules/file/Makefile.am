@@ -9,13 +9,19 @@ libmelo_file_la_SOURCES = \
 	melo_player_file.c \
 	melo_playlist_file.c \
 	melo_config_file.c \
+	melo_file_db.c \
 	melo_file.c
 
-libmelo_file_la_CFLAGS = $(MELO_ALL_CFLAGS)
-libmelo_file_la_LIBADD = $(MELO_ALL_LIBS)
+libmelo_file_la_CFLAGS = \
+	$(SQLITE_CFLAGS) \
+	$(MELO_ALL_CFLAGS)
+libmelo_file_la_LIBADD = \
+	$(SQLITE_LIBS) \
+	$(MELO_ALL_LIBS)
 
 noinst_HEADERS = \
 	melo_file.h \
+	melo_file_db.h \
 	melo_browser_file.h \
 	melo_player_file.h \
 	melo_playlist_file.h \
