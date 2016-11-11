@@ -127,12 +127,14 @@ static void
 melo_file_constructed (GObject *gobject)
 {
   MeloFilePrivate *priv = melo_file_get_instance_private (MELO_FILE (gobject));
-  gchar *path;
+  gchar *path, *db;
 
   /* Open media database */
-  path = melo_module_build_path (MELO_MODULE (gobject), "media.db");
-  priv->fdb = melo_file_db_new (path);
+  db = melo_module_build_path (MELO_MODULE (gobject), "media.db");
+  path = melo_module_build_path (MELO_MODULE (gobject), "covers");
+  priv->fdb = melo_file_db_new (db, path);
   g_free (path);
+  g_free (db);
 
   /* Set database file for browser */
   if (priv->fdb) {

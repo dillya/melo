@@ -23,8 +23,8 @@
 
 #include "melo_file_db.h"
 
-#define MELO_FILE_DB_VERSION 1
-#define MELO_FILE_DB_VERSION_STR "1"
+#define MELO_FILE_DB_VERSION 2
+#define MELO_FILE_DB_VERSION_STR "2"
 
 /* Table creation */
 #define MELO_FILE_DB_CREATE \
@@ -36,6 +36,7 @@
   "        'date'          INTEGER," \
   "        'track'         INTEGER," \
   "        'tracks'        INTEGER," \
+  "        'cover'         TEXT," \
   "        'file'          TEXT," \
   "        'path_id'       INTEGER," \
   "        'timestamp'     INTEGER" \
@@ -68,6 +69,7 @@
 struct _MeloFileDBPrivate {
   GMutex mutex;
   sqlite3 *db;
+  gchar *cover_path;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloFileDB, melo_file_db, G_TYPE_OBJECT)
@@ -80,6 +82,9 @@ melo_file_db_finalize (GObject *gobject)
 {
   MeloFileDB *fdb = MELO_FILE_DB (gobject);
   MeloFileDBPrivate *priv = melo_file_db_get_instance_private (fdb);
+
+  /* Free cover path */
+  g_free (priv->cover_path);
 
   /* Close database file */
   melo_file_db_close (fdb);
@@ -112,7 +117,7 @@ melo_file_db_init (MeloFileDB *self)
 }
 
 MeloFileDB *
-melo_file_db_new (const gchar *file)
+melo_file_db_new (const gchar *file, const gchar *cover_path)
 {
   MeloFileDB *fdb;
 
@@ -126,6 +131,10 @@ melo_file_db_new (const gchar *file)
     g_object_unref (fdb);
     return NULL;
   }
+
+  /* Copy cover path and create it */
+  fdb->priv->cover_path = g_strdup (cover_path);
+  g_mkdir_with_parents (fdb->priv->cover_path, 0700);
 
   return fdb;
 }
@@ -264,6 +273,7 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
   gint album_id;
   gint genre_id;
   gboolean ret;
+  gchar *cover_file = NULL;
   char *sql;
 
   /* Lock database access */
@@ -287,75 +297,111 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
     return TRUE;
   }
 
-  /* Find artist ID */
-  if (tags && tags->artist) {
-    sql = sqlite3_mprintf ("SELECT rowid FROM artist WHERE artist = '%q'",
-                           tags->artist);
-    ret = melo_file_db_get_int (priv, sql, &artist_id);
-    sqlite3_free (sql);
-    if (!ret || !artist_id) {
-      /* Add new artist */
-      sql = sqlite3_mprintf ("INSERT INTO artist (artist) VALUES ('%q')",
+  /* Parse all tags */
+  if (tags) {
+    GBytes *cover;
+
+    /* Find artist ID */
+    if (tags->artist) {
+      sql = sqlite3_mprintf ("SELECT rowid FROM artist WHERE artist = '%q'",
                              tags->artist);
-      sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
-      artist_id = sqlite3_last_insert_rowid (priv->db);
+      ret = melo_file_db_get_int (priv, sql, &artist_id);
       sqlite3_free (sql);
+      if (!ret || !artist_id) {
+        /* Add new artist */
+        sql = sqlite3_mprintf ("INSERT INTO artist (artist) VALUES ('%q')",
+                               tags->artist);
+        sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
+        artist_id = sqlite3_last_insert_rowid (priv->db);
+        sqlite3_free (sql);
+      }
     }
-  }
 
-  /* Find album ID */
-  if (tags && tags->album) {
-    sql = sqlite3_mprintf ("SELECT rowid FROM album WHERE album = '%q'",
-                           tags->album);
-    ret = melo_file_db_get_int (priv, sql, &album_id);
-    sqlite3_free (sql);
-    if (!ret || !album_id) {
-      /* Add new album */
-      sql = sqlite3_mprintf ("INSERT INTO album (album) VALUES ('%q')",
+    /* Find album ID */
+    if (tags->album) {
+      sql = sqlite3_mprintf ("SELECT rowid FROM album WHERE album = '%q'",
                              tags->album);
-      sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
-      album_id = sqlite3_last_insert_rowid (priv->db);
+      ret = melo_file_db_get_int (priv, sql, &album_id);
       sqlite3_free (sql);
+      if (!ret || !album_id) {
+        /* Add new album */
+        sql = sqlite3_mprintf ("INSERT INTO album (album) VALUES ('%q')",
+                               tags->album);
+        sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
+        album_id = sqlite3_last_insert_rowid (priv->db);
+        sqlite3_free (sql);
+      }
     }
-  }
 
-  /* Find genre ID */
-  if (tags && tags->genre) {
-    sql = sqlite3_mprintf ("SELECT rowid FROM genre WHERE genre = '%q'",
-                           tags->genre);
-    ret = melo_file_db_get_int (priv, sql, &genre_id);
-    sqlite3_free (sql);
-    if (!ret || !genre_id) {
-      /* Add new genre */
-      sql = sqlite3_mprintf ("INSERT INTO genre (genre) VALUES ('%q')",
+    /* Find genre ID */
+    if (tags->genre) {
+      sql = sqlite3_mprintf ("SELECT rowid FROM genre WHERE genre = '%q'",
                              tags->genre);
-      sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
-      genre_id = sqlite3_last_insert_rowid (priv->db);
+      ret = melo_file_db_get_int (priv, sql, &genre_id);
       sqlite3_free (sql);
+      if (!ret || !genre_id) {
+        /* Add new genre */
+        sql = sqlite3_mprintf ("INSERT INTO genre (genre) VALUES ('%q')",
+                               tags->genre);
+        sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
+        genre_id = sqlite3_last_insert_rowid (priv->db);
+        sqlite3_free (sql);
+      }
+    }
+
+    /* Get cover art */
+    cover = melo_tags_get_cover (tags, NULL);
+    if (cover) {
+      gchar *cover_path;
+      gchar *type;
+      gchar *md5;
+
+      /* Calculate md5 of cover art */
+      md5 = g_compute_checksum_for_bytes (G_CHECKSUM_MD5, cover);
+
+      /* Get cover type */
+      type = melo_tags_get_cover_type (tags);
+
+      /* Generate file name */
+      cover_file = g_strdup_printf ("%s.%s", md5,
+                                 g_strcmp0 (type, "image/png") ? "png" : "jpg");
+      g_free (type);
+      g_free (md5);
+
+      /* Create file if not exist */
+      cover_path = g_strdup_printf ("%s/%s", priv->cover_path, cover_file);
+      if (!g_file_test (cover_path, G_FILE_TEST_EXISTS))
+        g_file_set_contents (cover_path, g_bytes_get_data (cover, NULL),
+                             g_bytes_get_size (cover), NULL);
+      g_free (cover_path);
+      g_bytes_unref (cover);
     }
   }
 
   /* Add song */
   if (!row_id) {
     sql = sqlite3_mprintf ("INSERT INTO song (title,artist_id,album_id,"
-                           "genre_id,date,track,tracks,file,path_id,timestamp) "
-                           "VALUES ('%q',%d,%d,%d,%d,%d,%d,'%q',%d,%d)",
+                           "genre_id,date,track,tracks,cover,file,path_id,"
+                           "timestamp) "
+                           "VALUES (%Q,%d,%d,%d,%d,%d,%d,%Q,'%q',%d,%d)",
                            tags ? tags->title : NULL, artist_id, album_id,
                            genre_id, tags ? tags->date : 0,
                            tags ? tags->track : 0, tags ? tags->tracks : 0,
-                           filename, path_id, timestamp);
+                           cover_file, filename, path_id, timestamp);
   } else {
-    sql = sqlite3_mprintf ("UPDATE song SET title = '%q', artist_id = %d, "
+    sql = sqlite3_mprintf ("UPDATE song SET title = %Q, artist_id = %d, "
                            "album_id = %d, genre_id = %d, date = %d, "
-                           "track = %d, tracks = %d, timestamp = '%d' "
+                           "track = %d, tracks = %d, cover = %Q, "
+                           "timestamp = '%d' "
                            "WHERE rowid = %d",
                            tags ? tags->title : NULL, artist_id, album_id,
                            genre_id, tags ? tags->date : 0,
                            tags ? tags->track : 0, tags ? tags->tracks : 0,
-                           timestamp, row_id);
+                           cover_file, timestamp, row_id);
   }
   sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
   sqlite3_free (sql);
+  g_free (cover_file);
 
   /* Unlock database access */
   g_mutex_unlock (&priv->mutex);
@@ -420,6 +466,8 @@ melo_file_db_find_vsong (MeloFileDB *db, gboolean one,
     len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "track,");
   if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
     len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "tracks,");
+  if (tags_fields & MELO_TAGS_FIELDS_COVER)
+    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "cover,");
   if (len)
     columns[len-1] = '\0';
 
@@ -517,6 +565,33 @@ melo_file_db_find_vsong (MeloFileDB *db, gboolean one,
       tags->track = sqlite3_column_int (req, i++);
     if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
       tags->tracks = sqlite3_column_int (req, i++);
+    if (tags_fields & MELO_TAGS_FIELDS_COVER) {
+      const gchar *filename;
+
+      /* Get cover filename */
+      filename = sqlite3_column_text (req, i++);
+      if (filename) {
+        GMappedFile *file;
+        GBytes *cover;
+        const gchar *type;
+        gchar *path;
+
+        /* Open cover file and read data */
+        path = g_strdup_printf ("%s/%s", priv->cover_path, filename);
+        if (g_file_test (path, G_FILE_TEST_EXISTS)) {
+          file = g_mapped_file_new (path, FALSE, NULL);
+          cover = g_mapped_file_get_bytes (file);
+          g_mapped_file_unref (file);
+        }
+        g_free (path);
+
+        /* Add cover type */
+        type = NULL;
+
+        /* Add cover to MeloTags */
+        melo_tags_take_cover (tags, cover, type);
+      }
+    }
 
     /* Get only one song from database */
     if (one) {

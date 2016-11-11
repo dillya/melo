@@ -65,7 +65,7 @@ typedef enum {
 
 GType melo_file_db_get_type (void);
 
-MeloFileDB *melo_file_db_new (const gchar *file);
+MeloFileDB *melo_file_db_new (const gchar *file, const gchar *cover_path);
 
 gboolean melo_file_db_get_path_id (MeloFileDB *db, const gchar *path,
                                    gboolean add, gint *path_id);
