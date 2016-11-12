@@ -291,7 +291,7 @@ melo_brower_file_fix_path (const gchar *path)
 static MeloTags *
 melo_browser_file_discover_tags (MeloBrowserFile *bfile,
                                  GstDiscovererInfo *info, const gchar *path,
-                                 const gchar *file)
+                                 gint path_id, const gchar *file)
 {
   MeloBrowserFilePrivate *priv = bfile->priv;
   const GstTagList *gtags;
@@ -305,8 +305,12 @@ melo_browser_file_discover_tags (MeloBrowserFile *bfile,
     tags = melo_tags_new_from_gst_tag_list (gtags, MELO_TAGS_FIELDS_FULL);
 
   /* Add file to database if tags are available */
-  if (priv->fdb && tags)
-    melo_file_db_add_tags (priv->fdb, path, file, 0, tags);
+  if (priv->fdb && tags) {
+    if (path)
+      melo_file_db_add_tags (priv->fdb, path, file, 0, tags);
+    else
+      melo_file_db_add_tags2 (priv->fdb, path_id, file, 0, tags);
+  }
 
   return tags;
 }
@@ -329,7 +333,7 @@ on_discovered (GstDiscoverer *discoverer, GstDiscovererInfo *info,
   file = g_path_get_basename (uri);
 
   /* Add media to database */
-  tags = melo_browser_file_discover_tags (bfile, info, path, file);
+  tags = melo_browser_file_discover_tags (bfile, info, path, 0, file);
   if (tags)
     melo_tags_unref (tags);
   g_free (path);
@@ -348,6 +352,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
   GList *dir_list = NULL;
   GList *list = NULL;
   gchar *path, *path_uri;
+  gint path_id;
 
   /* Get details */
   if (g_file_query_file_type (dir, 0, NULL) != G_FILE_TYPE_DIRECTORY)
@@ -367,6 +372,9 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
   path_uri = g_file_get_uri (dir);
   path = g_uri_unescape_string (path_uri, NULL);
   g_free (path_uri);
+
+  /* Get path ID for faster database find / insertion */
+  melo_file_db_get_path_id (priv->fdb, path, TRUE, &path_id);
 
   /* Create list */
   while ((info = g_file_enumerator_next_file (dir_enum, NULL, NULL))) {
@@ -428,7 +436,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
         tags = melo_file_db_find_one_song (priv->fdb,
                          tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING ?
                                             MELO_TAGS_FIELDS_NONE : tags_fields,
-                         MELO_FILE_DB_FIELDS_PATH, path,
+                         MELO_FILE_DB_FIELDS_PATH_ID, path_id,
                          MELO_FILE_DB_FIELDS_FILE, name,
                          MELO_FILE_DB_FIELDS_END);
 
@@ -449,7 +457,8 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
             /* Get tags from URI */
             info = gst_discoverer_discover_uri (disco, file_uri, NULL);
             if (info) {
-              tags = melo_browser_file_discover_tags (bfile, info, path, name);
+              tags = melo_browser_file_discover_tags (bfile, info, NULL,
+                                                      path_id, name);
               g_object_unref (info);
             }
           } else if (tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING ||
@@ -916,7 +925,7 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
   /* Get tags from URI */
   info = gst_discoverer_discover_uri (disco, uri, NULL);
   if (info) {
-    tags = melo_browser_file_discover_tags (bfile, info, dir, file);
+    tags = melo_browser_file_discover_tags (bfile, info, dir, 0, file);
     g_object_unref (info);
   }
 
