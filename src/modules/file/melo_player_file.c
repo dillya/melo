@@ -260,13 +260,21 @@ static gboolean
 melo_player_file_add (MeloPlayer *player, const gchar *path, const gchar *name,
                       MeloTags *tags)
 {
+  gchar *_name = NULL;
+
   if (!player->playlist)
     return FALSE;
 
+  /* Extract file name from URI */
+  if (!name) {
+    _name = g_path_get_basename (path);
+    name = _name;
+  }
+
   /* Add URI to playlist */
-  if (!name)
-    name = g_path_get_basename (path);
   melo_playlist_add (player->playlist, name, name, path, FALSE);
+  g_free (_name);
+
   return TRUE;
 }
 
@@ -275,6 +283,7 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
                        MeloTags *tags, gboolean insert)
 {
   MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gchar *_name = NULL;
 
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
@@ -289,8 +298,10 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
   priv->uri = g_strdup (path);
 
   /* Create new status */
-  if (!name)
-    name = g_path_get_basename (priv->uri);
+  if (!name) {
+    _name = g_path_get_basename (priv->uri);
+    name = _name;
+  }
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
   priv->tag_list = gst_tag_list_new_empty ();
 
@@ -301,6 +312,7 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
   /* Add new file to playlist */
   if (insert && player->playlist)
     melo_playlist_add (player->playlist, name, name, path, TRUE);
+  g_free (_name);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
