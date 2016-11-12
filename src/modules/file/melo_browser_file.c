@@ -338,7 +338,8 @@ on_discovered (GstDiscoverer *discoverer, GstDiscovererInfo *info,
 
 static GList *
 melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
-                        MeloBrowserTagsMode tags_mode)
+                        MeloBrowserTagsMode tags_mode,
+                        MeloTagsFields tags_fields)
 {
   MeloBrowserFilePrivate *priv = bfile->priv;
   GstDiscoverer *disco = NULL;
@@ -424,8 +425,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
         /* Get file from database */
         tags = melo_file_db_find_one_song (priv->fdb,
                          tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING ?
-                                                         MELO_TAGS_FIELDS_NONE :
-                                                         MELO_TAGS_FIELDS_FULL,
+                                            MELO_TAGS_FIELDS_NONE : tags_fields,
                          MELO_FILE_DB_FIELDS_PATH, path,
                          MELO_FILE_DB_FIELDS_FILE, name,
                          MELO_FILE_DB_FIELDS_END);
@@ -489,7 +489,8 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
 
 static GList *
 melo_browser_file_get_local_list (MeloBrowserFile *bfile, const gchar *uri,
-                                  MeloBrowserTagsMode tags_mode)
+                                  MeloBrowserTagsMode tags_mode,
+                                  MeloTagsFields tags_fields)
 {
   GFile *dir;
   GList *list;
@@ -500,7 +501,7 @@ melo_browser_file_get_local_list (MeloBrowserFile *bfile, const gchar *uri,
     return NULL;
 
   /* Get list from GFile */
-  list = melo_browser_file_list (bfile, dir, tags_mode);
+  list = melo_browser_file_list (bfile, dir, tags_mode, tags_fields);
   g_object_unref (dir);
 
   return list;
@@ -564,7 +565,8 @@ melo_browser_file_get_mount (MeloBrowserFile *bfile, const gchar *path)
 
 static GList *
 melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path,
-                                   MeloBrowserTagsMode tags_mode)
+                                   MeloBrowserTagsMode tags_mode,
+                                   MeloTagsFields tags_fields)
 {
   GMount *mount;
   GFile *root, *dir;
@@ -595,7 +597,7 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path,
   g_object_unref (root);
 
   /* List files from our GFile  */
-  list = melo_browser_file_list (bfile, dir, tags_mode);
+  list = melo_browser_file_list (bfile, dir, tags_mode, tags_fields);
   g_object_unref (dir);
 
   return list;
@@ -739,7 +741,8 @@ melo_browser_file_get_network_uri (MeloBrowserFile *bfile, const gchar *path)
 
 static GList *
 melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path,
-                                    MeloBrowserTagsMode tags_mode)
+                                    MeloBrowserTagsMode tags_mode,
+                                    MeloTagsFields tags_fields)
 {
   GList *list = NULL;
   GFile *dir;
@@ -757,7 +760,7 @@ melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path,
     return NULL;
 
   /* Get list from GFile */
-  list = melo_browser_file_list (bfile, dir, tags_mode);
+  list = melo_browser_file_list (bfile, dir, tags_mode, tags_fields);
   g_object_unref (dir);
 
   return list;
@@ -800,15 +803,18 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
     /* Get file path: "/local/" */
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:%s/%s", bfile->priv->local_path, path);
-    list = melo_browser_file_get_local_list (bfile, uri, tags_mode);
+    list = melo_browser_file_get_local_list (bfile, uri, tags_mode,
+                                             tags_fields);
     g_free (uri);
   } else if (g_str_has_prefix (path, "network")) {
     /* Get file path: "/network/" */
-    list = melo_browser_file_get_network_list (bfile, path + 8, tags_mode);
+    list = melo_browser_file_get_network_list (bfile, path + 8, tags_mode,
+                                               tags_fields);
   } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
              path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
     /* Volume path: "/VOLUME_ID/" */
-    list = melo_browser_file_get_volume_list (bfile, path, tags_mode);
+    list = melo_browser_file_get_volume_list (bfile, path, tags_mode,
+                                              tags_fields);
   }
 
   return list;
@@ -883,7 +889,7 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
 
   /* Get tags from database */
   if (priv->fdb) {
-    tags = melo_file_db_find_one_song (priv->fdb, MELO_TAGS_FIELDS_FULL,
+    tags = melo_file_db_find_one_song (priv->fdb, fields,
                                        MELO_FILE_DB_FIELDS_PATH, dir,
                                        MELO_FILE_DB_FIELDS_FILE, file,
                                        MELO_FILE_DB_FIELDS_END);
