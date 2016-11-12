@@ -1,16 +1,26 @@
 /* Helper to do JSON-RPC 2.0 call */
-function jsonrpc_call(method, params, callback) {
+function jsonrpc_callback(extra_data) {
+    return function(data, textStatus, jqXHR) {
+        extra_data.callback(data, extra_data.data);
+    };
+}
+
+function jsonrpc_call(method, params, data, callback) {
   var request = {};
   request.jsonrpc = "2.0";
   request.method = method;
   request.params = params;
   request.id = 1;
+  var extra_data = {};
+  extra_data.callback = callback;
+  extra_data.data = data;
 
-  $.post("/rpc", JSON.stringify(request), callback, "json");
+  $.post("/rpc", JSON.stringify(request), jsonrpc_callback(extra_data), "json");
 }
 
 function melo_update_list() {
-  jsonrpc_call("module.get_list", JSON.parse('[["full"]]'), function(response) {
+  jsonrpc_call("module.get_list", JSON.parse('[["full"]]'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -56,8 +66,8 @@ function melo_update_list() {
 }
 
 function melo_get_info(id) {
-  jsonrpc_call("module.get_info", JSON.parse('["' + id + '",["full"]]'),
-               function(response) {
+  jsonrpc_call("module.get_info", JSON.parse('["' + id + '",["full"]]'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -69,8 +79,8 @@ function melo_get_info(id) {
 
 function melo_get_browsers(id, ul) {
   jsonrpc_call("module.get_browser_list",
-               JSON.parse('["' + id + '",["name"]]'),
-               function(response) {
+               JSON.parse('["' + id + '",["name"]]'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -102,8 +112,8 @@ function melo_get_browsers(id, ul) {
 }
 
 function melo_get_browser_info(id) {
-  jsonrpc_call("browser.get_info", JSON.parse('["' + id + '",["full"]]'),
-               function(response) {
+  jsonrpc_call("browser.get_info", JSON.parse('["' + id + '",["full"]]'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -150,14 +160,17 @@ function melo_get_browser_list(id, path, off, count) {
   jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","' + path + '",' +
                                                 off + ',' + count + ',' +
                                          '["full"],{},{"mode":"only_cached",' +
-                                         '"fields":["title","artist"]}]'),
-               function(response) {
+                                         '"fields":["title","artist"]}]'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
 
     /* Save current ID and path of the browser */
     melo_browser_current_id = id;
     melo_browser_current_path = path;
+
+    /* Create a new list for not available tags items */
+    var get_tags_list = [];
 
     /* Generate list */
     $('#browser_list').html("");
@@ -230,13 +243,23 @@ function melo_get_browser_list(id, path, off, count) {
 
       /* Add item */
       $('#browser_list').append(item);
+
+      /* Add file to list if no tags available */
+      if (response.result[i].tags == null) {
+        var plop = [item, fpath];
+        get_tags_list.push (plop);
+      }
     }
+
+    /* Launch get_tags task */
+    get_tags_list.reverse();
+    melo_browser_update_tags (id, get_tags_list);
   });
 }
 
 function melo_browser_action(action, id, path, update) {
   jsonrpc_call("browser." + action, JSON.parse('["' + id + '","' + path + '"]'),
-               function(response) {
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -249,7 +272,7 @@ function melo_browser_action(action, id, path, update) {
 
 function melo_browser_get_tags(id, path, item) {
   jsonrpc_call("browser.get_tags", JSON.parse('["' + id + '","' + path + '",["full"]]'),
-               function(response) {
+               null, function(response, data) {
     item.children("a.tags_link").text("-");
     item.children("a.tags_link").unbind().click([id, path, item], function(e) {
       e.data[2].children("a.tags_link").text("+");
@@ -287,6 +310,27 @@ function melo_browser_get_tags(id, path, item) {
   });
 }
 
+function melo_browser_update_tags (id, list) {
+  if (list.length == 0)
+    return;
+
+  var obj = list.pop (list);
+
+  jsonrpc_call("browser.get_tags", JSON.parse('["' + id + '","' + obj[1]+
+                                                '",["title","artist"]]'),
+               [obj, id, list], function(response, data) {
+    if (response.error || !response.result)
+      return;
+
+    /* Update link name */
+    if (response.result.title != null) {
+      data[0][0].children("a:first").text(response.result.artist + ' - ' +
+                                          response.result.title);
+    }
+    melo_browser_update_tags (data[1], data[2]);
+  });
+}
+
 function melo_browser_previous() {
   var path = melo_browser_current_path;
   var n = path.lastIndexOf('/', path.length - 2);
@@ -310,7 +354,7 @@ function melo_add_players(id, name) {
   players = [];
 
   jsonrpc_call("module.get_player_list", JSON.parse('["' + id + '",["full"]]'),
-               function(response) {
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -401,7 +445,7 @@ function melo_update_player(play) {
   /* Get status */
   jsonrpc_call("player.get_status",
                JSON.parse('["' + id + '",["full"],["full"],' + tags_ts + ']'),
-               function(response) {
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
     var s = response.result;
@@ -482,7 +526,7 @@ function melo_player_poll(state) {
 
 function melo_set_player_state(id, state, play) {
   jsonrpc_call("player.set_state", JSON.parse('["' + id + '","' + state + '"]'),
-               function(response) {
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -492,8 +536,8 @@ function melo_set_player_state(id, state, play) {
 }
 
 function melo_player_action(action, id, play) {
-  jsonrpc_call("player." + action, JSON.parse('["' + id + '"]'),
-               function(response) {
+  jsonrpc_call("player." + action, JSON.parse('["' + id + '"]'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -503,16 +547,16 @@ function melo_player_action(action, id, play) {
 }
 
 function melo_player_seek(id, pos) {
-  jsonrpc_call("player.set_pos", JSON.parse('["' + id + '",' + pos + ']'),
-               function(response) {
+  jsonrpc_call("player.set_pos", JSON.parse('["' + id + '",' + pos + ']'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
   });
 }
 
 function melo_get_playlist_list(id, play) {
-  jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '"]'),
-               function(response) {
+  jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '"]'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -560,7 +604,7 @@ function melo_get_playlist_list(id, play) {
 
 function melo_playlist_play(id, name, play) {
   jsonrpc_call("playlist.play", JSON.parse('["' + id + '","' + name + '"]'),
-               function(response) {
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -572,7 +616,7 @@ function melo_playlist_play(id, name, play) {
 
 function melo_playlist_remove(id, name, play) {
   jsonrpc_call("playlist.remove", JSON.parse('["' + id + '","' + name + '"]'),
-               function(response) {
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -605,8 +649,8 @@ function melo_playlist_poll(state) {
 }
 
 function melo_get_config(id) {
-  jsonrpc_call("config.get", JSON.parse('["' + id + '"]'),
-               function(response) {
+  jsonrpc_call("config.get", JSON.parse('["' + id + '"]'), null,
+               function(response, data) {
     if (response.error || !response.result)
       return;
     var groups = response.result
@@ -698,7 +742,7 @@ function melo_set_config(id, group_id, items, form) {
   params.push(group_list);
 
   /* Send new configuration */
-  jsonrpc_call("config.set", params, function(response) {
+  jsonrpc_call("config.set", params, null, function(response, data) {
     if (response.error || !response.result)
       return;
 
