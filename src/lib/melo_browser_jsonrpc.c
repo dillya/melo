@@ -162,8 +162,11 @@ melo_browser_jsonrpc_list_to_object (const GList *list,
       json_object_set_string_member (obj, "remove", item->remove);
     }
     if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS) {
-      JsonObject *tags = melo_tags_to_json_object (item->tags, tags_fields);
-      json_object_set_object_member (obj, "tags", tags);
+      if (item->tags) {
+        JsonObject *tags = melo_tags_to_json_object (item->tags, tags_fields);
+        json_object_set_object_member (obj, "tags", tags);
+      } else
+        json_object_set_null_member (obj, "tags");
     }
     json_array_add_object_element (array, obj);
   }
