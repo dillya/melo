@@ -149,7 +149,8 @@ function melo_get_browser_list(id, path, off, count) {
   /* Do request */
   jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","' + path + '",' +
                                                 off + ',' + count + ',' +
-                            '["full"],{},{"mode":"cached","fields":["full"]}]'),
+                                         '["full"],{},{"mode":"only_cached",' +
+                                         '"fields":["title","artist"]}]'),
                function(response) {
     if (response.error || !response.result)
       return;
@@ -162,15 +163,26 @@ function melo_get_browser_list(id, path, off, count) {
     $('#browser_list').html("");
     for (var i = 0; i < response.result.length; i++) {
       var name = response.result[i].name;
+      var title = name;
       var npath = path + response.result[i].name + "/";
       var fpath = path + response.result[i].name;
 
       /* Use full name when available */
-      if (response.result[i].full_name != null)
-        name = response.result[i].full_name + ' (' + name + ')';
+      if (response.result[i].full_name != null) {
+        name = response.result[i].full_name;
+        title = name;
+      }
+
+      /* Use artist + title when available */
+      if (response.result[i].tags != null &&
+          response.result[i].tags.title != null) {
+        name = response.result[i].tags.artist + ' - ' +
+               response.result[i].tags.title;
+        title = response.result[i].full_name  + ' (' + name + ')';
+      }
 
       /* Generate list item */
-      var item = $('<li><a href="#">' + name + '</a> [' +
+      var item = $('<li><a href="#" title="' + title + '">' + name + '</a> [' +
                                         response.result[i].type + ']</li>');
 
       /* Setup link */
@@ -267,7 +279,7 @@ function melo_browser_get_tags(id, path, item) {
       '<div>' +
         'Title: <span class="ttitle">' + tags.title  + '</span><br>' +
         'Artist: <span class="artist">' + tags.artist + '</span><br>' +
-        'Alnum: <span class="album">' + tags.album + '</span><br>' +
+        'Album: <span class="album">' + tags.album + '</span><br>' +
         'Genre: <span class="genre">' + tags.genre + '</span><br>' +
         'Date: <span class="date">' + tags.date + '</span><br>' +
         'Track: <span class="track">' + tags.track + '/' + tags.tracks + '</span>' +
@@ -328,7 +340,7 @@ function melo_add_players(id, name) {
                         '<span class="under">Tags:</span><br>' +
                         'Title: <span class="ttitle"></span><br>' +
                         'Artist: <span class="artist"></span><br>' +
-                        'Alnum: <span class="album"></span><br>' +
+                        'Album: <span class="album"></span><br>' +
                         'Genre: <span class="genre"></span><br>' +
                         'Date: <span class="date"></span><br>' +
                         'Track: <span class="track"></span>' +
