@@ -423,12 +423,12 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
 
         /* Get file from database */
         tags = melo_file_db_find_one_song (priv->fdb,
-                               tags_mode == MELO_BROWSER_TAGS_MODE_NONE_CACHED ?
+                         tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING ?
                                                          MELO_TAGS_FIELDS_NONE :
                                                          MELO_TAGS_FIELDS_FULL,
-                               MELO_FILE_DB_FIELDS_PATH, path,
-                               MELO_FILE_DB_FIELDS_FILE, name,
-                               MELO_FILE_DB_FIELDS_END);
+                         MELO_FILE_DB_FIELDS_PATH, path,
+                         MELO_FILE_DB_FIELDS_FILE, name,
+                         MELO_FILE_DB_FIELDS_END);
 
         /* No tags available in database */
         if (!tags) {
@@ -437,8 +437,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
           /* Generate complete file URI */
           file_uri = g_strdup_printf ("%s/%s", path, name);
 
-          if (tags_mode == MELO_BROWSER_TAGS_MODE_FULL_CACHED ||
-              tags_mode == MELO_BROWSER_TAGS_MODE_FULL) {
+          if (tags_mode == MELO_BROWSER_TAGS_MODE_FULL) {
             GstDiscovererInfo *info;
 
             /* Create a new discoverer if not yet done */
@@ -451,7 +450,8 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
               tags = melo_browser_file_discover_tags (bfile, info, path, name);
               g_object_unref (info);
             }
-          } else {
+          } else if (tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING ||
+                     tags_mode == MELO_BROWSER_TAGS_MODE_FULL_WITH_CACHING) {
             /* Add URI to discoverer pending list */
             gst_discoverer_discover_uri_async (priv->discoverer, file_uri);
           }
@@ -460,7 +460,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
 
         /* Add tags to item */
         if (tags) {
-          if (tags_mode == MELO_BROWSER_TAGS_MODE_NONE_CACHED)
+          if (tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING)
             melo_tags_unref (tags);
           else
             item->tags = tags;

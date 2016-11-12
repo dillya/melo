@@ -194,12 +194,12 @@ melo_browser_jsonrpc_get_tags_mode (JsonObject *obj, MeloBrowserTagsMode *mode,
     return;
 
   /* Convert to MeloBrowserTagsMode */
-  if (!g_strcmp0 (mod, "none_cached"))
-    *mode = MELO_BROWSER_TAGS_MODE_NONE_CACHED;
-  else if (!g_strcmp0 (mod, "cached"))
-    *mode = MELO_BROWSER_TAGS_MODE_CACHED;
-  else if (!g_strcmp0 (mod, "full_cached"))
-    *mode = MELO_BROWSER_TAGS_MODE_FULL_CACHED;
+  if (!g_strcmp0 (mod, "none_with_caching"))
+    *mode = MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING;
+  else if (!g_strcmp0 (mod, "only_cached"))
+    *mode = MELO_BROWSER_TAGS_MODE_ONLY_CACHED;
+  else if (!g_strcmp0 (mod, "full_cwith_caching"))
+    *mode = MELO_BROWSER_TAGS_MODE_FULL_WITH_CACHING;
   else if (!g_strcmp0 (mod, "full"))
     *mode = MELO_BROWSER_TAGS_MODE_FULL;
   else
