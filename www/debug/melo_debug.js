@@ -148,7 +148,8 @@ function melo_get_browser_list(id, path, off, count) {
 
   /* Do request */
   jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","' + path + '",' +
-                                                off + ',' + count + ']'),
+                                                off + ',' + count + ',' +
+                            '["full"],{},{"mode":"cached","fields":["full"]}]'),
                function(response) {
     if (response.error || !response.result)
       return;
