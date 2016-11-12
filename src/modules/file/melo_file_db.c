@@ -479,6 +479,10 @@ melo_file_db_find_vsong (MeloFileDB *db, gboolean one,
                                         va_arg (args, const gchar *));
         join_path = TRUE;
         break;
+      case MELO_FILE_DB_FIELDS_PATH_ID:
+        conds[pos++] = sqlite3_mprintf ("path_id = %d",
+                                        va_arg (args, gint));
+        break;
       case MELO_FILE_DB_FIELDS_FILE:
         conds[pos++] = sqlite3_mprintf ("file = '%q'",
                                         va_arg (args, const gchar *));
