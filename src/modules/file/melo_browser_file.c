@@ -41,6 +41,8 @@ static void vms_added(GVolumeMonitor *monitor, GObject *obj,
                       MeloBrowserFilePrivate *priv);
 static void vms_removed(GVolumeMonitor *monitor, GObject *obj,
                         MeloBrowserFilePrivate *priv);
+static void on_discovered (GstDiscoverer *discoverer, GstDiscovererInfo *info,
+                           GError *error, gpointer user_data);
 static void melo_browser_file_set_id (GObject *obj,
                                       MeloBrowserFilePrivate *priv);
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
@@ -66,6 +68,7 @@ struct _MeloBrowserFilePrivate {
   GHashTable *ids;
   GHashTable *shortcuts;
   MeloFileDB *fdb;
+  GstDiscoverer *discoverer;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloBrowserFile, melo_browser_file, MELO_TYPE_BROWSER)
@@ -76,6 +79,10 @@ melo_browser_file_finalize (GObject *gobject)
   MeloBrowserFile *browser_file = MELO_BROWSER_FILE (gobject);
   MeloBrowserFilePrivate *priv =
                           melo_browser_file_get_instance_private (browser_file);
+
+  /* Stop discoverer and release it */
+  gst_discoverer_stop (priv->discoverer);
+  gst_object_unref (priv->discoverer);
 
   /* Release volume monitor */
   g_object_unref (priv->monitor);
@@ -156,6 +163,14 @@ melo_browser_file_init (MeloBrowserFile *self)
   /* Init Hash table for shortcuts */
   priv->shortcuts = g_hash_table_new_full (g_str_hash, g_str_equal,
                                            g_free, g_free);
+
+  /* Create a new Gstreamer discoverer for async tags discovering */
+  priv->discoverer = gst_discoverer_new (GST_SECOND, NULL);
+  gst_discoverer_start (priv->discoverer);
+
+  /* Subscribe to discovered event of discoverer */
+  g_signal_connect (priv->discoverer, "discovered",
+                    (GCallback) on_discovered, self);
 }
 
 void
@@ -273,14 +288,65 @@ melo_brower_file_fix_path (const gchar *path)
   return path;
 }
 
-static GList *
-melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
+static MeloTags *
+melo_browser_file_discover_tags (MeloBrowserFile *bfile,
+                                 GstDiscovererInfo *info, const gchar *path,
+                                 const gchar *file)
 {
   MeloBrowserFilePrivate *priv = bfile->priv;
+  const GstTagList *gtags;
+  MeloTags *tags = NULL;
+
+  /* Get GstTagLsit */
+  gtags = gst_discoverer_info_get_tags (info);
+
+  /* Convert to MeloTags */
+  if (gtags)
+    tags = melo_tags_new_from_gst_tag_list (gtags, MELO_TAGS_FIELDS_FULL);
+
+  /* Add file to database if tags are available */
+  if (priv->fdb && tags)
+    melo_file_db_add_tags (priv->fdb, path, file, 0, tags);
+
+  return tags;
+}
+
+static void
+on_discovered (GstDiscoverer *discoverer, GstDiscovererInfo *info,
+               GError *error, gpointer user_data)
+{
+  MeloBrowserFile *bfile = user_data;
+  gchar *path, *file;
+  const gchar *uri;
+  MeloTags *tags;
+
+  if (error || !info)
+    return;
+
+  /* Get dirname and basename */
+  uri = gst_discoverer_info_get_uri (info);
+  path = g_path_get_dirname (uri);
+  file = g_path_get_basename (uri);
+
+  /* Add media to database */
+  tags = melo_browser_file_discover_tags (bfile, info, path, file);
+  if (tags)
+    melo_tags_unref (tags);
+  g_free (path);
+  g_free (file);
+}
+
+static GList *
+melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
+                        MeloBrowserTagsMode tags_mode)
+{
+  MeloBrowserFilePrivate *priv = bfile->priv;
+  GstDiscoverer *disco = NULL;
   GFileEnumerator *dir_enum;
   GFileInfo *info;
   GList *dir_list = NULL;
   GList *list = NULL;
+  gchar *path;
 
   /* Get details */
   if (g_file_query_file_type (dir, 0, NULL) != G_FILE_TYPE_DIRECTORY)
@@ -295,6 +361,9 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
                                     0, NULL, NULL);
   if (!dir_enum)
     return NULL;
+
+  /* Get path from directory */
+  path = g_file_get_uri (dir);
 
   /* Create list */
   while ((info = g_file_enumerator_next_file (dir_enum, NULL, NULL))) {
@@ -348,13 +417,67 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
     item->add = add;
 
     /* Insert into list */
-    if (type == G_FILE_TYPE_REGULAR)
+    if (type == G_FILE_TYPE_REGULAR) {
+      if (tags_mode != MELO_BROWSER_TAGS_MODE_NONE) {
+        MeloTags *tags = NULL;
+
+        /* Get file from database */
+        tags = melo_file_db_find_one_song (priv->fdb,
+                               tags_mode == MELO_BROWSER_TAGS_MODE_NONE_CACHED ?
+                                                         MELO_TAGS_FIELDS_NONE :
+                                                         MELO_TAGS_FIELDS_FULL,
+                               MELO_FILE_DB_FIELDS_PATH, path,
+                               MELO_FILE_DB_FIELDS_FILE, name,
+                               MELO_FILE_DB_FIELDS_END);
+
+        /* No tags available in database */
+        if (!tags) {
+          gchar *file_uri;
+
+          /* Generate complete file URI */
+          file_uri = g_strdup_printf ("%s/%s", path, name);
+
+          if (tags_mode == MELO_BROWSER_TAGS_MODE_FULL_CACHED ||
+              tags_mode == MELO_BROWSER_TAGS_MODE_FULL) {
+            GstDiscovererInfo *info;
+
+            /* Create a new discoverer if not yet done */
+            if (!disco)
+              disco = gst_discoverer_new (GST_SECOND, NULL);
+
+            /* Get tags from URI */
+            info = gst_discoverer_discover_uri (disco, file_uri, NULL);
+            if (info) {
+              tags = melo_browser_file_discover_tags (bfile, info, path, name);
+              g_object_unref (info);
+            }
+          } else {
+            /* Add URI to discoverer pending list */
+            gst_discoverer_discover_uri_async (priv->discoverer, file_uri);
+          }
+          g_free (file_uri);
+        }
+
+        /* Add tags to item */
+        if (tags) {
+          if (tags_mode == MELO_BROWSER_TAGS_MODE_NONE_CACHED)
+            melo_tags_unref (tags);
+          else
+            item->tags = tags;
+        }
+      }
       list = g_list_prepend (list, item);
-    else
+    } else {
       dir_list = g_list_prepend (dir_list, item);
+    }
     g_object_unref (info);
   }
   g_object_unref (dir_enum);
+  g_free (path);
+
+  /* Free discoverer */
+  if (disco)
+    gst_object_unref (disco);
 
   /* Sort both lists */
   list = g_list_sort (list, (GCompareFunc) melo_browser_item_cmp);
@@ -365,7 +488,8 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir)
 }
 
 static GList *
-melo_browser_file_get_local_list (MeloBrowserFile *bfile, const gchar *uri)
+melo_browser_file_get_local_list (MeloBrowserFile *bfile, const gchar *uri,
+                                  MeloBrowserTagsMode tags_mode)
 {
   GFile *dir;
   GList *list;
@@ -376,7 +500,7 @@ melo_browser_file_get_local_list (MeloBrowserFile *bfile, const gchar *uri)
     return NULL;
 
   /* Get list from GFile */
-  list = melo_browser_file_list (bfile, dir);
+  list = melo_browser_file_list (bfile, dir, tags_mode);
   g_object_unref (dir);
 
   return list;
@@ -439,7 +563,8 @@ melo_browser_file_get_mount (MeloBrowserFile *bfile, const gchar *path)
 }
 
 static GList *
-melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
+melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path,
+                                   MeloBrowserTagsMode tags_mode)
 {
   GMount *mount;
   GFile *root, *dir;
@@ -470,7 +595,7 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path)
   g_object_unref (root);
 
   /* List files from our GFile  */
-  list = melo_browser_file_list (bfile, dir);
+  list = melo_browser_file_list (bfile, dir, tags_mode);
   g_object_unref (dir);
 
   return list;
@@ -613,7 +738,8 @@ melo_browser_file_get_network_uri (MeloBrowserFile *bfile, const gchar *path)
 }
 
 static GList *
-melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path)
+melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path,
+                                    MeloBrowserTagsMode tags_mode)
 {
   GList *list = NULL;
   GFile *dir;
@@ -631,7 +757,7 @@ melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path)
     return NULL;
 
   /* Get list from GFile */
-  list = melo_browser_file_list (bfile, dir);
+  list = melo_browser_file_list (bfile, dir, tags_mode);
   g_object_unref (dir);
 
   return list;
@@ -674,15 +800,15 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
     /* Get file path: "/local/" */
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:%s/%s", bfile->priv->local_path, path);
-    list = melo_browser_file_get_local_list (bfile, uri);
+    list = melo_browser_file_get_local_list (bfile, uri, tags_mode);
     g_free (uri);
   } else if (g_str_has_prefix (path, "network")) {
     /* Get file path: "/network/" */
-    list = melo_browser_file_get_network_list (bfile, path + 8);
+    list = melo_browser_file_get_network_list (bfile, path + 8, tags_mode);
   } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
              path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
     /* Volume path: "/VOLUME_ID/" */
-    list = melo_browser_file_get_volume_list (bfile, path);
+    list = melo_browser_file_get_volume_list (bfile, path, tags_mode);
   }
 
   return list;
@@ -773,20 +899,7 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
   /* Get tags from URI */
   info = gst_discoverer_discover_uri (disco, uri, NULL);
   if (info) {
-    const GstTagList *gtags;
-
-    /* Get GstTagLsit */
-    gtags = gst_discoverer_info_get_tags (info);
-
-    /* Convert to MeloTags */
-    if (gtags)
-      tags = melo_tags_new_from_gst_tag_list (gtags, MELO_TAGS_FIELDS_FULL);
-
-    /* Add file to database if tags are available */
-    if (priv->fdb)
-      melo_file_db_add_tags (priv->fdb, dir, file, 0, tags);
-
-    /* Free info */
+    tags = melo_browser_file_discover_tags (bfile, info, dir, file);
     g_object_unref (info);
   }
 
