@@ -347,7 +347,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
   GFileInfo *info;
   GList *dir_list = NULL;
   GList *list = NULL;
-  gchar *path;
+  gchar *path, *path_uri;
 
   /* Get details */
   if (g_file_query_file_type (dir, 0, NULL) != G_FILE_TYPE_DIRECTORY)
@@ -364,7 +364,9 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
     return NULL;
 
   /* Get path from directory */
-  path = g_file_get_uri (dir);
+  path_uri = g_file_get_uri (dir);
+  path = g_uri_unescape_string (path_uri, NULL);
+  g_free (path_uri);
 
   /* Create list */
   while ((info = g_file_enumerator_next_file (dir_enum, NULL, NULL))) {
@@ -832,8 +834,15 @@ melo_browser_file_get_uri (MeloBrowser *browser, const gchar *path)
 
   /* Generate URI from path */
   if (g_str_has_prefix (path, "local/")) {
+    GFile *root;
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:%s/%s", bfile->priv->local_path, path);
+    root = g_file_new_for_uri (uri);
+    g_free (uri);
+    if (!root)
+      return NULL;
+    uri = g_file_get_uri (root);
+    g_object_unref (root);
   } else if (g_str_has_prefix (path, "network/")) {
     uri = melo_browser_file_get_network_uri (bfile, path + 8);
   } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
@@ -876,12 +885,14 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
   GstDiscovererInfo *info;
   GstDiscoverer *disco;
   MeloTags *tags = NULL;
-  gchar *uri, *dir, *file;
+  gchar *_uri, *uri, *dir, *file;
 
   /* Get URI from path */
-  uri = melo_browser_file_get_uri (browser, path);
-  if (!uri)
+  _uri = melo_browser_file_get_uri (browser, path);
+  if (!_uri)
     return NULL;
+  uri = g_uri_unescape_string (_uri, NULL);
+  g_free (_uri);
 
   /* Get dirname and basename */
   dir = g_path_get_dirname (uri);
@@ -926,14 +937,21 @@ melo_browser_file_add (MeloBrowser *browser, const gchar *path)
 {
   gboolean ret;
   gchar *uri;
+  gchar *_name, *name;
 
   /* Get final URI from path */
   uri = melo_browser_file_get_uri (browser, path);
   if (!uri)
     return FALSE;
 
+  /* Unescape for name */
+  _name = g_uri_unescape_string (uri, NULL);
+  name = g_path_get_basename (_name);
+  g_free (_name);
+
   /* Add with URI */
-  ret = melo_player_add (browser->player, uri, NULL, NULL);
+  ret = melo_player_add (browser->player, uri, name, NULL);
+  g_free (name);
   g_free (uri);
 
   return ret;
@@ -943,6 +961,7 @@ static gboolean
 melo_browser_file_play (MeloBrowser *browser, const gchar *path)
 {
   gboolean ret;
+  gchar *_name, *name;
   gchar *uri;
 
   /* Get final URI from path */
@@ -950,8 +969,14 @@ melo_browser_file_play (MeloBrowser *browser, const gchar *path)
   if (!uri)
     return FALSE;
 
+  /* Unescape for name */
+  _name = g_uri_unescape_string (uri, NULL);
+  name = g_path_get_basename (_name);
+  g_free (_name);
+
   /* Play with URI */
-  ret = melo_player_play (browser->player, uri, NULL, NULL, TRUE);
+  ret = melo_player_play (browser->player, uri, name, NULL, TRUE);
+  g_free (name);
   g_free (uri);
 
   return ret;
