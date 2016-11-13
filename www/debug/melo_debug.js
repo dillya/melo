@@ -79,7 +79,7 @@ function melo_get_info(id) {
 
 function melo_get_browsers(id, ul) {
   jsonrpc_call("module.get_browser_list",
-               JSON.parse('["' + id + '",["name"]]'), null,
+               JSON.parse('["' + id + '",["name","search","go"]]'), null,
                function(response, data) {
     if (response.error || !response.result)
       return;
@@ -100,8 +100,100 @@ function melo_get_browsers(id, ul) {
       });
 
       /* Add a link to get list from browser */
-      bro.children("a.open").click(response.result[i].id, function(e) {
-        melo_get_browser_list(e.data, "/", 0, 0);
+      bro.children("a.open").click(response.result[i], function(e) {
+        var search = e.data.search;
+        var go = e.data.go;
+
+        /* Reset go and search */
+        $("#browser_go").text("");
+        $("#browser_search").text("");
+
+        /* Add search form */
+        if (search && search.support == true) {
+          var text = search.input_text || "";
+          var button = search.button_text || "Search";
+
+          /* Create a new form */
+          var form = $(
+          '<form>Search: ' +
+            '<input type="text" id="search" name="input" value="' + text + '">' +
+            '<input type="submit" value="' + button  + '">' +
+          '</form>');
+
+          /* Add action for button */
+          form.submit([e.data.id, form], function(e) {
+            var input = e.data[1].children("input").val();
+            melo_browser_search(e.data[0], input, 0, 0);
+            e.preventDefault();
+          })
+
+          /* Change text of input when active */
+          form.children("input:first").focusin(text, function(e) {
+            if ($(this).val() == e.data)
+              $(this).val("");
+          });
+          form.children("input:first").focusout(text, function(e) {
+            if ($(this).val() == "")
+              $(this).val(e.data);
+          });
+
+          /* Add form */
+          $("#browser_search").append(form);
+        }
+
+        /* Add go form */
+        if (go && go.support == true) {
+          var text = go.input_text || "";
+          var list = go.button_list_text || "List";
+          var play = go.button_play_text || "Play";
+          var add = go.button_add_text || "Add";
+
+          /* Create a new form */
+          var form = $(
+          '<form>Go: ' +
+            '<input type="text" id="go" name="input" value="' + text + '">' +
+          '</form>');
+          if (go.list_support == true) {
+            var button = $('<input type="button" value="' + list  + '">');
+            button.click([e.data.id, form], function (e) {
+              var input = e.data[1].children("input").val();
+              melo_browser_get_list(e.data[0], input, 0, 0);
+            });
+            form.append(button);
+          }
+          if (go.play_support == true) {
+            var button = $('<input type="button" value="' + play  + '">');
+            button.click([e.data.id, form], function (e) {
+              var input = e.data[1].children("input").val();
+              melo_browser_action("play", e.data[0], input, false);
+            });
+            form.append(button);
+          }
+          if (go.add_support == true) {
+            var button = $('<input type="button" value="' + add  + '">');
+            button.click([e.data.id, form], function (e) {
+              var input = e.data[1].children("input").val();
+              melo_browser_action("add", e.data[0], input, false);
+            });
+            form.append(button);
+          }
+
+          /* Change text of input when active */
+          form.children("input:first").focusin(text, function(e) {
+            if ($(this).val() == e.data)
+              $(this).val("");
+          });
+          form.children("input:first").focusout(text, function(e) {
+            if ($(this).val() == "")
+              $(this).val(e.data);
+          });
+
+          /* Add form */
+          $("#browser_go").append(form);
+        }
+
+        /* Get list for root path */
+        melo_browser_get_list(e.data.id, "/", 0, 0);
         return false;
       });
 
@@ -128,7 +220,7 @@ var melo_browser_current_path = "";
 var melo_browser_current_off = 0;
 var melo_browser_current_count = 0;
 
-function melo_get_browser_list(id, path, off, count) {
+function melo_browser_list(method, id, path, off, count) {
   /* Set navigation */
   if (count == 0)
     count = 100;
@@ -147,17 +239,17 @@ function melo_get_browser_list(id, path, off, count) {
     if (prev_off < 0)
       prev_off = 0;
     $('#bnav').children("a.prev").click([id, path, prev_off, count], function(e) {
-      melo_get_browser_list(e.data[0], e.data[1], e.data[2], e.data[3]);
+      melo_browser_get_list(e.data[0], e.data[1], e.data[2], e.data[3]);
       return false;
     });
   }
   $('#bnav').children("a.next").click([id, path, off+count, count], function(e) {
-    melo_get_browser_list(e.data[0], e.data[1], e.data[2], e.data[3]);
+    melo_browser_get_list(e.data[0], e.data[1], e.data[2], e.data[3]);
     return false;
   });
 
   /* Do request */
-  jsonrpc_call("browser.get_list", JSON.parse('["' + id + '","' + path + '",' +
+  jsonrpc_call("browser." + method, JSON.parse('["' + id + '","' + path + '",' +
                                                 off + ',' + count + ',' +
                                          '["full"],{},{"mode":"only_cached",' +
                                          '"fields":["title","artist"]}]'), null,
@@ -203,7 +295,7 @@ function melo_get_browser_list(id, path, off, count) {
           response.result[i].type == "category") {
         /* Get list of children */
         item.children("a").click([id, npath], function(e) {
-          melo_get_browser_list(e.data[0], e.data[1], 0, 0);
+          melo_browser_get_list(e.data[0], e.data[1], 0, 0);
           return false;
         });
       } else {
@@ -246,8 +338,7 @@ function melo_get_browser_list(id, path, off, count) {
 
       /* Add file to list if no tags available */
       if (response.result[i].tags == null) {
-        var plop = [item, fpath];
-        get_tags_list.push (plop);
+        get_tags_list.push ([item, fpath]);
       }
     }
 
@@ -255,6 +346,14 @@ function melo_get_browser_list(id, path, off, count) {
     get_tags_list.reverse();
     melo_browser_update_tags (id, get_tags_list);
   });
+}
+
+function melo_browser_get_list(id, path, off, count) {
+  melo_browser_list("get_list", id, path, off, count);
+}
+
+function melo_browser_search(id, path, off, count) {
+  melo_browser_list("search", id, path, off, count);
 }
 
 function melo_browser_action(action, id, path, update) {
@@ -265,7 +364,7 @@ function melo_browser_action(action, id, path, update) {
 
     /* Update list when remove is done */
     if (update)
-      melo_get_browser_list(melo_browser_current_id, melo_browser_current_path,
+      melo_browser_get_list(melo_browser_current_id, melo_browser_current_path,
                             melo_browser_current_off, melo_browser_current_count);
   });
 }
@@ -341,7 +440,7 @@ function melo_browser_previous() {
 
   /* Get parent and update list */
   path = path.substring(0, n + 1);
-  melo_get_browser_list(melo_browser_current_id, path, 0, 0);
+  melo_browser_get_list(melo_browser_current_id, path, 0, 0);
 }
 
 var players = [];
