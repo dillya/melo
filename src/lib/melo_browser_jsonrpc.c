@@ -72,6 +72,8 @@ melo_browser_jsonrpc_get_info_fields (JsonObject *obj)
       fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_NAME;
     else if (!g_strcmp0 (field, "description"))
       fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_DESCRIPTION;
+    else if (!g_strcmp0 (field, "tags"))
+      fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_TAGS;
   }
 
   return fields;
@@ -90,6 +92,13 @@ melo_browser_jsonrpc_info_to_object (const gchar *id,
       json_object_set_string_member (obj, "name", info->name);
     if (fields & MELO_BROWSER_JSONRPC_INFO_FIELDS_DESCRIPTION)
       json_object_set_string_member (obj, "description", info->description);
+    if (fields & MELO_BROWSER_JSONRPC_INFO_FIELDS_TAGS) {
+      JsonObject *o = json_object_new ();
+      json_object_set_boolean_member (o, "support", info->tags_support);
+      json_object_set_boolean_member (o, "cache_support",
+                                      info->tags_cache_support);
+      json_object_set_object_member (obj, "tags", o);
+    }
   }
   return obj;
 }
