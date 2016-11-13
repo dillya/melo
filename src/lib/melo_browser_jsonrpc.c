@@ -74,6 +74,8 @@ melo_browser_jsonrpc_get_info_fields (JsonObject *obj)
       fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_DESCRIPTION;
     else if (!g_strcmp0 (field, "search"))
       fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_SEARCH;
+    else if (!g_strcmp0 (field, "go"))
+      fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_GO;
     else if (!g_strcmp0 (field, "tags"))
       fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_TAGS;
   }
@@ -103,6 +105,21 @@ melo_browser_jsonrpc_info_to_object (const gchar *id,
       json_object_set_string_member (o, "button_text",
                                      info->search_button_text);
       json_object_set_object_member (obj, "search", o);
+    }
+    if (fields & MELO_BROWSER_JSONRPC_INFO_FIELDS_GO) {
+      JsonObject *o = json_object_new ();
+      json_object_set_boolean_member (o, "support", info->go_support);
+      json_object_set_boolean_member (o, "list_support", info->go_list_support);
+      json_object_set_boolean_member (o, "play_support", info->go_play_support);
+      json_object_set_boolean_member (o, "add_support", info->go_add_support);
+      json_object_set_string_member (o, "input_text", info->go_input_text);
+      json_object_set_string_member (o, "button_list_text",
+                                     info->go_button_list_text);
+      json_object_set_string_member (o, "button_play_text",
+                                     info->go_button_play_text);
+      json_object_set_string_member (o, "button_add_text",
+                                     info->go_button_add_text);
+      json_object_set_object_member (obj, "go", o);
     }
     if (fields & MELO_BROWSER_JSONRPC_INFO_FIELDS_TAGS) {
       JsonObject *o = json_object_new ();

@@ -81,6 +81,15 @@ struct _MeloBrowserInfo {
   gboolean search_hint_support;
   const gchar *search_input_text;
   const gchar *search_button_text;
+  /* Go support */
+  gboolean go_support;
+  gboolean go_list_support;
+  gboolean go_play_support;
+  gboolean go_add_support;
+  const gchar *go_input_text;
+  const gchar *go_button_list_text;
+  const gchar *go_button_play_text;
+  const gchar *go_button_add_text;
   /* Tags support */
   gboolean tags_support;
   gboolean tags_cache_support;
