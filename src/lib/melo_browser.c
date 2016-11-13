@@ -237,6 +237,28 @@ melo_browser_get_list (MeloBrowser *browser, const gchar *path, gint offset,
                            tags_fields);
 }
 
+GList *
+melo_browser_search (MeloBrowser *browser, const gchar *input, gint offset,
+                     gint count, MeloBrowserTagsMode tags_mode,
+                     MeloTagsFields tags_fields)
+{
+  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
+
+  g_return_val_if_fail (bclass->search, NULL);
+
+  return bclass->search (browser, input, offset, count, tags_mode, tags_fields);
+}
+
+gchar *
+melo_browser_search_hint (MeloBrowser *browser, const gchar *input)
+{
+  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
+
+  g_return_val_if_fail (bclass->search_hint, NULL);
+
+  return bclass->search_hint (browser, input);
+}
+
 MeloTags *
 melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
                        MeloTagsFields fields)

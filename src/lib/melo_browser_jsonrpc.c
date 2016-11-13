@@ -72,6 +72,8 @@ melo_browser_jsonrpc_get_info_fields (JsonObject *obj)
       fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_NAME;
     else if (!g_strcmp0 (field, "description"))
       fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_DESCRIPTION;
+    else if (!g_strcmp0 (field, "search"))
+      fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_SEARCH;
     else if (!g_strcmp0 (field, "tags"))
       fields |= MELO_BROWSER_JSONRPC_INFO_FIELDS_TAGS;
   }
@@ -92,6 +94,16 @@ melo_browser_jsonrpc_info_to_object (const gchar *id,
       json_object_set_string_member (obj, "name", info->name);
     if (fields & MELO_BROWSER_JSONRPC_INFO_FIELDS_DESCRIPTION)
       json_object_set_string_member (obj, "description", info->description);
+    if (fields & MELO_BROWSER_JSONRPC_INFO_FIELDS_SEARCH) {
+      JsonObject *o = json_object_new ();
+      json_object_set_boolean_member (o, "support", info->search_support);
+      json_object_set_boolean_member (o, "hint_support",
+                                      info->search_hint_support);
+      json_object_set_string_member (o, "input_text", info->search_input_text);
+      json_object_set_string_member (o, "button_text",
+                                     info->search_button_text);
+      json_object_set_object_member (obj, "search", o);
+    }
     if (fields & MELO_BROWSER_JSONRPC_INFO_FIELDS_TAGS) {
       JsonObject *o = json_object_new ();
       json_object_set_boolean_member (o, "support", info->tags_support);
@@ -303,8 +315,12 @@ melo_browser_jsonrpc_get_list (const gchar *method,
     melo_browser_jsonrpc_get_tags_mode (obj, &tags_mode, &tags_fields);
 
   /* Get list */
-  list = melo_browser_get_list (bro, path, offset, count, tags_mode,
+  if (!g_strcmp0 (method, "browser.search"))
+    list = melo_browser_search (bro, path, offset, count, tags_mode,
                                 tags_fields);
+  else
+    list = melo_browser_get_list (bro, path, offset, count, tags_mode,
+                                  tags_fields);
   json_object_unref (obj);
   g_object_unref (bro);
 
@@ -317,6 +333,47 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   /* Return array */
   *result = json_node_new (JSON_NODE_ARRAY);
   json_node_take_array (*result, array);
+}
+
+static void
+melo_browser_jsonrpc_search_hint (const gchar *method,
+                                  JsonArray *s_params, JsonNode *params,
+                                  JsonNode **result, JsonNode **error,
+                                  gpointer user_data)
+{
+  MeloBrowser *bro;
+  JsonObject *obj;
+  const gchar *input;
+  gchar *hint;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get browser from ID */
+  bro = melo_browser_jsonrpc_get_browser (obj, error);
+  if (!bro) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get input */
+  input = json_object_get_string_member (obj, "input");
+
+  /* Get hint */
+  hint = melo_browser_search_hint (bro, input);
+  json_object_unref (obj);
+  g_object_unref (bro);
+
+  /* Create result object */
+  obj = json_object_new ();
+  json_object_set_string_member (obj, "hint", hint);
+  g_free (hint);
+
+  /* Return object */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
 }
 
 static void
@@ -452,6 +509,40 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"array\"}",
     .callback = melo_browser_jsonrpc_get_list,
+    .user_data = NULL,
+  },
+  {
+    .method = "search",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"input\", \"type\": \"string\"},"
+              "  {\"name\": \"offset\", \"type\": \"integer\"},"
+              "  {\"name\": \"count\", \"type\": \"integer\"},"
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"sort\", \"type\": \"object\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"tags\", \"type\": \"object\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"array\"}",
+    .callback = melo_browser_jsonrpc_get_list,
+    .user_data = NULL,
+  },
+  {
+    .method = "search_hint",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"input\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_browser_jsonrpc_search_hint,
     .user_data = NULL,
   },
   {

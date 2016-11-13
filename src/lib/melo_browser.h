@@ -59,9 +59,13 @@ struct _MeloBrowserClass {
   GObjectClass parent_class;
 
   const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
-  GList *(*get_list) (MeloBrowser *browser, const gchar *path,  gint offset,
+  GList *(*get_list) (MeloBrowser *browser, const gchar *path, gint offset,
                       gint count, MeloBrowserTagsMode tags_mode,
                       MeloTagsFields tags_fields);
+  GList *(*search) (MeloBrowser *browser, const gchar *input, gint offset,
+                    gint count, MeloBrowserTagsMode tags_mode,
+                    MeloTagsFields tags_fields);
+  gchar *(*search_hint) (MeloBrowser *browser, const gchar *input);
   MeloTags *(*get_tags) (MeloBrowser *browser, const gchar *path,
                          MeloTagsFields fields);
   gboolean (*add) (MeloBrowser *browser, const gchar *path);
@@ -72,6 +76,12 @@ struct _MeloBrowserClass {
 struct _MeloBrowserInfo {
   const gchar *name;
   const gchar *description;
+  /* Search support */
+  gboolean search_support;
+  gboolean search_hint_support;
+  const gchar *search_input_text;
+  const gchar *search_button_text;
+  /* Tags support */
   gboolean tags_support;
   gboolean tags_cache_support;
 };
@@ -107,6 +117,11 @@ GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path,
                               gint offset, gint count,
                               MeloBrowserTagsMode tags_mode,
                               MeloTagsFields tags_fields);
+GList *melo_browser_search (MeloBrowser *browser, const gchar *input,
+                            gint offset, gint count,
+                            MeloBrowserTagsMode tags_mode,
+                            MeloTagsFields tags_fields);
+gchar *melo_browser_search_hint (MeloBrowser *browser, const gchar *input);
 MeloTags *melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
                                  MeloTagsFields fields);
 gboolean melo_browser_add (MeloBrowser *browser, const gchar *path);
