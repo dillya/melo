@@ -267,7 +267,9 @@ melo_player_file_add (MeloPlayer *player, const gchar *path, const gchar *name,
 
   /* Extract file name from URI */
   if (!name) {
-    _name = g_path_get_basename (path);
+    gchar *escaped = escaped = g_path_get_basename (path);
+    _name = g_uri_unescape_string (escaped, NULL);
+    g_free (escaped);
     name = _name;
   }
 
@@ -299,7 +301,9 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
 
   /* Create new status */
   if (!name) {
-    _name = g_path_get_basename (priv->uri);
+    gchar *escaped = escaped = g_path_get_basename (priv->uri);
+    _name = g_uri_unescape_string (escaped, NULL);
+    g_free (escaped);
     name = _name;
   }
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
