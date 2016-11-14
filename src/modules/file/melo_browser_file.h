@@ -42,7 +42,7 @@ struct _MeloBrowserFile {
   MeloBrowser parent_instance;
 
   /*< private >*/
-MeloBrowserFilePrivate *priv;
+  MeloBrowserFilePrivate *priv;
 };
 
 struct _MeloBrowserFileClass {
