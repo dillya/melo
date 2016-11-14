@@ -271,6 +271,7 @@ function melo_browser_list(method, id, path, off, count) {
       var title = name;
       var npath = path + response.result[i].name + "/";
       var fpath = path + response.result[i].name;
+      var item_class = "browser_media";
 
       /* Use full name when available */
       if (response.result[i].full_name != null) {
@@ -284,6 +285,7 @@ function melo_browser_list(method, id, path, off, count) {
         name = response.result[i].tags.artist + ' - ' +
                response.result[i].tags.title;
         title = response.result[i].full_name  + ' (' + name + ')';
+        item_class = "browser_tags";
       }
 
       /* Generate list item */
@@ -297,13 +299,13 @@ function melo_browser_list(method, id, path, off, count) {
         item.children("a").click([id, npath], function(e) {
           melo_browser_get_list(e.data[0], e.data[1], 0, 0);
           return false;
-        });
+        }).toggleClass("browser_category");
       } else {
         /* Do action on file / item */
         item.children("a").click([id, fpath], function(e) {
           melo_browser_action("play", e.data[0], e.data[1], false);
           return false;
-        });
+        }).toggleClass(item_class);
       }
 
       /* Add a link if item is addable */
@@ -424,7 +426,8 @@ function melo_browser_update_tags (id, list) {
     /* Update link name */
     if (response.result.title != null) {
       data[0][0].children("a:first").text(response.result.artist + ' - ' +
-                                          response.result.title);
+                                          response.result.title)
+                                    .toggleClass("browser_tags");
     }
     melo_browser_update_tags (data[1], data[2]);
   });
