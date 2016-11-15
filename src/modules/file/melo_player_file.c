@@ -165,8 +165,8 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       gint64 duration;
 
       /* Get duration */
-      if (gst_element_query_duration (priv->src, GST_FORMAT_TIME, &duration)) {
-        priv->status->duration = duration / 1000000; }
+      if (gst_element_query_duration (priv->src, GST_FORMAT_TIME, &duration))
+        priv->status->duration = duration / 1000000;
       break;
     }
     case GST_MESSAGE_TAG: {
@@ -442,7 +442,7 @@ melo_player_file_get_pos (MeloPlayer *player, gint *duration)
     *duration = priv->status->duration;
 
   /* Get length */
-  if (!gst_element_query_position (priv->src, GST_FORMAT_TIME, &pos))
+  if (!gst_element_query_position (priv->pipeline, GST_FORMAT_TIME, &pos))
     pos = 0;
 
   return pos / 1000000;
