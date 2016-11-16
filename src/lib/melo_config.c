@@ -96,6 +96,15 @@ melo_config_finalize (GObject *gobject)
 
   /* Free all values for each groups */
   for (i = 0; i < priv->groups_count; i++) {
+    int j;
+
+    /* Free string values */
+    for (j = 0; j < priv->groups[i].items_count; j++) {
+      if (priv->groups[i].items[j].type == MELO_CONFIG_TYPE_STRING)
+        g_free (priv->values[i].values[j]._string);
+    }
+
+    /* Free values arrays */
     g_slice_free1 (priv->values[i].bsize, priv->values[i].updated_values);
     g_slice_free1 (priv->values[i].size, priv->values[i].new_values);
     g_slice_free1 (priv->values[i].size, priv->values[i].values);

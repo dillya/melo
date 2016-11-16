@@ -332,6 +332,8 @@ melo_browser_item_free (MeloBrowserItem *item)
     g_free (item->full_name);
   if (item->type)
     g_free (item->type);
+  if (item->add)
+    g_free (item->add);
   if (item->remove)
     g_free (item->remove);
   if (item->tags)

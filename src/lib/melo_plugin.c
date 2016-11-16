@@ -95,6 +95,7 @@ melo_plugin_load_unclock (const gchar *name, gboolean enable)
 
   /* Open plugin */
   module = g_module_open (path, G_MODULE_BIND_LAZY);
+  g_free (path);
   if (!module)
       goto err_free;
 
@@ -119,7 +120,6 @@ melo_plugin_load_unclock (const gchar *name, gboolean enable)
 err_close:
   g_module_close (module);
 err_free:
-  g_free (path);
   return FALSE;
 }
 

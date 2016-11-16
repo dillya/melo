@@ -169,11 +169,11 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
 
     /* Get tags from status */
     tags = melo_player_status_get_tags (status);
-    if (tags && (tags_timestamp <= 0 ||
-                 melo_tags_updated (tags, tags_timestamp))) {
-      json_object_set_object_member (obj, "tags",
-                                     melo_tags_to_json_object (tags,
-                                                               tags_fields));
+    if (tags) {
+      if (tags_timestamp <= 0 || melo_tags_updated (tags, tags_timestamp))
+        json_object_set_object_member (obj, "tags",
+                                       melo_tags_to_json_object (tags,
+                                                                 tags_fields));
       melo_tags_unref (tags);
     } else
       json_object_set_null_member (obj, "tags");

@@ -283,8 +283,10 @@ melo_config_jsonrpc_get (const gchar *method,
 
   /* Get config from ID */
   cfg = melo_config_jsonrpc_get_config (obj, error);
-  if (!cfg)
+  if (!cfg) {
+    json_object_unref (obj);
     return;
+  }
 
   /* Get group ID */
   if (json_object_has_member (obj, "group"))
@@ -324,8 +326,10 @@ melo_config_jsonrpc_set (const gchar *method,
 
   /* Get config from ID */
   cfg = melo_config_jsonrpc_get_config (obj, error);
-  if (!cfg)
+  if (!cfg) {
+    json_object_unref (obj);
     return;
+  }
 
   /* Convert config to JSON */
   ret = melo_config_update (cfg, melo_config_jsonrpc_update, (gpointer) obj,
