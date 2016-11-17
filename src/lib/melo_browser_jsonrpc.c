@@ -303,7 +303,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   JsonArray *array;
   JsonObject *obj;
   GList *l;
-  const gchar *path;
+  const gchar *path, *input;
   gint offset, count;
 
   /* Get parameters */
@@ -319,7 +319,10 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   }
 
   /* Get path */
-  path = json_object_get_string_member (obj, "path");
+  if (!g_strcmp0 (method, "browser.search"))
+    input = json_object_get_string_member (obj, "input");
+  else
+    path = json_object_get_string_member (obj, "path");
 
   /* Get fields */
   fields = melo_browser_jsonrpc_get_list_fields (obj);
@@ -334,7 +337,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
 
   /* Get browser list */
   if (!g_strcmp0 (method, "browser.search"))
-    list = melo_browser_search (bro, path, offset, count, tags_mode,
+    list = melo_browser_search (bro, input, offset, count, tags_mode,
                                 tags_fields);
   else
     list = melo_browser_get_list (bro, path, offset, count, tags_mode,
