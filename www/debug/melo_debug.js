@@ -79,7 +79,7 @@ function melo_get_info(id) {
 
 function melo_get_browsers(id, ul) {
   jsonrpc_call("module.get_browser_list",
-               JSON.parse('["' + id + '",["name","search","go"]]'), null,
+               JSON.parse('["' + id + '",["name","tags","search","go"]]'), null,
                function(response, data) {
     if (response.error || !response.result)
       return;
@@ -102,6 +102,7 @@ function melo_get_browsers(id, ul) {
       /* Add a link to get list from browser */
       bro.children("a.open").click(response.result[i], function(e) {
         var search = e.data.search;
+        var tags = e.data.tags;
         var go = e.data.go;
 
         /* Reset go and search */
@@ -192,7 +193,12 @@ function melo_get_browsers(id, ul) {
           $("#browser_go").append(form);
         }
 
+        /* Set tags support for browser */
+        if (tags)
+          melo_browser_current_do_tags = tags.support;
+
         /* Get list for root path */
+        $('#browser_list').html("");
         melo_browser_get_list(e.data.id, "/", 0, 0);
         return false;
       });
@@ -219,6 +225,7 @@ var melo_browser_current_id = "";
 var melo_browser_current_path = "";
 var melo_browser_current_off = 0;
 var melo_browser_current_count = 0;
+var melo_browser_current_do_tags = false;
 
 function melo_browser_list(method, id, path, off, count) {
   /* Set navigation */
@@ -349,8 +356,10 @@ function melo_browser_list(method, id, path, off, count) {
     }
 
     /* Launch get_tags task */
-    get_tags_list.reverse();
-    melo_browser_update_tags (id, get_tags_list);
+    if (melo_browser_current_do_tags == true) {
+      get_tags_list.reverse();
+      melo_browser_update_tags (id, get_tags_list);
+    }
   });
 }
 
