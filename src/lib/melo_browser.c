@@ -224,7 +224,7 @@ melo_browser_get_player (MeloBrowser *browser)
   return g_object_ref (browser->player);
 }
 
-GList *
+MeloBrowserList *
 melo_browser_get_list (MeloBrowser *browser, const gchar *path, gint offset,
                        gint count, MeloBrowserTagsMode tags_mode,
                        MeloTagsFields tags_fields)
@@ -237,7 +237,7 @@ melo_browser_get_list (MeloBrowser *browser, const gchar *path, gint offset,
                            tags_fields);
 }
 
-GList *
+MeloBrowserList *
 melo_browser_search (MeloBrowser *browser, const gchar *input, gint offset,
                      gint count, MeloBrowserTagsMode tags_mode,
                      MeloTagsFields tags_fields)
@@ -298,6 +298,19 @@ melo_browser_remove (MeloBrowser *browser, const gchar *path)
   g_return_val_if_fail (bclass->remove, FALSE);
 
   return bclass->remove (browser, path);
+}
+
+MeloBrowserList *
+melo_browser_list_new ()
+{
+  return g_slice_new0 (MeloBrowserList);
+}
+
+void
+melo_browser_list_free (MeloBrowserList *list)
+{
+  g_list_free_full (list->items, (GDestroyNotify) melo_browser_item_free);
+  g_slice_free (MeloBrowserList, list);
 }
 
 MeloBrowserItem *

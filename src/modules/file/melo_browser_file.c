@@ -46,11 +46,11 @@ static void on_discovered (GstDiscoverer *discoverer, GstDiscovererInfo *info,
 static void melo_browser_file_set_id (GObject *obj,
                                       MeloBrowserFilePrivate *priv);
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
-static GList *melo_browser_file_get_list (MeloBrowser *browser,
-                                          const gchar *path, gint offset,
-                                          gint count,
-                                          MeloBrowserTagsMode tags_mode,
-                                          MeloTagsFields tags_fields);
+static MeloBrowserList *melo_browser_file_get_list (MeloBrowser *browser,
+                                                  const gchar *path,
+                                                  gint offset, gint count,
+                                                  MeloBrowserTagsMode tags_mode,
+                                                  MeloTagsFields tags_fields);
 static MeloTags *melo_browser_file_get_tags (MeloBrowser *browser,
                                              const gchar *path,
                                              MeloTagsFields fields);
@@ -777,14 +777,19 @@ melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path,
   return list;
 }
 
-static GList *
+static MeloBrowserList *
 melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
                             gint offset, gint count,
                             MeloBrowserTagsMode tags_mode,
                             MeloTagsFields tags_fields)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
-  GList *list = NULL;
+  MeloBrowserList *list;
+
+  /* Create browser list */
+  list = melo_browser_list_new ();
+  if (!list)
+    return NULL;
 
   /* Check path */
   if (!path || *path != '/')
@@ -799,33 +804,33 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
     /* Add Local entry for local file system */
     item = melo_browser_item_new ("local", "category");
     item->full_name = g_strdup ("Local");
-    list = g_list_append(list, item);
+    list->items = g_list_append(list->items, item);
 
     /* Add Network entry for scanning network */
     item = melo_browser_item_new ("network", "category");
     item->full_name = g_strdup ("Network");
-    list = g_list_append(list, item);
+    list->items = g_list_append(list->items, item);
 
     /* Add local volumes to list */
-    list = melo_browser_file_list_volumes (bfile, list);
+    list->items = melo_browser_file_list_volumes (bfile, list->items);
   } else if (g_str_has_prefix (path, "local")) {
     gchar *uri;
 
     /* Get file path: "/local/" */
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:%s/%s", bfile->priv->local_path, path);
-    list = melo_browser_file_get_local_list (bfile, uri, tags_mode,
-                                             tags_fields);
+    list->items = melo_browser_file_get_local_list (bfile, uri, tags_mode,
+                                                    tags_fields);
     g_free (uri);
   } else if (g_str_has_prefix (path, "network")) {
     /* Get file path: "/network/" */
-    list = melo_browser_file_get_network_list (bfile, path + 8, tags_mode,
-                                               tags_fields);
+    list->items = melo_browser_file_get_network_list (bfile, path + 8,
+                                                      tags_mode, tags_fields);
   } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
              path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
     /* Volume path: "/VOLUME_ID/" */
-    list = melo_browser_file_get_volume_list (bfile, path, tags_mode,
-                                              tags_fields);
+    list->items = melo_browser_file_get_volume_list (bfile, path, tags_mode,
+                                                     tags_fields);
   }
 
   return list;

@@ -40,6 +40,7 @@ typedef struct _MeloBrowserClass MeloBrowserClass;
 typedef struct _MeloBrowserPrivate MeloBrowserPrivate;
 
 typedef struct _MeloBrowserInfo MeloBrowserInfo;
+typedef struct _MeloBrowserList MeloBrowserList;
 typedef struct _MeloBrowserItem MeloBrowserItem;
 
 typedef enum _MeloBrowserTagsMode MeloBrowserTagsMode;
@@ -59,12 +60,14 @@ struct _MeloBrowserClass {
   GObjectClass parent_class;
 
   const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
-  GList *(*get_list) (MeloBrowser *browser, const gchar *path, gint offset,
-                      gint count, MeloBrowserTagsMode tags_mode,
-                      MeloTagsFields tags_fields);
-  GList *(*search) (MeloBrowser *browser, const gchar *input, gint offset,
-                    gint count, MeloBrowserTagsMode tags_mode,
-                    MeloTagsFields tags_fields);
+  MeloBrowserList *(*get_list) (MeloBrowser *browser, const gchar *path,
+                                gint offset, gint count,
+                                MeloBrowserTagsMode tags_mode,
+                                MeloTagsFields tags_fields);
+  MeloBrowserList *(*search) (MeloBrowser *browser, const gchar *input,
+                              gint offset, gint count,
+                              MeloBrowserTagsMode tags_mode,
+                              MeloTagsFields tags_fields);
   gchar *(*search_hint) (MeloBrowser *browser, const gchar *input);
   MeloTags *(*get_tags) (MeloBrowser *browser, const gchar *path,
                          MeloTagsFields fields);
@@ -95,6 +98,11 @@ struct _MeloBrowserInfo {
   gboolean tags_cache_support;
 };
 
+struct _MeloBrowserList {
+  gint count;
+  GList *items;
+};
+
 struct _MeloBrowserItem {
   gchar *name;
   gchar *full_name;
@@ -122,20 +130,23 @@ MeloBrowser *melo_browser_get_browser_by_id (const gchar *id);
 void melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player);
 MeloPlayer *melo_browser_get_player (MeloBrowser *browser);
 
-GList *melo_browser_get_list (MeloBrowser *browser, const gchar *path,
-                              gint offset, gint count,
-                              MeloBrowserTagsMode tags_mode,
-                              MeloTagsFields tags_fields);
-GList *melo_browser_search (MeloBrowser *browser, const gchar *input,
-                            gint offset, gint count,
-                            MeloBrowserTagsMode tags_mode,
-                            MeloTagsFields tags_fields);
+MeloBrowserList *melo_browser_get_list (MeloBrowser *browser, const gchar *path,
+                                        gint offset, gint count,
+                                        MeloBrowserTagsMode tags_mode,
+                                        MeloTagsFields tags_fields);
+MeloBrowserList *melo_browser_search (MeloBrowser *browser, const gchar *input,
+                                      gint offset, gint count,
+                                      MeloBrowserTagsMode tags_mode,
+                                      MeloTagsFields tags_fields);
 gchar *melo_browser_search_hint (MeloBrowser *browser, const gchar *input);
 MeloTags *melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
                                  MeloTagsFields fields);
 gboolean melo_browser_add (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_play (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_remove (MeloBrowser *browser, const gchar *path);
+
+MeloBrowserList *melo_browser_list_new (void);
+void melo_browser_list_free (MeloBrowserList *list);
 
 MeloBrowserItem *melo_browser_item_new (const gchar *name, const gchar *type);
 gint melo_browser_item_cmp (const MeloBrowserItem *a, const MeloBrowserItem *b);

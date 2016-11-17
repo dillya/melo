@@ -298,10 +298,11 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   MeloBrowserJSONRPCListFields fields;
   MeloBrowserTagsMode tags_mode = MELO_BROWSER_TAGS_MODE_NONE;
   MeloTagsFields tags_fields = MELO_TAGS_FIELDS_NONE;
+  MeloBrowserList *list;
   MeloBrowser *bro;
   JsonArray *array;
   JsonObject *obj;
-  GList *list, *l;
+  GList *l;
   const gchar *path;
   gint offset, count;
 
@@ -331,7 +332,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS)
     melo_browser_jsonrpc_get_tags_mode (obj, &tags_mode, &tags_fields);
 
-  /* Get list */
+  /* Get browser list */
   if (!g_strcmp0 (method, "browser.search"))
     list = melo_browser_search (bro, path, offset, count, tags_mode,
                                 tags_fields);
@@ -341,11 +342,19 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   json_object_unref (obj);
   g_object_unref (bro);
 
-  /* Create list */
-  array = melo_browser_jsonrpc_list_to_object (list, fields, tags_fields);
+  /* No list provided */
+  if (!list) {
+    *error = melo_jsonrpc_build_error_node (MELO_JSONRPC_ERROR_INVALID_REQUEST,
+                                            "Method not available!");
+    return;
+  }
 
-  /* Free item list */
-  g_list_free_full (list, (GDestroyNotify) melo_browser_item_free);
+  /* Create list */
+  array = melo_browser_jsonrpc_list_to_object (list->items, fields,
+                                               tags_fields);
+
+  /* Free browser list */
+  melo_browser_list_free (list);
 
   /* Return array */
   *result = json_node_new (JSON_NODE_ARRAY);

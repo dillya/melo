@@ -36,11 +36,11 @@ static MeloBrowserInfo melo_browser_radio_info = {
 
 static const MeloBrowserInfo *melo_browser_radio_get_info (
                                                           MeloBrowser *browser);
-static GList *melo_browser_radio_get_list (MeloBrowser *browser,
-                                           const gchar *path, gint offset,
-                                           gint count,
-                                           MeloBrowserTagsMode tags_mode,
-                                           MeloTagsFields tags_fields);
+static MeloBrowserList *melo_browser_radio_get_list (MeloBrowser *browser,
+                                                  const gchar *path,
+                                                  gint offset, gint count,
+                                                  MeloBrowserTagsMode tags_mode,
+                                                  MeloTagsFields tags_fields);
 static gboolean melo_browser_radio_play (MeloBrowser *browser,
                                          const gchar *path);
 
@@ -105,23 +105,28 @@ melo_browser_radio_get_info (MeloBrowser *browser)
   return &melo_browser_radio_info;
 }
 
-static GList *
+static MeloBrowserList *
 melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
                              gint offset, gint count,
                              MeloBrowserTagsMode tags_mode,
                              MeloTagsFields tags_fields)
 {
   MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
+  static MeloBrowserList *list;
   SoupMessage *msg;
   GInputStream *stream;
   JsonParser *parser;
   JsonNode *node;
   JsonArray *array;
   JsonObject *obj;
-  GList *list = NULL;
   gchar *url;
   gint page;
   gint i;
+
+  /* Create browser list */
+  list = melo_browser_list_new ();
+  if (!list)
+    return NULL;
 
   /* Generate URL */
   page = (offset / count) + 1;
@@ -174,11 +179,11 @@ melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
     item->type = *type == 'm' ? g_strdup ("category") : g_strdup ("radio");
 
     /* Add item to list */
-    list = g_list_prepend (list, item);
+    list->items = g_list_prepend (list->items, item);
   }
 
   /* Reverse list */
-  list = g_list_reverse (list);
+  list->items = g_list_reverse (list->items);
 
   /* Free objects */
   g_object_unref (parser);
