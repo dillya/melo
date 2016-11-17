@@ -252,10 +252,14 @@ function melo_browser_list(method, id, path, off, count) {
   jsonrpc_call("browser." + method, JSON.parse('["' + id + '","' + path + '",' +
                                                 off + ',' + count + ',' +
                                          '["full"],{},{"mode":"only_cached",' +
-                                         '"fields":["title","artist"]}]'), null,
-               function(response, data) {
+                                         '"fields":["title","artist"]}]'),
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
+
+    /* Do not use path when we do research */
+    if (method == "search")
+      path = "";
 
     /* Save current ID and path of the browser */
     melo_browser_current_id = id;
