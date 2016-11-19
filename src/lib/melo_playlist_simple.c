@@ -1,5 +1,5 @@
 /*
- * melo_playlist_file.c: Simple File Playlist
+ * melo_playlist_simple.c: Simple Playlist
  *
  * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
  *
@@ -22,41 +22,41 @@
 #include <string.h>
 
 #include "melo_player.h"
-#include "melo_playlist_file.h"
+#include "melo_playlist_simple.h"
 
-#define MELO_PLAYLIST_FILE_NAME_EXT_SIZE 10
+#define MELO_PLAYLIST_SIMPLE_NAME_EXT_SIZE 10
 
-static GList *melo_playlist_file_get_list (MeloPlaylist *playlist,
-                                           gchar **current);
-static gboolean melo_playlist_file_add (MeloPlaylist *playlist,
-                                        const gchar *name,
-                                        const gchar *full_name,
-                                        const gchar *path,
-                                        gboolean is_current);
-static gchar *melo_playlist_file_get_prev (MeloPlaylist *playlist,
-                                           gboolean set);
-static gchar *melo_playlist_file_get_next (MeloPlaylist *playlist,
-                                           gboolean set);
-static gboolean melo_playlist_file_play (MeloPlaylist *playlist,
-                                         const gchar *name);
-static gboolean melo_playlist_file_remove (MeloPlaylist *playlist,
+static GList *melo_playlist_simple_get_list (MeloPlaylist *playlist,
+                                             gchar **current);
+static gboolean melo_playlist_simple_add (MeloPlaylist *playlist,
+                                          const gchar *name,
+                                          const gchar *full_name,
+                                          const gchar *path,
+                                          gboolean is_current);
+static gchar *melo_playlist_simple_get_prev (MeloPlaylist *playlist,
+                                             gboolean set);
+static gchar *melo_playlist_simple_get_next (MeloPlaylist *playlist,
+                                             gboolean set);
+static gboolean melo_playlist_simple_play (MeloPlaylist *playlist,
                                            const gchar *name);
+static gboolean melo_playlist_simple_remove (MeloPlaylist *playlist,
+                                             const gchar *name);
 
-struct _MeloPlaylistFilePrivate {
+struct _MeloPlaylistSimplePrivate {
   GMutex mutex;
   GList *playlist;
   GHashTable *names;
   GList *current;
 };
 
-G_DEFINE_TYPE_WITH_PRIVATE (MeloPlaylistFile, melo_playlist_file, MELO_TYPE_PLAYLIST)
+G_DEFINE_TYPE_WITH_PRIVATE (MeloPlaylistSimple, melo_playlist_simple, MELO_TYPE_PLAYLIST)
 
 static void
-melo_playlist_file_finalize (GObject *gobject)
+melo_playlist_simple_finalize (GObject *gobject)
 {
-  MeloPlaylistFile *playlist_file = MELO_PLAYLIST_FILE (gobject);
-  MeloPlaylistFilePrivate *priv =
-                          melo_playlist_file_get_instance_private (playlist_file);
+  MeloPlaylistSimple *playlist_simple = MELO_PLAYLIST_SIMPLE (gobject);
+  MeloPlaylistSimplePrivate *priv =
+                    melo_playlist_simple_get_instance_private (playlist_simple);
 
   /* Clear mutex */
   g_mutex_clear (&priv->mutex);
@@ -69,30 +69,31 @@ melo_playlist_file_finalize (GObject *gobject)
   g_list_free_full (priv->playlist, (GDestroyNotify) melo_playlist_item_unref);
 
   /* Chain up to the parent class */
-  G_OBJECT_CLASS (melo_playlist_file_parent_class)->finalize (gobject);
+  G_OBJECT_CLASS (melo_playlist_simple_parent_class)->finalize (gobject);
 }
 
 static void
-melo_playlist_file_class_init (MeloPlaylistFileClass *klass)
+melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
 {
   MeloPlaylistClass *plclass = MELO_PLAYLIST_CLASS (klass);
   GObjectClass *oclass = G_OBJECT_CLASS (klass);
 
-  plclass->get_list = melo_playlist_file_get_list;
-  plclass->add = melo_playlist_file_add;
-  plclass->get_prev = melo_playlist_file_get_prev;
-  plclass->get_next = melo_playlist_file_get_next;
-  plclass->play = melo_playlist_file_play;
-  plclass->remove = melo_playlist_file_remove;
+  plclass->get_list = melo_playlist_simple_get_list;
+  plclass->add = melo_playlist_simple_add;
+  plclass->get_prev = melo_playlist_simple_get_prev;
+  plclass->get_next = melo_playlist_simple_get_next;
+  plclass->play = melo_playlist_simple_play;
+  plclass->remove = melo_playlist_simple_remove;
 
   /* Add custom finalize() function */
-  oclass->finalize = melo_playlist_file_finalize;
+  oclass->finalize = melo_playlist_simple_finalize;
 }
 
 static void
-melo_playlist_file_init (MeloPlaylistFile *self)
+melo_playlist_simple_init (MeloPlaylistSimple *self)
 {
-  MeloPlaylistFilePrivate *priv = melo_playlist_file_get_instance_private (self);
+  MeloPlaylistSimplePrivate *priv =
+                               melo_playlist_simple_get_instance_private (self);
 
   self->priv = priv;
   priv->playlist = NULL;
@@ -106,10 +107,10 @@ melo_playlist_file_init (MeloPlaylistFile *self)
 }
 
 static GList *
-melo_playlist_file_get_list (MeloPlaylist *playlist, gchar **current)
+melo_playlist_simple_get_list (MeloPlaylist *playlist, gchar **current)
 {
-  MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
-  MeloPlaylistFilePrivate *priv = plfile->priv;
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
   GList *list;
 
   /* Lock playlist */
@@ -128,12 +129,12 @@ melo_playlist_file_get_list (MeloPlaylist *playlist, gchar **current)
 }
 
 static gboolean
-melo_playlist_file_add (MeloPlaylist *playlist, const gchar *name,
-                        const gchar *full_name, const gchar *path,
-                        gboolean is_current)
+melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *name,
+                          const gchar *full_name, const gchar *path,
+                          gboolean is_current)
 {
-  MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
-  MeloPlaylistFilePrivate *priv = plfile->priv;
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
   MeloPlaylistItem *item;
   gint len, i;
   gchar *final_name;
@@ -141,17 +142,21 @@ melo_playlist_file_add (MeloPlaylist *playlist, const gchar *name,
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
+  /* Use full_name or path when name is not provided */
+  if (!name)
+    name = full_name ? full_name : path;
+
   /* Generate a new name if current doesn't exists */
   len = strlen (name);
-  final_name = g_strndup (name, len + MELO_PLAYLIST_FILE_NAME_EXT_SIZE);
+  final_name = g_strndup (name, len + MELO_PLAYLIST_SIMPLE_NAME_EXT_SIZE);
   for (i = 1; i > 0 && g_hash_table_lookup (priv->names, final_name); i++)
-    g_snprintf (final_name + len, MELO_PLAYLIST_FILE_NAME_EXT_SIZE, "_%d", i);
+    g_snprintf (final_name + len, MELO_PLAYLIST_SIMPLE_NAME_EXT_SIZE, "_%d", i);
   if (i < 0) {
     g_mutex_unlock (&priv->mutex);
     return FALSE;
   }
 
-  /* Add a new file to playlist */
+  /* Add a new simple to playlist */
   item = melo_playlist_item_new (NULL, full_name, path);
   item->name = final_name;
   item->can_play = TRUE;
@@ -170,10 +175,10 @@ melo_playlist_file_add (MeloPlaylist *playlist, const gchar *name,
 }
 
 static gchar *
-melo_playlist_file_get_prev (MeloPlaylist *playlist, gboolean set)
+melo_playlist_simple_get_prev (MeloPlaylist *playlist, gboolean set)
 {
-  MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
-  MeloPlaylistFilePrivate *priv = plfile->priv;
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
   gchar *path = NULL;
 
   /* Lock playlist */
@@ -193,10 +198,10 @@ melo_playlist_file_get_prev (MeloPlaylist *playlist, gboolean set)
 }
 
 static gchar *
-melo_playlist_file_get_next (MeloPlaylist *playlist, gboolean set)
+melo_playlist_simple_get_next (MeloPlaylist *playlist, gboolean set)
 {
-  MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
-  MeloPlaylistFilePrivate *priv = plfile->priv;
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
   gchar *path = NULL;
 
   /* Lock playlist */
@@ -215,10 +220,10 @@ melo_playlist_file_get_next (MeloPlaylist *playlist, gboolean set)
 }
 
 static gboolean
-melo_playlist_file_play (MeloPlaylist *playlist, const gchar *name)
+melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
 {
-  MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
-  MeloPlaylistFilePrivate *priv = plfile->priv;
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
   MeloPlaylistItem *item = NULL;
   GList *element;
 
@@ -249,10 +254,10 @@ melo_playlist_file_play (MeloPlaylist *playlist, const gchar *name)
 }
 
 static gboolean
-melo_playlist_file_remove (MeloPlaylist *playlist, const gchar *name)
+melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
 {
-  MeloPlaylistFile *plfile = MELO_PLAYLIST_FILE (playlist);
-  MeloPlaylistFilePrivate *priv = plfile->priv;
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
   MeloPlaylistItem *item;
   GList *element;
 

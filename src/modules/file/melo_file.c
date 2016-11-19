@@ -23,7 +23,7 @@
 #include "melo_file_db.h"
 #include "melo_browser_file.h"
 #include "melo_player_file.h"
-#include "melo_playlist_file.h"
+#include "melo_playlist_simple.h"
 #include "melo_config_file.h"
 
 /* Module file info */
@@ -95,7 +95,8 @@ melo_file_init (MeloFile *self)
   self->priv = priv;
   priv->files = melo_browser_new (MELO_TYPE_BROWSER_FILE, "file_files");
   priv->player = melo_player_new (MELO_TYPE_PLAYER_FILE, "file_player");
-  priv->playlist = melo_playlist_new (MELO_TYPE_PLAYLIST_FILE, "file_playlist");
+  priv->playlist = melo_playlist_new (MELO_TYPE_PLAYLIST_SIMPLE,
+                                      "file_playlist");
 
   if (!priv->files || !priv->player || !priv->player)
     return;

@@ -24,8 +24,6 @@
 #include "melo_player.h"
 #include "melo_playlist_radio.h"
 
-#define MELO_PLAYLIST_RADIO_NAME_EXT_SIZE 10
-
 static GList *melo_playlist_radio_get_list (MeloPlaylist *playlist,
                                             gchar **current);
 static gboolean melo_playlist_radio_add (MeloPlaylist *playlist,
