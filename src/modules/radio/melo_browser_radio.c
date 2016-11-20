@@ -32,12 +32,21 @@ static MeloBrowserInfo melo_browser_radio_info = {
   .description = "Navigate though more than 30,000 radio and webradio",
   .tags_support = TRUE,
   .tags_cache_support = FALSE,
+  /* Search feature */
+  .search_support = TRUE,
+  .search_input_text = "Type a radio name or a genre...",
+  .search_button_text = "Go",
 };
 
 static const MeloBrowserInfo *melo_browser_radio_get_info (
                                                           MeloBrowser *browser);
 static MeloBrowserList *melo_browser_radio_get_list (MeloBrowser *browser,
                                                   const gchar *path,
+                                                  gint offset, gint count,
+                                                  MeloBrowserTagsMode tags_mode,
+                                                  MeloTagsFields tags_fields);
+static MeloBrowserList *melo_browser_radio_search (MeloBrowser *browser,
+                                                  const gchar *input,
                                                   gint offset, gint count,
                                                   MeloBrowserTagsMode tags_mode,
                                                   MeloTagsFields tags_fields);
@@ -76,6 +85,7 @@ melo_browser_radio_class_init (MeloBrowserRadioClass *klass)
 
   bclass->get_info = melo_browser_radio_get_info;
   bclass->get_list = melo_browser_radio_get_list;
+  bclass->search = melo_browser_radio_search;
   bclass->play = melo_browser_radio_play;
 
   /* Add custom finalize() function */
@@ -105,37 +115,20 @@ melo_browser_radio_get_info (MeloBrowser *browser)
   return &melo_browser_radio_info;
 }
 
-static MeloBrowserList *
-melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
-                             gint offset, gint count,
-                             MeloBrowserTagsMode tags_mode,
-                             MeloTagsFields tags_fields)
+static GList *
+melo_browser_radio_parse (MeloBrowserRadio *bradio, const gchar *url)
 {
-  MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
-  static MeloBrowserList *list;
   SoupMessage *msg;
   GInputStream *stream;
+  GList *list = NULL;
   JsonParser *parser;
   JsonNode *node;
   JsonArray *array;
   JsonObject *obj;
-  gchar *url;
-  gint page;
-  gint i;
-
-  /* Create browser list */
-  list = melo_browser_list_new (path);
-  if (!list)
-    return NULL;
-
-  /* Generate URL */
-  page = (offset / count) + 1;
-  url = g_strdup_printf ("http://www.sparod.com/radio%s?count=%d&page=%d",
-                         path, count, page);
+  gint count, i;
 
   /* Create request */
   msg = soup_message_new ("GET", url);
-  g_free (url);
 
   /* Send message and wait answer */
   stream = soup_session_send (bradio->priv->session, msg, NULL, NULL);
@@ -179,11 +172,11 @@ melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
     item->type = *type == 'm' ? g_strdup ("category") : g_strdup ("radio");
 
     /* Add item to list */
-    list->items = g_list_prepend (list->items, item);
+    list = g_list_prepend (list, item);
   }
 
   /* Reverse list */
-  list->items = g_list_reverse (list->items);
+  list = g_list_reverse (list);
 
   /* Free objects */
   g_object_unref (parser);
@@ -199,6 +192,62 @@ bad_status:
 bad_request:
   g_object_unref (msg);
   return NULL;
+}
+
+static MeloBrowserList *
+melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
+                             gint offset, gint count,
+                             MeloBrowserTagsMode tags_mode,
+                             MeloTagsFields tags_fields)
+{
+  MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
+  static MeloBrowserList *list;
+  gchar *url;
+  gint page;
+
+  /* Create browser list */
+  list = melo_browser_list_new (path);
+  if (!list)
+    return NULL;
+
+  /* Generate URL */
+  page = (offset / count) + 1;
+  url = g_strdup_printf ("http://www.sparod.com/radio%s?count=%d&page=%d",
+                         path, count, page);
+
+  /* Get list from URL */
+  list->items = melo_browser_radio_parse (bradio, url);
+  g_free (url);
+
+  return list;
+}
+
+static MeloBrowserList *
+melo_browser_radio_search (MeloBrowser *browser, const gchar *input,
+                           gint offset, gint count,
+                           MeloBrowserTagsMode tags_mode,
+                           MeloTagsFields tags_fields)
+{
+  MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
+  static MeloBrowserList *list;
+  gchar *url;
+  gint page;
+
+  /* Create browser list */
+  list = melo_browser_list_new ("/search/0/");
+  if (!list)
+    return NULL;
+
+  /* Generate URL */
+  page = (offset / count) + 1;
+  url = g_strdup_printf ("http://www.sparod.com/radio/search/%s?"
+                         "count=%d&page=%d", input, count, page);
+
+  /* Get list from URL */
+  list->items = melo_browser_radio_parse (bradio, url);
+  g_free (url);
+
+  return list;
 }
 
 static gboolean
