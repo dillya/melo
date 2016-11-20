@@ -53,6 +53,10 @@ struct _MeloModuleClass {
   GObjectClass parent_class;
 
   const MeloModuleInfo *(*get_info) (MeloModule *module);
+  void (*register_browser) (MeloModule *module, MeloBrowser *browser);
+  void (*unregister_browser) (MeloModule *module, MeloBrowser *browser);
+  void (*register_player) (MeloModule *module, MeloPlayer *player);
+  void (*unregister_player) (MeloModule *module, MeloPlayer *player);
 };
 
 struct _MeloModuleInfo {

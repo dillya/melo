@@ -161,6 +161,7 @@ melo_module_get_info (MeloModule *module)
 gboolean
 melo_module_register_browser (MeloModule *module, MeloBrowser *browser)
 {
+  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
   MeloModulePrivate *priv = module->priv;
 
   /* Lock browser list */
@@ -173,6 +174,10 @@ melo_module_register_browser (MeloModule *module, MeloBrowser *browser)
   /* Add to browser list */
   priv->browser_list = g_list_append (priv->browser_list,
                                       g_object_ref (browser));
+
+  /* Signal module for attachment */
+  if (mclass->register_browser)
+    mclass->register_browser (module, browser);
 
   /* Unlock browser list */
   g_mutex_unlock (&priv->browser_mutex);
@@ -187,6 +192,7 @@ failed:
 void
 melo_module_unregister_browser (MeloModule *module, const char *id)
 {
+  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
   MeloModulePrivate *priv = module->priv;
   MeloBrowser *bro;
 
@@ -197,6 +203,10 @@ melo_module_unregister_browser (MeloModule *module, const char *id)
   bro = melo_browser_get_browser_by_id (id);
   if (!bro)
     goto unlock;
+
+  /* Signal module for remove */
+  if (mclass->unregister_browser)
+    mclass->unregister_browser (module, bro);
 
   /* Remove browser from list */
   priv->browser_list = g_list_remove (priv->browser_list, bro);
@@ -230,6 +240,7 @@ melo_module_get_browser_list (MeloModule *module)
 gboolean
 melo_module_register_player (MeloModule *module, MeloPlayer *player)
 {
+  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
   MeloModulePrivate *priv = module->priv;
 
   /* Lock player list */
@@ -242,6 +253,10 @@ melo_module_register_player (MeloModule *module, MeloPlayer *player)
   /* Add to player list */
   priv->player_list = g_list_append (priv->player_list,
                                       g_object_ref (player));
+
+  /* Signal module for attachment */
+  if (mclass->register_player)
+    mclass->register_player (module, player);
 
   /* Unlock player list */
   g_mutex_unlock (&priv->player_mutex);
@@ -256,6 +271,7 @@ failed:
 void
 melo_module_unregister_player (MeloModule *module, const char *id)
 {
+  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
   MeloModulePrivate *priv = module->priv;
   MeloPlayer *play;
 
@@ -266,6 +282,10 @@ melo_module_unregister_player (MeloModule *module, const char *id)
   play = melo_player_get_player_by_id (id);
   if (!play)
     goto unlock;
+
+  /* Signal module for remove */
+  if (mclass->unregister_player)
+    mclass->unregister_player (module, play);
 
   /* Remove player from list */
   priv->player_list = g_list_remove (priv->player_list, play);
