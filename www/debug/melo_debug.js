@@ -274,38 +274,38 @@ function melo_browser_list(method, id, path, off, count) {
 
     /* Create a new list for not available tags items */
     var get_tags_list = [];
+    var items = response.result.items;
 
     /* Generate list */
     $('#browser_list').html("");
-    for (var i = 0; i < response.result.length; i++) {
-      var name = response.result[i].name;
+    for (var i = 0; i < items.length; i++) {
+      var name = items[i].name;
       var title = name;
-      var npath = path + response.result[i].name + "/";
-      var fpath = path + response.result[i].name;
+      var npath = path + items[i].name + "/";
+      var fpath = path + items[i].name;
       var item_class = "browser_media";
 
       /* Use full name when available */
-      if (response.result[i].full_name != null) {
-        name = response.result[i].full_name;
+      if (items[i].full_name != null) {
+        name = items[i].full_name;
         title = name;
       }
 
       /* Use artist + title when available */
-      if (response.result[i].tags != null &&
-          response.result[i].tags.title != null) {
-        name = response.result[i].tags.artist + ' - ' +
-               response.result[i].tags.title;
-        title = response.result[i].full_name  + ' (' + name + ')';
+      if (items[i].tags != null &&
+          items[i].tags.title != null) {
+        name = items[i].tags.artist + ' - ' + items[i].tags.title;
+        title = items[i].full_name  + ' (' + name + ')';
         item_class = "browser_tags";
       }
 
       /* Generate list item */
       var item = $('<li><a href="#" title="' + title + '">' + name + '</a> [' +
-                                        response.result[i].type + ']</li>');
+                                        items[i].type + ']</li>');
 
       /* Setup link */
-      if (response.result[i].type == "directory" ||
-          response.result[i].type == "category") {
+      if (items[i].type == "directory" ||
+          items[i].type == "category") {
         /* Get list of children */
         item.children("a").click([id, npath], function(e) {
           melo_browser_get_list(e.data[0], e.data[1], 0, 0);
@@ -320,8 +320,8 @@ function melo_browser_list(method, id, path, off, count) {
       }
 
       /* Add a link if item is addable */
-      if (response.result[i].add != null) {
-        item.append(' [<a class="add" href="#">' + response.result[i].add + '</a>]');
+      if (items[i].add != null) {
+        item.append(' [<a class="add" href="#">' + items[i].add + '</a>]');
         item.children('a.add').click([id, fpath], function(e) {
           melo_browser_action("add", e.data[0], e.data[1], false);
           return false;
@@ -329,8 +329,8 @@ function melo_browser_list(method, id, path, off, count) {
       }
 
       /* Add a link if item is removable */
-      if (response.result[i].remove != null) {
-        item.append(' [<a class="rm" href="#">' + response.result[i].remove + '</a>]');
+      if (items[i].remove != null) {
+        item.append(' [<a class="rm" href="#">' + items[i].remove + '</a>]');
         item.children('a.rm').click([id, npath], function(e) {
           melo_browser_action("remove", e.data[0], e.data[1], true);
           return false;
@@ -338,7 +338,7 @@ function melo_browser_list(method, id, path, off, count) {
       }
 
       /* Add a link to display tags */
-      if (response.result[i].type == "file") {
+      if (items[i].type == "file") {
         item.append(' [<a class="tags_link" href="#">+</a>]<div class="tags"></div>');
         item.children("a.tags_link").click([id, fpath, item], function(e) {
           melo_browser_get_tags(e.data[0], e.data[1], e.data[2]);
@@ -350,7 +350,7 @@ function melo_browser_list(method, id, path, off, count) {
       $('#browser_list').append(item);
 
       /* Add file to list if no tags available */
-      if (response.result[i].tags == null) {
+      if (items[i].tags == null) {
         get_tags_list.push ([item, fpath]);
       }
     }
