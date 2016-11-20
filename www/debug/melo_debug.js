@@ -264,9 +264,11 @@ function melo_browser_list(method, id, path, off, count) {
     if (response.error || !response.result)
       return;
 
-    /* Do not use path when we do research */
-    if (method == "search")
+    /* Copy path from response */
+    if (response.result.path == null)
       path = "";
+    else
+      path = response.result.path;
 
     /* Save current ID and path of the browser */
     melo_browser_current_id = id;
