@@ -173,7 +173,8 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       /* New title */
       if (mtags->title) {
         /* Add title to playlist */
-        melo_playlist_add (player->playlist, mtags->title, NULL, NULL, TRUE);
+        melo_playlist_add (player->playlist, mtags->title, NULL, NULL, NULL,
+                           TRUE);
 
         /* Split title */
         if (!mtags->artist) {

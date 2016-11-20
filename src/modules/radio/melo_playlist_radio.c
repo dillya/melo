@@ -29,7 +29,7 @@ static GList *melo_playlist_radio_get_list (MeloPlaylist *playlist,
 static gboolean melo_playlist_radio_add (MeloPlaylist *playlist,
                                          const gchar *name,
                                          const gchar *full_name,
-                                         const gchar *path,
+                                         const gchar *path, MeloTags *tags,
                                          gboolean is_current);
 static void melo_playlist_radio_empty (MeloPlaylist *playlist);
 
@@ -111,7 +111,7 @@ melo_playlist_radio_get_list (MeloPlaylist *playlist, gchar **current)
 static gboolean
 melo_playlist_radio_add (MeloPlaylist *playlist, const gchar *name,
                          const gchar *full_name, const gchar *path,
-                         gboolean is_current)
+                         MeloTags *tags, gboolean is_current)
 {
   MeloPlaylistRadio *plradio = MELO_PLAYLIST_RADIO (playlist);
   MeloPlaylistRadioPrivate *priv = plradio->priv;
@@ -134,7 +134,7 @@ melo_playlist_radio_add (MeloPlaylist *playlist, const gchar *name,
   }
 
   /* Add a new song to playlist */
-  item = melo_playlist_item_new (name, full_name, path);
+  item = melo_playlist_item_new (name, full_name, path, tags);
   item->can_play = FALSE;
   item->can_remove = FALSE;
   priv->playlist = g_list_prepend (priv->playlist, item);

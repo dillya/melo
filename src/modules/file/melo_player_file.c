@@ -274,7 +274,7 @@ melo_player_file_add (MeloPlayer *player, const gchar *path, const gchar *name,
   }
 
   /* Add URI to playlist */
-  melo_playlist_add (player->playlist, name, name, path, FALSE);
+  melo_playlist_add (player->playlist, name, name, path, tags, FALSE);
   g_free (_name);
 
   return TRUE;
@@ -315,7 +315,7 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
 
   /* Add new file to playlist */
   if (insert && player->playlist)
-    melo_playlist_add (player->playlist, name, name, path, TRUE);
+    melo_playlist_add (player->playlist, name, name, path, tags, TRUE);
   g_free (_name);
 
   /* Unlock player mutex */

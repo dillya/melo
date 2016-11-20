@@ -32,7 +32,7 @@ static gboolean melo_playlist_simple_add (MeloPlaylist *playlist,
                                           const gchar *name,
                                           const gchar *full_name,
                                           const gchar *path,
-                                          gboolean is_current);
+                                          MeloTags *tags, gboolean is_current);
 static gchar *melo_playlist_simple_get_prev (MeloPlaylist *playlist,
                                              gboolean set);
 static gchar *melo_playlist_simple_get_next (MeloPlaylist *playlist,
@@ -131,7 +131,7 @@ melo_playlist_simple_get_list (MeloPlaylist *playlist, gchar **current)
 static gboolean
 melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *name,
                           const gchar *full_name, const gchar *path,
-                          gboolean is_current)
+                          MeloTags *tags, gboolean is_current)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
@@ -157,7 +157,7 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *name,
   }
 
   /* Add a new simple to playlist */
-  item = melo_playlist_item_new (NULL, full_name, path);
+  item = melo_playlist_item_new (NULL, full_name, path, tags);
   item->name = final_name;
   item->can_play = TRUE;
   item->can_remove = TRUE;

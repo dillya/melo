@@ -24,6 +24,8 @@
 
 #include <glib-object.h>
 
+#include "melo_tags.h"
+
 G_BEGIN_DECLS
 
 #define MELO_TYPE_PLAYLIST             (melo_playlist_get_type ())
@@ -55,7 +57,7 @@ struct _MeloPlaylistClass {
 
   GList *(*get_list) (MeloPlaylist *playlist, gchar **current);
   gboolean (*add) (MeloPlaylist *playlist, const gchar *name,
-                   const gchar *full_name, const gchar *path,
+                   const gchar *full_name, const gchar *path, MeloTags *tags,
                    gboolean is_current);
   gchar *(*get_prev) (MeloPlaylist *playlist, gboolean set);
   gchar *(*get_next) (MeloPlaylist *playlist, gboolean set);
@@ -68,6 +70,7 @@ struct _MeloPlaylistItem {
   gchar *name;
   gchar *full_name;
   gchar *path;
+  MeloTags *tags;
   gboolean can_play;
   gboolean can_remove;
 
@@ -86,7 +89,7 @@ MeloPlayer *melo_playlist_get_player (MeloPlaylist *playlist);
 GList *melo_playlist_get_list (MeloPlaylist *playlist, gchar **current);
 gboolean melo_playlist_add (MeloPlaylist *playlist, const gchar *name,
                             const gchar *full_name, const gchar *path,
-                            gboolean is_current);
+                            MeloTags *tags, gboolean is_current);
 gchar *melo_playlist_get_prev (MeloPlaylist *playlist, gboolean set);
 gchar *melo_playlist_get_next (MeloPlaylist *playlist, gboolean set);
 gboolean melo_playlist_play (MeloPlaylist *playlist, const gchar *name);
@@ -95,7 +98,7 @@ void melo_playlist_empty (MeloPlaylist *playlist);
 
 MeloPlaylistItem *melo_playlist_item_new (const gchar *name,
                                           const gchar *full_name,
-                                          const gchar *path);
+                                          const gchar *path, MeloTags *tags);
 MeloPlaylistItem *melo_playlist_item_ref (MeloPlaylistItem *item);
 void melo_playlist_item_unref (MeloPlaylistItem *item);
 

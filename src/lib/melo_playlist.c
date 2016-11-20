@@ -224,13 +224,13 @@ melo_playlist_get_list (MeloPlaylist *playlist, gchar **current)
 gboolean
 melo_playlist_add (MeloPlaylist *playlist, const gchar *name,
                    const gchar *full_name, const gchar *path,
-                   gboolean is_current)
+                   MeloTags *tags, gboolean is_current)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->add, FALSE);
 
-  return pclass->add (playlist, name, full_name, path, is_current);
+  return pclass->add (playlist, name, full_name, path, tags, is_current);
 }
 
 gchar *
@@ -284,7 +284,7 @@ melo_playlist_empty (MeloPlaylist *playlist)
 
 MeloPlaylistItem *
 melo_playlist_item_new (const gchar *name, const gchar *full_name,
-                        const gchar *path)
+                        const gchar *path, MeloTags *tags)
 {
   MeloPlaylistItem *item;
 
@@ -297,6 +297,8 @@ melo_playlist_item_new (const gchar *name, const gchar *full_name,
   item->name = g_strdup (name);
   item->full_name = g_strdup (full_name);
   item->path = g_strdup (path);
+  if (tags)
+    item->tags = melo_tags_ref (tags);
   item->ref_count = 1;
 
   return item;
@@ -318,5 +320,7 @@ melo_playlist_item_unref (MeloPlaylistItem *item)
   g_free (item->name);
   g_free (item->full_name);
   g_free (item->path);
+  if (item->tags)
+    melo_tags_unref (item->tags);
   g_slice_free (MeloPlaylistItem, item);
 }
