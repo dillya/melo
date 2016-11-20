@@ -254,7 +254,7 @@ melo_browser_jsonrpc_get_tags_mode (JsonObject *obj, MeloBrowserTagsMode *mode,
   else
     *mode = MELO_BROWSER_TAGS_MODE_NONE;
 
-  /* Get tags fieldsi and convert */
+  /* Get tags fields and convert */
   if (json_object_has_member (obj, "fields")) {
     JsonArray *array = json_object_get_array_member (obj, "fields");
     if (array)

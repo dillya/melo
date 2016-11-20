@@ -21,6 +21,14 @@
 
 #include "melo_playlist_jsonrpc.h"
 
+typedef enum {
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NONE = 0,
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME = 1,
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME = 2,
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS = 4,
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL = 255,
+} MeloPlaylistJSONRPCListFields;
+
 static MeloPlaylist *
 melo_playlist_jsonrpc_get_playlist (JsonObject *obj, JsonNode **error)
 {
@@ -39,6 +47,76 @@ melo_playlist_jsonrpc_get_playlist (JsonObject *obj, JsonNode **error)
   return NULL;
 }
 
+MeloPlaylistJSONRPCListFields
+melo_playlist_jsonrpc_get_list_fields (JsonObject *obj)
+{
+  MeloPlaylistJSONRPCListFields fields = MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NONE;
+  const gchar *field;
+  JsonArray *array;
+  guint count, i;
+
+  /* Check if fields is available */
+  if (!json_object_has_member (obj, "fields"))
+    return fields;
+
+  /* Get fields array */
+  array = json_object_get_array_member (obj, "fields");
+  if (!array)
+    return fields;
+
+  /* Parse array */
+  count = json_array_get_length (array);
+  for (i = 0; i < count; i++) {
+    field = json_array_get_string_element (array, i);
+    if (!field)
+      break;
+    if (!g_strcmp0 (field, "none")) {
+      fields = MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NONE;
+      break;
+    } else if (!g_strcmp0 (field, "full")) {
+      fields = MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL;
+      break;
+    } else if (!g_strcmp0 (field, "name"))
+      fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME;
+    else if (!g_strcmp0 (field, "full_name"))
+      fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME;
+    else if (!g_strcmp0 (field, "tags"))
+      fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS;
+  }
+
+  return fields;
+}
+
+JsonArray *
+melo_playlist_jsonrpc_list_to_array (const GList *list,
+                                     MeloPlaylistJSONRPCListFields fields,
+                                     MeloTagsFields tags_fields)
+{
+  JsonArray *array;
+  const GList *l;
+
+  /* Parse list and create array */
+  array = json_array_new ();
+  for (l = list; l != NULL; l = l->next) {
+    MeloPlaylistItem *item = (MeloPlaylistItem *) l->data;
+    JsonObject *obj = json_object_new ();
+    if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME)
+      json_object_set_string_member (obj, "name", item->name);
+    if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME)
+      json_object_set_string_member (obj, "full_name", item->full_name);
+    if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS) {
+      if (item->tags) {
+        JsonObject *tags = melo_tags_to_json_object (item->tags, tags_fields);
+        json_object_set_object_member (obj, "tags", tags);
+      } else
+        json_object_set_null_member (obj, "tags");
+    }
+    json_array_add_object_element (array, obj);
+  }
+
+  return array;
+}
+
 /* Method callbacks */
 static void
 melo_playlist_jsonrpc_get_list (const gchar *method,
@@ -46,6 +124,8 @@ melo_playlist_jsonrpc_get_list (const gchar *method,
                                JsonNode **result, JsonNode **error,
                                gpointer user_data)
 {
+  MeloPlaylistJSONRPCListFields fields = MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NONE;
+  MeloTagsFields tags_fields = MELO_TAGS_FIELDS_NONE;
   gchar *current = NULL;
   MeloPlaylist *plist;
   JsonArray *array;
@@ -64,26 +144,29 @@ melo_playlist_jsonrpc_get_list (const gchar *method,
     return;
   }
 
+  /* Get list fields */
+  fields = melo_playlist_jsonrpc_get_list_fields (obj);
+
+  /* Get tags if needed */
+  if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS &&
+      json_object_has_member (obj, "tags_fields")) {
+    array = json_object_get_array_member (obj, "tags_fields");
+    if (array)
+      tags_fields = melo_tags_get_fields_from_json_array (array);
+  }
+
   /* Get list */
   list = melo_playlist_get_list (plist, &current);
   json_object_unref (obj);
   g_object_unref (plist);
 
+  /* Create a new object */
   obj = json_object_new ();
   json_object_set_string_member (obj, "current", current);
   g_free (current);
 
-  /* Parse list and create array */
-  array = json_array_new ();
-  for (l = list; l != NULL; l = l->next) {
-    MeloPlaylistItem *item = (MeloPlaylistItem *) l->data;
-    JsonObject *o = json_object_new ();
-    json_object_set_string_member (o, "name", item->name);
-    json_object_set_string_member (o, "full_name", item->full_name);
-    json_object_set_boolean_member (o, "can_play", item->can_play);
-    json_object_set_boolean_member (o, "can_remove", item->can_remove);
-    json_array_add_object_element (array, o);
-  }
+  /* Create array from list */
+  array = melo_playlist_jsonrpc_list_to_array (list, fields, tags_fields);
   json_object_set_array_member (obj, "list", array);
 
   /* Free item list */
@@ -142,7 +225,15 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
   {
     .method = "get_list",
     .params = "["
-              "  {\"name\": \"id\", \"type\": \"string\"}"
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"tags_fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_playlist_jsonrpc_get_list,
