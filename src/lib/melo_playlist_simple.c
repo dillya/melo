@@ -26,8 +26,8 @@
 
 #define MELO_PLAYLIST_SIMPLE_NAME_EXT_SIZE 10
 
-static GList *melo_playlist_simple_get_list (MeloPlaylist *playlist,
-                                             gchar **current);
+static MeloPlaylistList *melo_playlist_simple_get_list (MeloPlaylist *playlist,
+                                                    MeloTagsFields tags_fields);
 static gboolean melo_playlist_simple_add (MeloPlaylist *playlist,
                                           const gchar *name,
                                           const gchar *full_name,
@@ -106,21 +106,27 @@ melo_playlist_simple_init (MeloPlaylistSimple *self)
   priv->names = g_hash_table_new (g_str_hash, g_str_equal);
 }
 
-static GList *
-melo_playlist_simple_get_list (MeloPlaylist *playlist, gchar **current)
+static MeloPlaylistList *
+melo_playlist_simple_get_list (MeloPlaylist *playlist,
+                               MeloTagsFields tags_fields)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
-  GList *list;
+  MeloPlaylistList *list;
+
+  /* Create new list */
+  list = melo_playlist_list_new ();
+  if (!list)
+    return NULL;
 
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
   /* Copy playlist */
-  list = g_list_copy_deep (priv->playlist, (GCopyFunc) melo_playlist_item_ref,
-                           NULL);
+  list->items = g_list_copy_deep (priv->playlist,
+                                  (GCopyFunc) melo_playlist_item_ref, NULL);
   if (priv->current)
-    *current = g_strdup (((MeloPlaylistItem *) priv->current->data)->name);
+    list->current = g_strdup (((MeloPlaylistItem *) priv->current->data)->name);
 
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);

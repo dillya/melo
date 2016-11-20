@@ -24,8 +24,8 @@
 #include "melo_player.h"
 #include "melo_playlist_radio.h"
 
-static GList *melo_playlist_radio_get_list (MeloPlaylist *playlist,
-                                            gchar **current);
+static MeloPlaylistList *melo_playlist_radio_get_list (MeloPlaylist *playlist,
+                                                    MeloTagsFields tags_fields);
 static gboolean melo_playlist_radio_add (MeloPlaylist *playlist,
                                          const gchar *name,
                                          const gchar *full_name,
@@ -84,26 +84,32 @@ melo_playlist_radio_init (MeloPlaylistRadio *self)
   g_mutex_init (&priv->mutex);
 }
 
-static GList *
-melo_playlist_radio_get_list (MeloPlaylist *playlist, gchar **current)
+static MeloPlaylistList *
+melo_playlist_radio_get_list (MeloPlaylist *playlist,
+                              MeloTagsFields tags_fields)
 {
   MeloPlaylistRadio *plradio = MELO_PLAYLIST_RADIO (playlist);
   MeloPlaylistRadioPrivate *priv = plradio->priv;
-  GList *list;
+  MeloPlaylistList *list;
+
+  /* Create new list */
+  list = melo_playlist_list_new ();
+  if (!list)
+    return NULL;
 
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
   /* Copy playlist */
-  list = g_list_copy_deep (priv->playlist, (GCopyFunc) melo_playlist_item_ref,
-                           NULL);
+  list->items = g_list_copy_deep (priv->playlist,
+                                  (GCopyFunc) melo_playlist_item_ref, NULL);
 
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
 
   /* Current is last entry in playlist */
-  if (list)
-    *current = g_strdup (((MeloPlaylistItem *) list->data)->name);
+  if (list->items)
+    list->current = g_strdup (((MeloPlaylistItem *) list->items->data)->name);
 
   return list;
 }

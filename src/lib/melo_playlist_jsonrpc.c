@@ -126,11 +126,10 @@ melo_playlist_jsonrpc_get_list (const gchar *method,
 {
   MeloPlaylistJSONRPCListFields fields = MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NONE;
   MeloTagsFields tags_fields = MELO_TAGS_FIELDS_NONE;
-  gchar *current = NULL;
   MeloPlaylist *plist;
   JsonArray *array;
   JsonObject *obj;
-  GList *list, *l;
+  MeloPlaylistList *list;
 
   /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
@@ -156,21 +155,28 @@ melo_playlist_jsonrpc_get_list (const gchar *method,
   }
 
   /* Get list */
-  list = melo_playlist_get_list (plist, &current);
+  list = melo_playlist_get_list (plist, tags_fields);
   json_object_unref (obj);
   g_object_unref (plist);
 
+  /* No list provided */
+  if (!list) {
+    *error = melo_jsonrpc_build_error_node (MELO_JSONRPC_ERROR_INVALID_REQUEST,
+                                            "Method not available!");
+    return;
+  }
+
   /* Create a new object */
   obj = json_object_new ();
-  json_object_set_string_member (obj, "current", current);
-  g_free (current);
+  json_object_set_string_member (obj, "current", list->current);
 
   /* Create array from list */
-  array = melo_playlist_jsonrpc_list_to_array (list, fields, tags_fields);
-  json_object_set_array_member (obj, "list", array);
+  array = melo_playlist_jsonrpc_list_to_array (list->items, fields,
+                                               tags_fields);
+  json_object_set_array_member (obj, "items", array);
 
-  /* Free item list */
-  g_list_free_full (list, (GDestroyNotify) melo_playlist_item_unref);
+  /* Free playlist list */
+  melo_playlist_list_free (list);
 
   /* Return array */
   *result = json_node_new (JSON_NODE_OBJECT);

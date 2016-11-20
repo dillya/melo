@@ -207,18 +207,14 @@ melo_playlist_get_player (MeloPlaylist *playlist)
   return g_object_ref (playlist->player);
 }
 
-GList *
-melo_playlist_get_list (MeloPlaylist *playlist, gchar **current)
+MeloPlaylistList *
+melo_playlist_get_list (MeloPlaylist *playlist, MeloTagsFields tags_fields)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
-  if (!pclass->get_list) {
-    if (current)
-      *current = NULL;
-    return NULL;
-  }
+  g_return_val_if_fail (pclass->get_list, NULL);
 
-  return pclass->get_list (playlist, current);
+  return pclass->get_list (playlist, tags_fields);
 }
 
 gboolean
@@ -280,6 +276,20 @@ melo_playlist_empty (MeloPlaylist *playlist)
 
   if (pclass->empty)
     pclass->empty (playlist);
+}
+
+MeloPlaylistList *
+melo_playlist_list_new ()
+{
+  return g_slice_new0 (MeloPlaylistList);
+}
+
+void
+melo_playlist_list_free (MeloPlaylistList *list)
+{
+  g_free (list->current);
+  g_list_free_full (list->items, (GDestroyNotify) melo_playlist_item_unref);
+  g_slice_free (MeloPlaylistList, list);
 }
 
 MeloPlaylistItem *

@@ -40,6 +40,7 @@ typedef struct _MeloPlaylist MeloPlaylist;
 typedef struct _MeloPlaylistClass MeloPlaylistClass;
 typedef struct _MeloPlaylistPrivate MeloPlaylistPrivate;
 
+typedef struct _MeloPlaylistList MeloPlaylistList;
 typedef struct _MeloPlaylistItem MeloPlaylistItem;
 
 struct _MeloPlaylist {
@@ -55,7 +56,8 @@ struct _MeloPlaylist {
 struct _MeloPlaylistClass {
   GObjectClass parent_class;
 
-  GList *(*get_list) (MeloPlaylist *playlist, gchar **current);
+  MeloPlaylistList *(*get_list) (MeloPlaylist *playlist,
+                                 MeloTagsFields tags_fields);
   gboolean (*add) (MeloPlaylist *playlist, const gchar *name,
                    const gchar *full_name, const gchar *path, MeloTags *tags,
                    gboolean is_current);
@@ -64,6 +66,11 @@ struct _MeloPlaylistClass {
   gboolean (*play) (MeloPlaylist *playlist, const gchar *name);
   gboolean (*remove) (MeloPlaylist *playlist, const gchar *name);
   void (*empty) (MeloPlaylist *playlist);
+};
+
+struct _MeloPlaylistList {
+  gchar *current;
+  GList *items;
 };
 
 struct _MeloPlaylistItem {
@@ -86,7 +93,8 @@ MeloPlaylist *melo_playlist_get_playlist_by_id (const gchar *id);
 void melo_playlist_set_player (MeloPlaylist *playlist, MeloPlayer *player);
 MeloPlayer *melo_playlist_get_player (MeloPlaylist *playlist);
 
-GList *melo_playlist_get_list (MeloPlaylist *playlist, gchar **current);
+MeloPlaylistList *melo_playlist_get_list (MeloPlaylist *playlist,
+                                          MeloTagsFields tags_fields);
 gboolean melo_playlist_add (MeloPlaylist *playlist, const gchar *name,
                             const gchar *full_name, const gchar *path,
                             MeloTags *tags, gboolean is_current);
@@ -95,6 +103,9 @@ gchar *melo_playlist_get_next (MeloPlaylist *playlist, gboolean set);
 gboolean melo_playlist_play (MeloPlaylist *playlist, const gchar *name);
 gboolean melo_playlist_remove (MeloPlaylist *playlist, const gchar *name);
 void melo_playlist_empty (MeloPlaylist *playlist);
+
+MeloPlaylistList *melo_playlist_list_new (void);
+void melo_playlist_list_free (MeloPlaylistList *list);
 
 MeloPlaylistItem *melo_playlist_item_new (const gchar *name,
                                           const gchar *full_name,
