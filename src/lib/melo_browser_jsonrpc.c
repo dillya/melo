@@ -191,6 +191,7 @@ melo_browser_jsonrpc_list_to_object (const MeloBrowserList *list,
     return NULL;
 
   /* Add list properties */
+  json_object_set_string_member (object, "path", list->path);
   json_object_set_int_member (object, "count", list->count);
 
   /* Parse list and create array */

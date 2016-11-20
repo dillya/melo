@@ -99,6 +99,7 @@ struct _MeloBrowserInfo {
 };
 
 struct _MeloBrowserList {
+  gchar *path;
   gint count;
   GList *items;
 };
@@ -145,7 +146,7 @@ gboolean melo_browser_add (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_play (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_remove (MeloBrowser *browser, const gchar *path);
 
-MeloBrowserList *melo_browser_list_new (void);
+MeloBrowserList *melo_browser_list_new (const gchar *path);
 void melo_browser_list_free (MeloBrowserList *list);
 
 MeloBrowserItem *melo_browser_item_new (const gchar *name, const gchar *type);

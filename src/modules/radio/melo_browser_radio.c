@@ -124,7 +124,7 @@ melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
   gint i;
 
   /* Create browser list */
-  list = melo_browser_list_new ();
+  list = melo_browser_list_new (path);
   if (!list)
     return NULL;
 

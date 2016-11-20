@@ -301,14 +301,25 @@ melo_browser_remove (MeloBrowser *browser, const gchar *path)
 }
 
 MeloBrowserList *
-melo_browser_list_new ()
+melo_browser_list_new (const gchar *path)
 {
-  return g_slice_new0 (MeloBrowserList);
+  MeloBrowserList *list;
+
+  /* Create browser list */
+  list = g_slice_new0 (MeloBrowserList);
+  if (!list)
+    return NULL;
+
+  /* Set path */
+  list->path = g_strdup (path);
+
+  return list;
 }
 
 void
 melo_browser_list_free (MeloBrowserList *list)
 {
+  g_free (list->path);
   g_list_free_full (list->items, (GDestroyNotify) melo_browser_item_free);
   g_slice_free (MeloBrowserList, list);
 }

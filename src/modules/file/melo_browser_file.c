@@ -787,7 +787,7 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
   MeloBrowserList *list;
 
   /* Create browser list */
-  list = melo_browser_list_new ();
+  list = melo_browser_list_new (path);
   if (!list)
     return NULL;
 
