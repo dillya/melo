@@ -670,13 +670,13 @@ function melo_player_seek(id, pos) {
 }
 
 function melo_get_playlist_list(id, play) {
-  jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '"]'), null,
+  jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '",["full"]]'), null,
                function(response, data) {
     if (response.error || !response.result)
       return;
 
     var current = response.result.current;
-    var list = response.result.list;
+    var list = response.result.items;
 
     /* Generate list */
     $('#playlist_list').html("");
