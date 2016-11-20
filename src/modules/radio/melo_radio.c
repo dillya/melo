@@ -32,6 +32,8 @@ static MeloModuleInfo melo_radio_info = {
 };
 
 static const MeloModuleInfo *melo_radio_get_info (MeloModule *module);
+static void melo_radio_register_browser (MeloModule *module,
+                                         MeloBrowser *browser);
 
 struct _MeloRadioPrivate {
   MeloBrowser *radios;
@@ -64,7 +66,6 @@ melo_radio_finalize (GObject *gobject)
   G_OBJECT_CLASS (melo_radio_parent_class)->finalize (gobject);
 }
 
-
 static void
 melo_radio_class_init (MeloRadioClass *klass)
 {
@@ -72,6 +73,7 @@ melo_radio_class_init (MeloRadioClass *klass)
   GObjectClass *oclass = G_OBJECT_CLASS (klass);
 
   mclass->get_info = melo_radio_get_info;
+  mclass->register_browser = melo_radio_register_browser;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_radio_finalize;
@@ -97,7 +99,15 @@ melo_radio_init (MeloRadio *self)
 
   /* Create links between browser, player and playlist */
   melo_player_set_playlist (priv->player, priv->playlist);
-  melo_browser_set_player (priv->radios, priv->player);
+}
+
+static void
+melo_radio_register_browser (MeloModule *module, MeloBrowser *browser)
+{
+  MeloRadioPrivate *priv = (MELO_RADIO (module))->priv;
+
+  /* Attach player to new browser */
+  melo_browser_set_player (browser, priv->player);
 }
 
 static const MeloModuleInfo *
