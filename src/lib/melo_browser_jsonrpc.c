@@ -176,17 +176,26 @@ melo_browser_jsonrpc_get_list_fields (JsonObject *obj)
   return fields;
 }
 
-JsonArray *
-melo_browser_jsonrpc_list_to_object (const GList *list,
+JsonObject *
+melo_browser_jsonrpc_list_to_object (const MeloBrowserList *list,
                                      MeloBrowserJSONRPCListFields fields,
                                      MeloTagsFields tags_fields)
 {
   JsonArray *array;
+  JsonObject *object;
   const GList *l;
+
+  /* Create object */
+  object = json_object_new ();
+  if (!object)
+    return NULL;
+
+  /* Add list properties */
+  json_object_set_int_member (object, "count", list->count);
 
   /* Parse list and create array */
   array = json_array_new ();
-  for (l = list; l != NULL; l = l->next) {
+  for (l = list->items; l != NULL; l = l->next) {
     MeloBrowserItem *item = (MeloBrowserItem *) l->data;
     JsonObject *obj = json_object_new ();
     if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME)
@@ -208,7 +217,9 @@ melo_browser_jsonrpc_list_to_object (const GList *list,
     }
     json_array_add_object_element (array, obj);
   }
-  return array;
+  json_object_set_array_member (object, "items", array);
+
+  return object;
 }
 
 static void
@@ -300,7 +311,6 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   MeloTagsFields tags_fields = MELO_TAGS_FIELDS_NONE;
   MeloBrowserList *list;
   MeloBrowser *bro;
-  JsonArray *array;
   JsonObject *obj;
   GList *l;
   const gchar *path, *input;
@@ -352,16 +362,15 @@ melo_browser_jsonrpc_get_list (const gchar *method,
     return;
   }
 
-  /* Create list */
-  array = melo_browser_jsonrpc_list_to_object (list->items, fields,
-                                               tags_fields);
+  /* Create response with item list */
+  obj = melo_browser_jsonrpc_list_to_object (list, fields, tags_fields);
 
   /* Free browser list */
   melo_browser_list_free (list);
 
-  /* Return array */
-  *result = json_node_new (JSON_NODE_ARRAY);
-  json_node_take_array (*result, array);
+  /* Return object */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
 }
 
 static void
@@ -536,7 +545,7 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "    \"required\": false"
               "  }"
               "]",
-    .result = "{\"type\":\"array\"}",
+    .result = "{\"type\":\"object\"}",
     .callback = melo_browser_jsonrpc_get_list,
     .user_data = NULL,
   },
@@ -560,7 +569,7 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "    \"required\": false"
               "  }"
               "]",
-    .result = "{\"type\":\"array\"}",
+    .result = "{\"type\":\"object\"}",
     .callback = melo_browser_jsonrpc_get_list,
     .user_data = NULL,
   },
