@@ -24,6 +24,11 @@
 #include <gst/tag/tag.h>
 
 #include "melo_tags.h"
+#include "melo_browser.h"
+
+/* Cover URL base */
+G_LOCK_DEFINE_STATIC (melo_tags_mutex);
+static gchar *melo_tags_cover_url_base = NULL;
 
 struct _MeloTagsPrivate {
   GMutex mutex;
@@ -32,6 +37,7 @@ struct _MeloTagsPrivate {
 
   /* Cover data */
   GBytes *cover;
+  gchar *cover_url;
   gchar *cover_type;
 };
 
@@ -106,7 +112,10 @@ melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type)
 
   /* Set cover */
   priv->cover = cover;
-  priv->cover_type = g_strdup (type);
+  if (type) {
+    g_free (priv->cover_type);
+    priv->cover_type = g_strdup (type);
+  }
 
   /* Update timestamp */
   melo_tags_update (tags);
@@ -157,6 +166,175 @@ melo_tags_get_cover_type (MeloTags *tags)
   g_mutex_unlock (&priv->mutex);
 
   return type;
+}
+
+gboolean
+melo_tags_set_cover_url (MeloTags *tags, GObject *obj, const gchar *path,
+                         const gchar *type)
+{
+  MeloTagsPrivate *priv = tags->priv;
+  const gchar *otype = NULL;
+  const gchar *id = NULL;
+  gchar *url = NULL;
+  gchar del ='/';
+
+  /* Lock object */
+  g_object_ref (obj);
+
+  /* Get ID from object */
+  if (MELO_IS_BROWSER (obj)) {
+    id = melo_browser_get_id (MELO_BROWSER (obj));
+    otype = "browser";
+  } else if (MELO_IS_PLAYER (obj)) {
+    id = melo_player_get_id (MELO_PLAYER (obj));
+    otype = "player";
+    path = "";
+    del = '\0';
+  } else if (MELO_IS_PLAYLIST (obj)) {
+    id = melo_playlist_get_id (MELO_PLAYLIST (obj));
+    otype = "playlist";
+  }
+
+  /* No ID found */
+  if (!id)
+    goto failed;
+
+  G_LOCK (melo_tags_mutex);
+
+  /* Generate cover URL from ID and path */
+  if (melo_tags_cover_url_base)
+    url = g_strdup_printf ("%s/%s/%s%c%s", melo_tags_cover_url_base, otype, id,
+                           del, path);
+  else
+    url = g_strdup_printf ("%s/%s%c%s", otype, id, path, del, path);
+
+  G_UNLOCK (melo_tags_mutex);
+
+  /* Free object */
+  g_object_unref (obj);
+
+  /* Lock cover access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set cover URL */
+  g_free (priv->cover_url);
+  priv->cover_url = url;
+
+  /* Update cover type */
+  if (type) {
+    g_free (priv->cover_type);
+    priv->cover_type = g_strdup (type);
+  }
+
+  /* Update timestamp */
+  melo_tags_update (tags);
+
+  /* Unlock cover access */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+
+failed:
+  g_object_unref (obj);
+  return FALSE;
+}
+
+gchar *
+melo_tags_get_cover_url (MeloTags *tags)
+{
+  MeloTagsPrivate *priv = tags->priv;
+  gchar *url = NULL;
+
+  /* Lock cover access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get cover URL */
+  if (priv->cover_url)
+      url = g_strdup (priv->cover_url);
+
+  /* Unlock cover access */
+  g_mutex_unlock (&priv->mutex);
+
+  return url;
+}
+
+void
+melo_tags_set_cover_url_base (const gchar *base)
+{
+  G_LOCK (melo_tags_mutex);
+  g_free (melo_tags_cover_url_base);
+  melo_tags_cover_url_base = g_strdup (base);
+  G_UNLOCK (melo_tags_mutex);
+}
+
+gboolean
+melo_tags_get_cover_from_url (const gchar *url, GBytes **data, gchar **type)
+{
+  gchar *otype, *id, *path;
+  gchar **values = NULL;
+  gboolean ret = FALSE;
+  gint base_len = 0;
+  gint len;
+
+  G_LOCK (melo_tags_mutex);
+
+  /* Check URL base */
+  if (melo_tags_cover_url_base)
+    base_len = strlen (melo_tags_cover_url_base) + 1;
+
+  G_UNLOCK (melo_tags_mutex);
+
+  /* Check string length */
+  len = strlen (url);
+  if (!len || len < base_len)
+    return FALSE;
+
+  /* Split URL (by removing base URL */
+  values = g_strsplit (url + base_len, "/", 3);
+  if (!values || !values[0] || !values[1])
+    goto end;
+
+  /* Get element type, ID and path */
+  otype = values[0];
+  id = values[1];
+  path = values[2];
+
+  /* Get cover from element */
+  if (!g_strcmp0 (otype, "browser") && path) {
+    MeloBrowser *browser;
+
+    /* Get browser from its ID */
+    browser = melo_browser_get_browser_by_id (id);
+    if (browser) {
+      ret = melo_browser_get_cover (browser, path, data, type);
+      g_object_unref (browser);
+    }
+  } else if (!g_strcmp0 (otype, "player")) {
+    MeloPlayer *player;
+
+    /* Get player from its ID */
+    player = melo_player_get_player_by_id (id);
+    if (player) {
+      ret = melo_player_get_cover (player, data, type);
+      g_object_unref (player);
+    }
+  } else if (!g_strcmp0 (otype, "playlist") && path) {
+    MeloPlaylist *playlist;
+
+    /* Get playlist from its ID */
+    playlist = melo_playlist_get_playlist_by_id (id);
+    if (playlist) {
+      ret = melo_playlist_get_cover (playlist, path, data, type);
+      g_object_unref (playlist);
+    }
+  } else
+    goto end;
+
+end:
+  /* Free URL values */
+  g_strfreev (values);
+
+  return ret;
 }
 
 MeloTags *
@@ -310,6 +488,8 @@ melo_tags_get_fields_from_json_array (JsonArray *array)
       fields |= MELO_TAGS_FIELDS_TRACKS;
     else if (!g_strcmp0 (field, "cover"))
       fields |= MELO_TAGS_FIELDS_COVER;
+    else if (!g_strcmp0 (field, "cover_url"))
+      fields |= MELO_TAGS_FIELDS_COVER_URL;
   }
 
   return fields;
@@ -367,6 +547,23 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
     /* Unlock cover */
     g_mutex_unlock (&priv->mutex);
   }
+
+  /* Add cover URL */
+  if (fields & MELO_TAGS_FIELDS_COVER_URL) {
+    MeloTagsPrivate *priv = tags->priv;
+
+    /* Lock cover */
+    g_mutex_lock (&priv->mutex);
+
+    /* Add to object */
+    if (priv->cover_url) {
+      json_object_set_string_member (obj, "cover_url", priv->cover_url);
+      json_object_set_string_member (obj, "cover_type", priv->cover_type);
+    }
+
+    /* Unlock cover */
+    g_mutex_unlock (&priv->mutex);
+  }
 }
 
 JsonObject *
@@ -398,6 +595,7 @@ melo_tags_unref (MeloTags *tags)
   g_free (tags->album);
   g_free (tags->genre);
   g_bytes_unref (tags->priv->cover);
+  g_free (tags->priv->cover_url);
   g_free (tags->priv->cover_type);
   g_mutex_clear (&tags->priv->mutex);
   g_slice_free (MeloTagsPrivate, tags->priv);

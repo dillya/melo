@@ -74,6 +74,9 @@ struct _MeloBrowserClass {
   gboolean (*add) (MeloBrowser *browser, const gchar *path);
   gboolean (*play) (MeloBrowser *browser, const gchar *path);
   gboolean (*remove) (MeloBrowser *browser, const gchar *path);
+
+  gboolean (*get_cover) (MeloBrowser *browser, const gchar *path,
+                         GBytes **cover, gchar **type);
 };
 
 struct _MeloBrowserInfo {
@@ -145,6 +148,9 @@ MeloTags *melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
 gboolean melo_browser_add (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_play (MeloBrowser *browser, const gchar *path);
 gboolean melo_browser_remove (MeloBrowser *browser, const gchar *path);
+
+gboolean melo_browser_get_cover (MeloBrowser *browser, const gchar *path,
+                                 GBytes **cover, gchar **type);
 
 MeloBrowserList *melo_browser_list_new (const gchar *path);
 void melo_browser_list_free (MeloBrowserList *list);

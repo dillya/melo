@@ -300,6 +300,17 @@ melo_browser_remove (MeloBrowser *browser, const gchar *path)
   return bclass->remove (browser, path);
 }
 
+gboolean
+melo_browser_get_cover (MeloBrowser *browser, const gchar *path, GBytes **cover,
+                        gchar **type)
+{
+  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
+
+  g_return_val_if_fail (bclass->get_cover, FALSE);
+
+  return bclass->get_cover (browser, path, cover, type);
+}
+
 MeloBrowserList *
 melo_browser_list_new (const gchar *path)
 {

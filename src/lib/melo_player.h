@@ -85,6 +85,7 @@ struct _MeloPlayerClass {
   gchar *(*get_name) (MeloPlayer *player);
   gint (*get_pos) (MeloPlayer *player, gint *duration);
   MeloPlayerStatus *(*get_status) (MeloPlayer *player);
+  gboolean (*get_cover) (MeloPlayer *player, GBytes **cover, gchar **type);
 };
 
 struct _MeloPlayerInfo {
@@ -129,6 +130,8 @@ MeloPlayerState melo_player_get_state (MeloPlayer *player);
 gchar *melo_player_get_name (MeloPlayer *player);
 gint melo_player_get_pos (MeloPlayer *player, gint *duration);
 MeloPlayerStatus *melo_player_get_status (MeloPlayer *player);
+gboolean melo_player_get_cover (MeloPlayer *player, GBytes **cover,
+                                gchar **type);
 
 /* MeloPlayerStatus helpers */
 MeloPlayerStatus *melo_player_status_new (MeloPlayerState state,

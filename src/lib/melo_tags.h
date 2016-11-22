@@ -53,6 +53,7 @@ enum _MeloTagsFields {
   MELO_TAGS_FIELDS_TRACK = 32,
   MELO_TAGS_FIELDS_TRACKS = 64,
   MELO_TAGS_FIELDS_COVER = 128,
+  MELO_TAGS_FIELDS_COVER_URL = 256,
 
   MELO_TAGS_FIELDS_FULL = ~0,
 };
@@ -63,9 +64,18 @@ gboolean melo_tags_updated (MeloTags *tags, gint64 timestamp);
 MeloTags *melo_tags_ref (MeloTags *tags);
 void melo_tags_unref (MeloTags *tags);
 
+/* Cover access */
 void melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type);
 GBytes *melo_tags_get_cover (MeloTags *tags, gchar **type);
 gchar *melo_tags_get_cover_type (MeloTags *tags);
+
+/* Cover URL for HTTP access */
+gboolean melo_tags_set_cover_url (MeloTags *tags, GObject *obj,
+                                  const gchar *path, const gchar *type);
+gchar *melo_tags_get_cover_url (MeloTags *tags);
+void melo_tags_set_cover_url_base (const gchar *base);
+gboolean melo_tags_get_cover_from_url (const gchar *url, GBytes **data,
+                                       gchar **type);
 
 /* Gstreamer helper */
 MeloTags *melo_tags_new_from_gst_tag_list (const GstTagList *tlist,

@@ -346,6 +346,16 @@ melo_player_get_status (MeloPlayer *player)
   return pclass->get_status (player);
 }
 
+gboolean
+melo_player_get_cover (MeloPlayer *player, GBytes **cover, gchar **type)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->get_cover, FALSE);
+
+  return pclass->get_cover (player, cover, type);
+}
+
 MeloPlayerStatus *
 melo_player_status_new (MeloPlayerState state, const gchar *name)
 {

@@ -278,6 +278,17 @@ melo_playlist_empty (MeloPlaylist *playlist)
     pclass->empty (playlist);
 }
 
+gboolean
+melo_playlist_get_cover (MeloPlaylist *playlist, const gchar *path,
+                         GBytes **cover, gchar **type)
+{
+  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
+
+  g_return_val_if_fail (pclass->get_cover, FALSE);
+
+  return pclass->get_cover (playlist, path, cover, type);
+}
+
 MeloPlaylistList *
 melo_playlist_list_new ()
 {
