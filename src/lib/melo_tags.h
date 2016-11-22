@@ -66,12 +66,15 @@ void melo_tags_unref (MeloTags *tags);
 
 /* Cover access */
 void melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type);
+gboolean melo_tags_has_cover (MeloTags *tags);
 GBytes *melo_tags_get_cover (MeloTags *tags, gchar **type);
+gboolean melo_tags_has_cover_type (MeloTags *tags);
 gchar *melo_tags_get_cover_type (MeloTags *tags);
 
 /* Cover URL for HTTP access */
 gboolean melo_tags_set_cover_url (MeloTags *tags, GObject *obj,
                                   const gchar *path, const gchar *type);
+gboolean melo_tags_has_cover_url (MeloTags *tags);
 gchar *melo_tags_get_cover_url (MeloTags *tags);
 void melo_tags_set_cover_url_base (const gchar *base);
 gboolean melo_tags_get_cover_from_url (const gchar *url, GBytes **data,

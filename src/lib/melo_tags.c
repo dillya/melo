@@ -124,6 +124,12 @@ melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type)
   g_mutex_unlock (&priv->mutex);
 }
 
+gboolean
+melo_tags_has_cover (MeloTags *tags)
+{
+  return tags->priv->cover ? TRUE : FALSE;
+}
+
 GBytes *
 melo_tags_get_cover (MeloTags *tags, gchar **type)
 {
@@ -147,6 +153,12 @@ melo_tags_get_cover (MeloTags *tags, gchar **type)
   g_mutex_unlock (&priv->mutex);
 
   return cover;
+}
+
+gboolean
+melo_tags_has_cover_type (MeloTags *tags)
+{
+  return tags->priv->cover_type ? TRUE : FALSE;
 }
 
 gchar *
@@ -237,6 +249,12 @@ melo_tags_set_cover_url (MeloTags *tags, GObject *obj, const gchar *path,
 failed:
   g_object_unref (obj);
   return FALSE;
+}
+
+gboolean
+melo_tags_has_cover_url (MeloTags *tags)
+{
+  return tags->priv->cover_url ? TRUE : FALSE;
 }
 
 gchar *
