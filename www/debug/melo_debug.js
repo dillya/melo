@@ -259,7 +259,7 @@ function melo_browser_list(method, id, path, off, count) {
   jsonrpc_call("browser." + method, JSON.parse('["' + id + '","' + path + '",' +
                                                 off + ',' + count + ',' +
                                          '["full"],{},{"mode":"only_cached",' +
-                                         '"fields":["title","artist"]}]'),
+                                   '"fields":["title","artist","cover_url"]}]'),
                null, function(response, data) {
     if (response.error || !response.result)
       return;
@@ -409,7 +409,9 @@ function melo_browser_get_tags(id, path, item) {
     var img_src = "";
 
     /* Create img src for cover */
-    if (tags.cover != null)
+    if (tags.cover_url != null)
+      img_src = "/" + tags.cover_url;
+    else if (tags.cover != null)
       img_src = "data:" + tags.cover_type + ";base64," + tags.cover;
 
     /* Update item */
@@ -433,7 +435,7 @@ function melo_browser_update_tags (id, list) {
   var obj = list.pop (list);
 
   jsonrpc_call("browser.get_tags", JSON.parse('["' + id + '","' + obj[1]+
-                                                '",["title","artist"]]'),
+                                           '",["title","artist","cover_url"]]'),
                [obj, id, list], function(response, data) {
     if (response.error || !response.result)
       return;
@@ -615,7 +617,9 @@ function melo_update_player(play) {
 
       /* Update image src if available */
       var img_src = "";
-      if (s.tags.cover != null)
+      if (s.tags.cover_url != null)
+        img_src = "/" + s.tags.cover_url + "?t=" + s.tags.timestamp;
+      else if (s.tags.cover != null)
         img_src = "data:" + s.tags.cover_type + ";base64," + s.tags.cover;
       player.children("img.player_cover").attr('src', img_src);
     }
