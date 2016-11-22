@@ -28,6 +28,7 @@
 #include "melo_avahi.h"
 #include "melo_httpd.h"
 #include "melo_httpd_file.h"
+#include "melo_httpd_cover.h"
 #include "melo_httpd_jsonrpc.h"
 
 #ifdef HAVE_CONFIG_H
@@ -58,6 +59,7 @@ struct _MeloHTTPDPrivate {
 
   /* Thread pools */
   GThreadPool *jsonrpc_pool;
+  GThreadPool *cover_pool;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloHTTPD, melo_httpd, G_TYPE_OBJECT)
@@ -68,6 +70,9 @@ melo_httpd_finalize (GObject *gobject)
   MeloHTTPDPrivate *priv =
                          melo_httpd_get_instance_private (MELO_HTTPD (gobject));
 
+  /* Free cover URL base */
+  melo_tags_set_cover_url_base (NULL);
+
   /* Free avahi client */
   if (priv->avahi)
     g_object_unref (priv->avahi);
@@ -77,6 +82,7 @@ melo_httpd_finalize (GObject *gobject)
 
   /* Free thread pools */
   g_thread_pool_free (priv->jsonrpc_pool, TRUE, FALSE);
+  g_thread_pool_free (priv->cover_pool, TRUE, FALSE);
 
   /* free authentication */
   g_object_unref (priv->auth_domain);
@@ -127,6 +133,8 @@ melo_httpd_init (MeloHTTPD *self)
   /* Init thread pools */
   priv->jsonrpc_pool = g_thread_pool_new (melo_httpd_jsonrpc_thread_handler,
                                           priv->server, 10, FALSE, NULL);
+  priv->cover_pool = g_thread_pool_new (melo_httpd_cover_thread_handler,
+                                        priv->server, 10, FALSE, NULL);
 
   /* Create an avahi client */
   priv->avahi = melo_avahi_new ();
@@ -160,6 +168,13 @@ melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name)
   /* Add an handler for JSON-RPC */
   soup_server_add_handler (server, "/rpc", melo_httpd_jsonrpc_handler,
                            priv->jsonrpc_pool, NULL);
+
+  /* Add an handler for covers */
+  soup_server_add_handler (server, "/cover", melo_httpd_cover_handler,
+                           priv->cover_pool, NULL);
+
+  /* Set cover URL base */
+  melo_tags_set_cover_url_base ("cover");
 
   /* Add avahi service */
   if (priv->avahi)

@@ -8,6 +8,7 @@ bin_PROGRAMS = melo
 melo_SOURCES = \
 	melo_httpd.c \
 	melo_httpd_file.c \
+	melo_httpd_cover.c \
 	melo_httpd_jsonrpc.c \
 	melo_config_main.c \
 	melo.c
@@ -31,5 +32,6 @@ noinst_HEADERS = \
 	melo_config_main.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
+	melo_httpd_cover.h \
 	melo_httpd_jsonrpc.h \
 	melo.h
