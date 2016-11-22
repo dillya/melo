@@ -139,6 +139,12 @@ melo_file_db_new (const gchar *file, const gchar *cover_path)
   return fdb;
 }
 
+const gchar *
+melo_file_db_get_cover_path (MeloFileDB *db)
+{
+  return db->priv->cover_path;
+}
+
 static gboolean
 melo_file_db_get_int (MeloFileDBPrivate *priv, const gchar *sql, gint *value)
 {
@@ -264,7 +270,7 @@ melo_file_db_get_path_id (MeloFileDB *db, const gchar *path, gboolean add,
 
 gboolean
 melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
-                        gint timestamp, MeloTags *tags)
+                        gint timestamp, MeloTags *tags, gchar **cover_out_file)
 {
   MeloFileDBPrivate *priv = db->priv;
   sqlite3_stmt *req;
@@ -401,7 +407,10 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
   }
   sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
   sqlite3_free (sql);
-  g_free (cover_file);
+  if (cover_out_file)
+    *cover_out_file = cover_file;
+  else
+    g_free (cover_file);
 
   /* Unlock database access */
   g_mutex_unlock (&priv->mutex);
@@ -411,7 +420,7 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
 
 gboolean
 melo_file_db_add_tags (MeloFileDB *db, const gchar *path, const gchar *filename,
-                       gint timestamp, MeloTags *tags)
+                       gint timestamp, MeloTags *tags, gchar **cover_out_file)
 {
   gint path_id;
 
@@ -420,14 +429,15 @@ melo_file_db_add_tags (MeloFileDB *db, const gchar *path, const gchar *filename,
     return FALSE;
 
   /* Add tags to database */
-  return melo_file_db_add_tags2 (db, path_id, filename, timestamp, tags);
+  return melo_file_db_add_tags2 (db, path_id, filename, timestamp, tags,
+                                 cover_out_file);
 }
 
 #define MELO_FILE_DB_COLUMN_SIZE 255
 #define MELO_FILE_DB_COND_COUNT 10
 
 static gpointer
-melo_file_db_find_vsong (MeloFileDB *db, gboolean one,
+melo_file_db_find_vsong (MeloFileDB *db, GObject *obj, gboolean one,
                          MeloTagsFields tags_fields, MeloFileDBFields field,
                          va_list args)
 {
@@ -466,6 +476,8 @@ melo_file_db_find_vsong (MeloFileDB *db, gboolean one,
     len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "track,");
   if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
     len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "tracks,");
+  if (tags_fields & MELO_TAGS_FIELDS_COVER_URL)
+    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "cover,");
   if (tags_fields & MELO_TAGS_FIELDS_COVER)
     len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "cover,");
   if (len)
@@ -569,6 +581,8 @@ melo_file_db_find_vsong (MeloFileDB *db, gboolean one,
       tags->track = sqlite3_column_int (req, i++);
     if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
       tags->tracks = sqlite3_column_int (req, i++);
+    if (tags_fields & MELO_TAGS_FIELDS_COVER_URL)
+      melo_tags_set_cover_url (tags, obj, sqlite3_column_text (req, i++), NULL);
     if (tags_fields & MELO_TAGS_FIELDS_COVER) {
       const gchar *filename;
 
@@ -617,7 +631,8 @@ error:
 }
 
 MeloTags *
-melo_file_db_find_one_song (MeloFileDB *db, MeloTagsFields tags_fields,
+melo_file_db_find_one_song (MeloFileDB *db, GObject *obj,
+                            MeloTagsFields tags_fields,
                             MeloFileDBFields field_0, ...)
 {
   MeloTags *tags;
@@ -625,24 +640,25 @@ melo_file_db_find_one_song (MeloFileDB *db, MeloTagsFields tags_fields,
 
   /* Find tags */
   va_start (args, field_0);
-  tags = (MeloTags *) melo_file_db_find_vsong (db, TRUE, tags_fields, field_0,
-                                               args);
+  tags = (MeloTags *) melo_file_db_find_vsong (db, obj, TRUE, tags_fields,
+                                               field_0, args);
   va_end (args);
 
   return tags;
 }
 
 GList *
-melo_file_db_find_song (MeloFileDB *db, MeloTagsFields tags_fields,
-                        MeloFileDBFields field_0, ...)
+melo_file_db_find_song (MeloFileDB *db, GObject *obj,
+                        MeloTagsFields tags_fields, MeloFileDBFields field_0,
+                        ...)
 {
   GList *list;
   va_list args;
 
   /* Find tags */
   va_start (args, field_0);
-  list = (GList *) melo_file_db_find_vsong (db, FALSE, tags_fields, field_0,
-                                            args);
+  list = (GList *) melo_file_db_find_vsong (db, obj, FALSE, tags_fields,
+                                            field_0, args);
   va_end (args);
 
   return list;
