@@ -31,6 +31,8 @@ static MeloPlayerState melo_player_upnp_get_state (MeloPlayer *player);
 static gchar *melo_player_upnp_get_name (MeloPlayer *player);
 static gint melo_player_upnp_get_pos (MeloPlayer *player, gint *duration);
 static MeloPlayerStatus *melo_player_upnp_get_status (MeloPlayer *player);
+static gboolean melo_player_upnp_get_cover (MeloPlayer *player, GBytes **data,
+                                            gchar **type);
 
 static void on_context_available (GUPnPContextManager *manager,
                                   GUPnPContext *context, gpointer user_data);
@@ -100,6 +102,7 @@ melo_player_upnp_class_init (MeloPlayerUpnpClass *klass)
   pclass->get_name = melo_player_upnp_get_name;
   pclass->get_pos = melo_player_upnp_get_pos;
   pclass->get_status = melo_player_upnp_get_status;
+  pclass->get_cover = melo_player_upnp_get_cover;
 
   /* Add custom finalize() function */
   object_class->finalize = melo_player_upnp_finalize;
@@ -240,17 +243,39 @@ melo_player_upnp_get_status (MeloPlayer *player)
   MeloPlayerUpnpPrivate *priv = (MELO_PLAYER_UPNP (player))->priv;
   MeloPlayerStatus *status;
 
-  /* Lock player mutex */
+  /* Lock status mutex */
   g_mutex_lock (&priv->status_mutex);
 
   /* Copy status */
   status = melo_player_status_ref (priv->status);
   status->pos = melo_player_upnp_get_pos (player, NULL);
 
-  /* Unlock player mutex */
+  /* Unlock status mutex */
   g_mutex_unlock (&priv->status_mutex);
 
   return status;
+}
+
+static gboolean
+melo_player_upnp_get_cover (MeloPlayer *player, GBytes **data, gchar **type)
+{
+  MeloPlayerUpnpPrivate *priv = (MELO_PLAYER_UPNP (player))->priv;
+  MeloTags *tags;
+
+  /* Lock status mutex */
+  g_mutex_lock (&priv->status_mutex);
+
+  /* Copy status */
+  tags = melo_player_status_get_tags (priv->status);
+  if (tags) {
+    *data = melo_tags_get_cover (tags, type);
+    melo_tags_unref (tags);
+  }
+
+  /* Unlock status mutex */
+  g_mutex_unlock (&priv->status_mutex);
+
+  return TRUE;
 }
 
 static void
@@ -313,7 +338,8 @@ on_context_unavailable (GUPnPContextManager *manager, GUPnPContext *context,
 static void
 on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
 {
-  MeloPlayerUpnpPrivate *priv = (MeloPlayerUpnpPrivate *) user_data;
+  MeloPlayerUpnp *up = MELO_PLAYER_UPNP (user_data);
+  MeloPlayerUpnpPrivate *priv = up->priv;
   const gchar *type;
   MeloTags *tags;
   GBytes *img;
@@ -333,6 +359,7 @@ on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
   /* Set cover in tags */
   if (tags) {
     melo_tags_take_cover (tags, img, type);
+    melo_tags_set_cover_url (tags, G_OBJECT (up), NULL, NULL);
     melo_tags_unref (tags);
   }
 
@@ -344,7 +371,8 @@ static void
 on_object_available (GUPnPDIDLLiteParser *parser, GUPnPDIDLLiteObject *object,
                      gpointer user_data)
 {
-  MeloPlayerUpnpPrivate *priv = (MeloPlayerUpnpPrivate *) user_data;
+  MeloPlayerUpnp *up = MELO_PLAYER_UPNP (user_data);
+  MeloPlayerUpnpPrivate *priv = up->priv;
   const gchar *img;
   SoupMessage *msg;
   MeloTags *tags;
@@ -367,15 +395,16 @@ on_object_available (GUPnPDIDLLiteParser *parser, GUPnPDIDLLiteObject *object,
   img = gupnp_didl_lite_object_get_album_art (object);
   if (img) {
     msg = soup_message_new ("GET", img);
-    soup_session_queue_message (priv->session, msg, on_request_done, priv);
+    soup_session_queue_message (priv->session, msg, on_request_done, up);
   }
 }
 
 static void
 on_notify (GObject *object, GParamSpec *pspec, gpointer user_data)
 {
-  MeloPlayerUpnpPrivate *priv = (MeloPlayerUpnpPrivate *) user_data;
   RygelMediaPlayer *player = RYGEL_MEDIA_PLAYER (object);
+  MeloPlayerUpnp *up = MELO_PLAYER_UPNP (user_data);
+  MeloPlayerUpnpPrivate *priv = up->priv;
 
   /* Lock player mutex */
   g_mutex_lock (&priv->status_mutex);
@@ -409,7 +438,7 @@ on_notify (GObject *object, GParamSpec *pspec, gpointer user_data)
     /* Parse meta with GUPnP parser */
     parser = gupnp_didl_lite_parser_new ();
     g_signal_connect (parser, "object-available",
-                      (GCallback)on_object_available, priv);
+                      (GCallback)on_object_available, up);
     gupnp_didl_lite_parser_parse_didl (parser, meta, NULL);
     g_object_unref (parser);
   }
@@ -448,7 +477,7 @@ melo_player_upnp_start (MeloPlayerUpnp *up, const gchar *name)
                                           RYGEL_MEDIA_RENDERER_PLUGIN (plugin));
 
   /* Register property notifications on player */
-  g_signal_connect (priv->player, "notify", (GCallback) on_notify, priv);
+  g_signal_connect (priv->player, "notify", (GCallback) on_notify, up);
 
   /* Disable video output */
   playbin = rygel_playbin_renderer_get_playbin (priv->renderer);
