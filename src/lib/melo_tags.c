@@ -627,6 +627,10 @@ melo_tags_to_json_object (MeloTags *tags, MeloTagsFields fields)
 void
 melo_tags_unref (MeloTags *tags)
 {
+  if (!tags)
+    return;
+
+  /* Decrement reference count */
   tags->priv->ref_count--;
   if (tags->priv->ref_count)
     return;
