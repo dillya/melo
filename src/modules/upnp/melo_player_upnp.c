@@ -340,15 +340,15 @@ on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
 {
   MeloPlayerUpnp *up = MELO_PLAYER_UPNP (user_data);
   MeloPlayerUpnpPrivate *priv = up->priv;
+  GBytes *img = NULL;
   const gchar *type;
   MeloTags *tags;
-  GBytes *img;
 
   /* Get content type */
   type = soup_message_headers_get_one (msg->response_headers, "Content-Type");
 
   /* Get image */
-  img = g_bytes_new (msg->response_body->data, msg->response_body->length);
+  g_object_get (msg, "response-body-data", &img, NULL);
 
   /* Lock status */
   g_mutex_lock (&priv->status_mutex);
