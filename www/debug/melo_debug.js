@@ -298,7 +298,10 @@ function melo_browser_list(method, id, path, off, count) {
       /* Use artist + title when available */
       if (items[i].tags != null &&
           items[i].tags.title != null) {
-        name = items[i].tags.artist + ' - ' + items[i].tags.title;
+        if (items[i].tags.artist != null)
+          name = items[i].tags.artist + ' - ' + items[i].tags.title;
+        else
+          name = items[i].tags.title;
         title = items[i].full_name  + ' (' + name + ')';
         item_class = "browser_tags";
       }
@@ -442,11 +445,14 @@ function melo_browser_update_tags (id, list) {
     if (response.error || !response.result)
       return;
 
+    /* Generate name */
+    var name = response.result.title;
+    if (response.result.artist != null)
+      name = response.result.artist + ' - ' + response.result.title;
+
     /* Update link name */
     if (response.result.title != null) {
-      data[0][0].children("a:first").text(response.result.artist + ' - ' +
-                                          response.result.title)
-                                    .toggleClass("browser_tags");
+      data[0][0].children("a:first").text(name).toggleClass("browser_tags");
     }
     melo_browser_update_tags (data[1], data[2]);
   });
