@@ -245,13 +245,15 @@ function melo_browser_list(method, id, path, off, count) {
     var prev_off = off - count;
     if (prev_off < 0)
       prev_off = 0;
-    $('#bnav').children("a.prev").click([id, path, prev_off, count], function(e) {
-      melo_browser_get_list(e.data[0], e.data[1], e.data[2], e.data[3]);
+    $('#bnav').children("a.prev").click([method, id, path, prev_off, count],
+                                        function(e) {
+      melo_browser_list(e.data[0], e.data[1], e.data[2], e.data[3], e.data[4]);
       return false;
     });
   }
-  $('#bnav').children("a.next").click([id, path, off+count, count], function(e) {
-    melo_browser_get_list(e.data[0], e.data[1], e.data[2], e.data[3]);
+  $('#bnav').children("a.next").click([method, id, path, off+count, count],
+                                      function(e) {
+    melo_browser_list(e.data[0], e.data[1], e.data[2], e.data[3], e.data[4]);
     return false;
   });
 
