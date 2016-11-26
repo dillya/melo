@@ -108,7 +108,6 @@ melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type)
   /* Free previous cover */
   if (priv->cover)
     g_bytes_unref (priv->cover);
-  g_free (priv->cover_type);
 
   /* Set cover */
   priv->cover = cover;
