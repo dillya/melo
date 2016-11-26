@@ -74,6 +74,8 @@ gchar *melo_tags_get_cover_type (MeloTags *tags);
 /* Cover URL for HTTP access */
 gboolean melo_tags_set_cover_url (MeloTags *tags, GObject *obj,
                                   const gchar *path, const gchar *type);
+void melo_tags_copy_cover_url (MeloTags *tags, const gchar *url,
+                               const gchar *type);
 gboolean melo_tags_has_cover_url (MeloTags *tags);
 gchar *melo_tags_get_cover_url (MeloTags *tags);
 void melo_tags_set_cover_url_base (const gchar *base);

@@ -250,6 +250,31 @@ failed:
   return FALSE;
 }
 
+void
+melo_tags_copy_cover_url (MeloTags *tags, const gchar *url, const gchar *type)
+{
+  MeloTagsPrivate *priv = tags->priv;
+
+  /* Lock cover access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set cover URL */
+  g_free (priv->cover_url);
+  priv->cover_url = g_strdup (url);
+
+  /* Update cover type */
+  if (type) {
+    g_free (priv->cover_type);
+    priv->cover_type = g_strdup (type);
+  }
+
+  /* Update timestamp */
+  melo_tags_update (tags);
+
+  /* Unlock cover access */
+  g_mutex_unlock (&priv->mutex);
+}
+
 gboolean
 melo_tags_has_cover_url (MeloTags *tags)
 {
