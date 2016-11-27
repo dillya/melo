@@ -904,22 +904,14 @@ melo_browser_file_get_uri (MeloBrowser *browser, const gchar *path)
 }
 
 static MeloTags *
-melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
-                            MeloTagsFields fields)
+melo_browser_file_get_tags_from_uri (MeloBrowserFile *bfile, const gchar *uri,
+                                     MeloTagsFields fields)
 {
-  MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   MeloBrowserFilePrivate *priv = bfile->priv;
   GstDiscovererInfo *info;
   GstDiscoverer *disco;
   MeloTags *tags = NULL;
-  gchar *_uri, *uri, *dir, *file;
-
-  /* Get URI from path */
-  _uri = melo_browser_file_get_uri (browser, path);
-  if (!_uri)
-    return NULL;
-  uri = g_uri_unescape_string (_uri, NULL);
-  g_free (_uri);
+  gchar *dir, *file;
 
   /* Get dirname and basename */
   dir = g_path_get_dirname (uri);
@@ -927,7 +919,7 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
 
   /* Get tags from database */
   if (priv->fdb) {
-    tags = melo_file_db_find_one_song (priv->fdb, G_OBJECT (browser), fields,
+    tags = melo_file_db_find_one_song (priv->fdb, G_OBJECT (bfile), fields,
                                        MELO_FILE_DB_FIELDS_PATH, dir,
                                        MELO_FILE_DB_FIELDS_FILE, file,
                                        MELO_FILE_DB_FIELDS_END);
@@ -951,10 +943,36 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
   gst_object_unref (disco);
 
 end:
-  /* Free uri */
+  /* Free URI parts */
   g_free (file);
   g_free (dir);
+
+  return tags;
+}
+
+static MeloTags *
+melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
+                            MeloTagsFields fields)
+{
+  MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
+  MeloBrowserFilePrivate *priv = bfile->priv;
+  MeloTags *tags = NULL;
+  gchar *uri, *uuri;
+
+  /* Get URI from path */
+  uri = melo_browser_file_get_uri (browser, path);
+  if (!uri)
+    return NULL;
+
+  /* Unescape URI */
+  uuri = g_uri_unescape_string (uri, NULL);
   g_free (uri);
+  if (!uuri)
+    return NULL;
+
+  /* Get tags from URI */
+  tags = melo_browser_file_get_tags_from_uri (bfile, uuri, fields);
+  g_free (uuri);
 
   return tags;
 }
@@ -962,9 +980,11 @@ end:
 static gboolean
 melo_browser_file_add (MeloBrowser *browser, const gchar *path)
 {
+  MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   gboolean ret;
-  gchar *uri;
-  gchar *_name, *name;
+  MeloTags *tags;
+  gchar *uri, *uuri;
+  gchar *name;
 
   /* Get final URI from path */
   uri = melo_browser_file_get_uri (browser, path);
@@ -972,13 +992,18 @@ melo_browser_file_add (MeloBrowser *browser, const gchar *path)
     return FALSE;
 
   /* Unescape for name */
-  _name = g_uri_unescape_string (uri, NULL);
-  name = g_path_get_basename (_name);
-  g_free (_name);
+  uuri = g_uri_unescape_string (uri, NULL);
+  name = g_path_get_basename (uuri);
+
+  /* Get tags from URI */
+  tags = melo_browser_file_get_tags_from_uri (bfile, uuri,
+                                              MELO_TAGS_FIELDS_FULL);
 
   /* Add with URI */
-  ret = melo_player_add (browser->player, uri, name, NULL);
+  ret = melo_player_add (browser->player, uri, name, tags);
+  melo_tags_unref (tags);
   g_free (name);
+  g_free (uuri);
   g_free (uri);
 
   return ret;
@@ -987,9 +1012,11 @@ melo_browser_file_add (MeloBrowser *browser, const gchar *path)
 static gboolean
 melo_browser_file_play (MeloBrowser *browser, const gchar *path)
 {
+  MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   gboolean ret;
-  gchar *_name, *name;
-  gchar *uri;
+  MeloTags *tags;
+  gchar *uri, *uuri;
+  gchar *name;
 
   /* Get final URI from path */
   uri = melo_browser_file_get_uri (browser, path);
@@ -997,13 +1024,18 @@ melo_browser_file_play (MeloBrowser *browser, const gchar *path)
     return FALSE;
 
   /* Unescape for name */
-  _name = g_uri_unescape_string (uri, NULL);
-  name = g_path_get_basename (_name);
-  g_free (_name);
+  uuri = g_uri_unescape_string (uri, NULL);
+  name = g_path_get_basename (uuri);
+
+  /* Get tags from URI */
+  tags = melo_browser_file_get_tags_from_uri (bfile, uuri,
+                                              MELO_TAGS_FIELDS_FULL);
 
   /* Play with URI */
-  ret = melo_player_play (browser->player, uri, name, NULL, TRUE);
+  ret = melo_player_play (browser->player, uri, name, tags, TRUE);
+  melo_tags_unref (tags);
   g_free (name);
+  g_free (uuri);
   g_free (uri);
 
   return ret;
