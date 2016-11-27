@@ -83,6 +83,87 @@ melo_tags_updated (MeloTags *tags, gint64 timestamp)
 }
 
 MeloTags *
+melo_tags_copy (MeloTags *tags)
+{
+  MeloTagsPrivate *priv = tags->priv;
+  MeloTagsPrivate *npriv;
+  MeloTags *ntags;
+
+  /* Create a new MeloTags */
+  ntags = melo_tags_new ();
+  if (!ntags)
+    return NULL;
+
+  /* Copy values */
+  ntags->title = g_strdup (tags->title);
+  ntags->artist = g_strdup (tags->artist);
+  ntags->album = g_strdup (tags->album);
+  ntags->genre = g_strdup (tags->genre);
+  ntags->date = tags->date;
+  ntags->track = tags->track;
+  ntags->tracks = tags->tracks;
+  npriv = ntags->priv;
+
+  /* Lock cover access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Copy cover values */
+  if (priv->cover)
+    npriv->cover = g_bytes_ref (priv->cover);
+  npriv->cover_url = g_strdup (priv->cover_url);
+  npriv->cover_type = g_strdup (priv->cover_type);
+
+  /* Unlock cover access */
+  g_mutex_unlock (&priv->mutex);
+
+  return ntags;
+}
+
+void
+melo_tags_merge (MeloTags *tags, MeloTags *old_tags)
+{
+  MeloTagsPrivate *priv = tags->priv;
+  MeloTagsPrivate *opriv = old_tags->priv;
+
+  /* Copy values */
+  if (!tags->title)
+    tags->title = g_strdup (old_tags->title);
+  if (!tags->artist)
+    tags->artist = g_strdup (old_tags->artist);
+  if (!tags->album)
+    tags->album = g_strdup (old_tags->album);
+  if (!tags->genre)
+    tags->genre = g_strdup (old_tags->genre);
+  if (!tags->date)
+    tags->date = old_tags->date;
+  if (!tags->track)
+    tags->track = old_tags->track;
+  if (!tags->tracks)
+    tags->tracks = old_tags->tracks;
+
+  /* Lock cover access */
+  g_mutex_lock (&priv->mutex);
+  g_mutex_lock (&opriv->mutex);
+
+  /* Free previous cover */
+  if (!priv->cover && !priv->cover_url) {
+    g_free (priv->cover_type);
+    g_free (priv->cover_url);
+    if (opriv->cover)
+      priv->cover = g_bytes_ref (opriv->cover);
+    priv->cover_url = g_strdup (opriv->cover_url);
+    priv->cover_type = g_strdup (opriv->cover_type);
+  }
+
+  /* Update timestamp */
+  melo_tags_update (tags);
+
+  /* Unlock cover access */
+  g_mutex_unlock (&opriv->mutex);
+  g_mutex_unlock (&priv->mutex);
+}
+
+MeloTags *
 melo_tags_ref (MeloTags *tags)
 {
   tags->priv->ref_count++;

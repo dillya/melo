@@ -61,6 +61,8 @@ enum _MeloTagsFields {
 MeloTags *melo_tags_new (void);
 void melo_tags_update (MeloTags *tags);
 gboolean melo_tags_updated (MeloTags *tags, gint64 timestamp);
+MeloTags *melo_tags_copy (MeloTags *tags);
+void melo_tags_merge (MeloTags *tags, MeloTags *old_tags);
 MeloTags *melo_tags_ref (MeloTags *tags);
 void melo_tags_unref (MeloTags *tags);
 
