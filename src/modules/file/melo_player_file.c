@@ -55,9 +55,6 @@ struct _MeloPlayerFilePrivate {
   GstElement *pipeline;
   GstElement *src;
   guint bus_watch_id;
-
-  /* Gstreamer tags */
-  GstTagList *tag_list;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloPlayerFile, melo_player_file, MELO_TYPE_PLAYER)
@@ -77,9 +74,6 @@ melo_player_file_finalize (GObject *gobject)
 
   /* Free gstreamer pipeline */
   g_object_unref (priv->pipeline);
-
-  /* Free tag list */
-  gst_tag_list_unref (priv->tag_list);
 
   /* Free URI */
   g_free (priv->uri);
@@ -132,9 +126,6 @@ melo_player_file_init (MeloPlayerFile *self)
   /* Create new status handler */
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
 
-  /* Create a new tag list */
-  priv->tag_list = gst_tag_list_new_empty ();
-
   /* Create pipeline */
   priv->pipeline = gst_pipeline_new ("file_player_pipeline");
   priv->src = gst_element_factory_make ("uridecodebin",
@@ -173,8 +164,8 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       break;
     }
     case GST_MESSAGE_TAG: {
+      MeloTags *mtags, *otags;
       GstTagList *tags;
-      MeloTags *mtags;
 
       /* Get tag list from message */
       gst_message_parse_tag (msg, &tags);
@@ -182,12 +173,17 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       /* Lock player mutex */
       g_mutex_lock (&priv->mutex);
 
-      /* Merge tags */
-      gst_tag_list_insert (priv->tag_list, tags, GST_TAG_MERGE_REPLACE);
-
       /* Fill MeloTags with GstTagList */
-      mtags = melo_tags_new_from_gst_tag_list (priv->tag_list,
-                                               MELO_TAGS_FIELDS_FULL);
+      mtags = melo_tags_new_from_gst_tag_list (tags, MELO_TAGS_FIELDS_FULL);
+
+      /* Merge with old tags */
+      otags = melo_player_status_get_tags (priv->status);
+      if (otags) {
+        melo_tags_merge (mtags, otags);
+        melo_tags_unref (otags);
+      }
+
+      /* Set tags to status */
       if (melo_tags_has_cover (mtags))
         melo_tags_set_cover_url (mtags, G_OBJECT (pfile), NULL, NULL);
       melo_player_status_take_tags (priv->status, mtags);
@@ -298,7 +294,6 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
   /* Stop pipeline */
   gst_element_set_state (priv->pipeline, GST_STATE_READY);
   melo_player_status_unref (priv->status);
-  gst_tag_list_unref (priv->tag_list);
 
   /* Replace URI */
   g_free (priv->uri);
@@ -312,7 +307,8 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
     name = _name;
   }
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
-  priv->tag_list = gst_tag_list_new_empty ();
+  if (tags)
+    melo_player_status_set_tags (priv->status, tags);
 
   /* Set new location to src element */
   g_object_set (priv->src, "uri", path, NULL);
