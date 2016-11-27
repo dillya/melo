@@ -43,6 +43,7 @@ static const MeloBrowserInfo *melo_browser_radio_get_info (
 static MeloBrowserList *melo_browser_radio_get_list (MeloBrowser *browser,
                                                   const gchar *path,
                                                   gint offset, gint count,
+                                                  const gchar *token,
                                                   MeloBrowserTagsMode tags_mode,
                                                   MeloTagsFields tags_fields);
 static MeloBrowserList *melo_browser_radio_search (MeloBrowser *browser,
@@ -196,7 +197,7 @@ bad_request:
 
 static MeloBrowserList *
 melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
-                             gint offset, gint count,
+                             gint offset, gint count, const gchar *token,
                              MeloBrowserTagsMode tags_mode,
                              MeloTagsFields tags_fields)
 {

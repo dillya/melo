@@ -49,6 +49,7 @@ static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static MeloBrowserList *melo_browser_file_get_list (MeloBrowser *browser,
                                                   const gchar *path,
                                                   gint offset, gint count,
+                                                  const gchar *token,
                                                   MeloBrowserTagsMode tags_mode,
                                                   MeloTagsFields tags_fields);
 static MeloTags *melo_browser_file_get_tags (MeloBrowser *browser,
@@ -792,7 +793,7 @@ melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path,
 
 static MeloBrowserList *
 melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
-                            gint offset, gint count,
+                            gint offset, gint count, const gchar *token,
                             MeloBrowserTagsMode tags_mode,
                             MeloTagsFields tags_fields)
 {

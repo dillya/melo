@@ -193,6 +193,8 @@ melo_browser_jsonrpc_list_to_object (const MeloBrowserList *list,
   /* Add list properties */
   json_object_set_string_member (object, "path", list->path);
   json_object_set_int_member (object, "count", list->count);
+  json_object_set_string_member (object, "prev_token", list->prev_token);
+  json_object_set_string_member (object, "next_token", list->next_token);
 
   /* Parse list and create array */
   array = json_array_new ();
@@ -315,6 +317,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   JsonObject *obj;
   GList *l;
   const gchar *path, *input;
+  const gchar *token = NULL;
   gint offset, count;
 
   /* Get parameters */
@@ -342,16 +345,20 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   offset = json_object_get_int_member (obj, "offset");
   count = json_object_get_int_member (obj, "count");
 
+  /* Get navigation token */
+  if (json_object_has_member (obj, "token"))
+    token = json_object_get_string_member (obj, "token");
+
   /* Get tags if needed */
   if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS)
     melo_browser_jsonrpc_get_tags_mode (obj, &tags_mode, &tags_fields);
 
   /* Get browser list */
   if (!g_strcmp0 (method, "browser.search"))
-    list = melo_browser_search (bro, input, offset, count, tags_mode,
+    list = melo_browser_search (bro, input, offset, count, token, tags_mode,
                                 tags_fields);
   else
-    list = melo_browser_get_list (bro, path, offset, count, tags_mode,
+    list = melo_browser_get_list (bro, path, offset, count, token, tags_mode,
                                   tags_fields);
   json_object_unref (obj);
   g_object_unref (bro);
@@ -533,6 +540,7 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "  {\"name\": \"path\", \"type\": \"string\"},"
               "  {\"name\": \"offset\", \"type\": \"integer\"},"
               "  {\"name\": \"count\", \"type\": \"integer\"},"
+              "  {\"name\": \"token\", \"type\": \"string\"},"
               "  {"
               "    \"name\": \"fields\", \"type\": \"array\","
               "    \"required\": false"
@@ -557,6 +565,7 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "  {\"name\": \"input\", \"type\": \"string\"},"
               "  {\"name\": \"offset\", \"type\": \"integer\"},"
               "  {\"name\": \"count\", \"type\": \"integer\"},"
+              "  {\"name\": \"token\", \"type\": \"string\"},"
               "  {"
               "    \"name\": \"fields\", \"type\": \"array\","
               "    \"required\": false"

@@ -226,27 +226,29 @@ melo_browser_get_player (MeloBrowser *browser)
 
 MeloBrowserList *
 melo_browser_get_list (MeloBrowser *browser, const gchar *path, gint offset,
-                       gint count, MeloBrowserTagsMode tags_mode,
+                       gint count, const gchar *token,
+                       MeloBrowserTagsMode tags_mode,
                        MeloTagsFields tags_fields)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
   g_return_val_if_fail (bclass->get_list, NULL);
 
-  return bclass->get_list (browser, path, offset, count, tags_mode,
+  return bclass->get_list (browser, path, offset, count, token, tags_mode,
                            tags_fields);
 }
 
 MeloBrowserList *
 melo_browser_search (MeloBrowser *browser, const gchar *input, gint offset,
-                     gint count, MeloBrowserTagsMode tags_mode,
-                     MeloTagsFields tags_fields)
+                     gint count, const gchar *token,
+                     MeloBrowserTagsMode tags_mode, MeloTagsFields tags_fields)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
   g_return_val_if_fail (bclass->search, NULL);
 
-  return bclass->search (browser, input, offset, count, tags_mode, tags_fields);
+  return bclass->search (browser, input, offset, count, token, tags_mode,
+                         tags_fields);
 }
 
 gchar *
@@ -331,6 +333,8 @@ void
 melo_browser_list_free (MeloBrowserList *list)
 {
   g_free (list->path);
+  g_free (list->prev_token);
+  g_free (list->next_token);
   g_list_free_full (list->items, (GDestroyNotify) melo_browser_item_free);
   g_slice_free (MeloBrowserList, list);
 }

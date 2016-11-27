@@ -61,11 +61,11 @@ struct _MeloBrowserClass {
 
   const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
   MeloBrowserList *(*get_list) (MeloBrowser *browser, const gchar *path,
-                                gint offset, gint count,
+                                gint offset, gint count, const gchar *token,
                                 MeloBrowserTagsMode tags_mode,
                                 MeloTagsFields tags_fields);
   MeloBrowserList *(*search) (MeloBrowser *browser, const gchar *input,
-                              gint offset, gint count,
+                              gint offset, gint count, const gchar *token,
                               MeloBrowserTagsMode tags_mode,
                               MeloTagsFields tags_fields);
   gchar *(*search_hint) (MeloBrowser *browser, const gchar *input);
@@ -104,6 +104,8 @@ struct _MeloBrowserInfo {
 struct _MeloBrowserList {
   gchar *path;
   gint count;
+  gchar *prev_token;
+  gchar *next_token;
   GList *items;
 };
 
@@ -136,10 +138,12 @@ MeloPlayer *melo_browser_get_player (MeloBrowser *browser);
 
 MeloBrowserList *melo_browser_get_list (MeloBrowser *browser, const gchar *path,
                                         gint offset, gint count,
+                                        const gchar *token,
                                         MeloBrowserTagsMode tags_mode,
                                         MeloTagsFields tags_fields);
 MeloBrowserList *melo_browser_search (MeloBrowser *browser, const gchar *input,
                                       gint offset, gint count,
+                                      const gchar *token,
                                       MeloBrowserTagsMode tags_mode,
                                       MeloTagsFields tags_fields);
 gchar *melo_browser_search_hint (MeloBrowser *browser, const gchar *input);
