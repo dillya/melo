@@ -51,9 +51,6 @@ struct _MeloPlayerRadioPrivate {
   GstElement *src;
   guint bus_watch_id;
 
-  /* Gstreamer tags */
-  GstTagList *tag_list;
-
   /* Browser tags */
   MeloTags *btags;
 };
@@ -75,9 +72,6 @@ melo_player_radio_finalize (GObject *gobject)
 
   /* Free gstreamer pipeline */
   g_object_unref (priv->pipeline);
-
-  /* Free tag list */
-  gst_tag_list_unref (priv->tag_list);
 
   /* Unref browser tags */
   if (priv->btags)
@@ -130,9 +124,6 @@ melo_player_radio_init (MeloPlayerRadio *self)
   /* Create new status handler */
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
 
-  /* Create a new tag list */
-  priv->tag_list = gst_tag_list_new_empty ();
-
   /* Create pipeline */
   priv->pipeline = gst_pipeline_new ("radio_player_pipeline");
   priv->src = gst_element_factory_make ("uridecodebin",
@@ -163,7 +154,7 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
   switch (GST_MESSAGE_TYPE (msg)) {
     case GST_MESSAGE_TAG: {
       GstTagList *tags;
-      MeloTags *mtags;
+      MeloTags *mtags, *otags;
       gchar *artist, *title;
 
       /* Get tag list from message */
@@ -172,34 +163,22 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       /* Lock player mutex */
       g_mutex_lock (&priv->mutex);
 
-      /* Merge tags */
-      gst_tag_list_insert (priv->tag_list, tags, GST_TAG_MERGE_REPLACE);
-
       /* Fill MeloTags with GstTagList */
-      mtags = melo_tags_new_from_gst_tag_list (priv->tag_list,
-                                               MELO_TAGS_FIELDS_FULL);
-      melo_player_status_take_tags (priv->status, mtags);
+      mtags = melo_tags_new_from_gst_tag_list (tags, MELO_TAGS_FIELDS_FULL);
 
-      /* Use cover from browser tags */
-      if (priv->btags && !melo_tags_has_cover (mtags) &&
-          !melo_tags_has_cover_url (mtags)) {
-        gchar *cover_url, *type = NULL;
-        GBytes *cover;
-
-        /* Copy browser cover */
-        cover = melo_tags_get_cover (priv->btags, &type);
-        if (cover)
-          melo_tags_take_cover (mtags, cover, type);
-        g_free (type);
-
-        /* Copy browser cover URL if no cover bytes array */
-        if (!cover) {
-          cover_url = melo_tags_get_cover_url (priv->btags);
-          if (cover_url)
-            melo_tags_copy_cover_url (mtags, cover_url, NULL);
-          g_free (cover_url);
-        }
+      /* Merge with old tags */
+      otags = melo_player_status_get_tags (priv->status);
+      if (otags) {
+        melo_tags_merge (mtags, otags);
+        melo_tags_unref (otags);
       }
+
+      /* Merge with browser tags */
+      if (priv->btags)
+        melo_tags_merge (mtags, priv->btags);
+
+      /* Set tags to player status */
+      melo_player_status_take_tags (priv->status, mtags);
 
       /* Set cover URL */
       if (melo_tags_has_cover (mtags))
@@ -310,10 +289,8 @@ melo_player_radio_play (MeloPlayer *player, const gchar *path,
     priv->btags = NULL;
   }
   melo_player_status_unref (priv->status);
-  gst_tag_list_unref (priv->tag_list);
   melo_playlist_empty (player->playlist);
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
-  priv->tag_list = gst_tag_list_new_empty ();
   if (tags) {
     priv->btags = melo_tags_ref (tags);
     melo_player_status_set_tags (priv->status, tags);
