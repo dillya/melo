@@ -25,7 +25,8 @@ typedef enum {
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NONE = 0,
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME = 1,
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME = 2,
-  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS = 4,
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_CMDS = 4,
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS = 8,
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL = 255,
 } MeloPlaylistJSONRPCListFields;
 
@@ -80,6 +81,8 @@ melo_playlist_jsonrpc_get_list_fields (JsonObject *obj)
       fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME;
     else if (!g_strcmp0 (field, "full_name"))
       fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME;
+    else if (!g_strcmp0 (field, "cmds"))
+      fields |=  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_CMDS;
     else if (!g_strcmp0 (field, "tags"))
       fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS;
   }
@@ -104,6 +107,10 @@ melo_playlist_jsonrpc_list_to_array (const GList *list,
       json_object_set_string_member (obj, "name", item->name);
     if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME)
       json_object_set_string_member (obj, "full_name", item->full_name);
+    if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_CMDS) {
+      json_object_set_boolean_member (obj, "can_play", item->can_play);
+      json_object_set_boolean_member (obj, "can_remove", item->can_remove);
+    }
     if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS) {
       if (item->tags) {
         JsonObject *tags = melo_tags_to_json_object (item->tags, tags_fields);
