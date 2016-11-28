@@ -354,7 +354,7 @@ function melo_browser_list(method, id, path, off, count, token) {
       }
 
       /* Add a link to display tags */
-      if (items[i].type == "file") {
+      if (items[i].type != "directory" && items[i].type != "category") {
         item.append(' [<a class="tags_link" href="#">+</a>]<div class="tags"></div>');
         item.children("a.tags_link").click([id, fpath, item], function(e) {
           melo_browser_get_tags(e.data[0], e.data[1], e.data[2]);
