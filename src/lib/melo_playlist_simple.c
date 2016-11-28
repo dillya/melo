@@ -304,7 +304,8 @@ melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
 
   /* Play media if player is available */
   if (playlist->player)
-    melo_player_play (playlist->player, item->path, NULL, NULL, FALSE);
+    melo_player_play (playlist->player, item->path, item->name, item->tags,
+                      FALSE);
   melo_playlist_item_unref (item);
 
   return TRUE;
