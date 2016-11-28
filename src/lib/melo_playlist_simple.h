@@ -50,6 +50,9 @@ struct _MeloPlaylistSimpleClass {
 
 GType melo_playlist_simple_get_type (void);
 
+void melo_playlist_simple_override_cover_url (MeloPlaylistSimple *plsimple,
+                                              gboolean override_url);
+
 G_END_DECLS
 
 #endif /* __MELO_PLAYLIST_SIMPLE_H__ */

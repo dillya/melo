@@ -45,11 +45,16 @@ static gboolean melo_playlist_simple_play (MeloPlaylist *playlist,
 static gboolean melo_playlist_simple_remove (MeloPlaylist *playlist,
                                              const gchar *name);
 
+static gboolean melo_playlist_simple_get_cover (MeloPlaylist *playlist,
+                                                const gchar *path,
+                                                GBytes **data, gchar **type);
+
 struct _MeloPlaylistSimplePrivate {
   GMutex mutex;
   GList *playlist;
   GHashTable *names;
   GList *current;
+  gboolean override_cover_url;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloPlaylistSimple, melo_playlist_simple, MELO_TYPE_PLAYLIST)
@@ -89,6 +94,8 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   plclass->play = melo_playlist_simple_play;
   plclass->remove = melo_playlist_simple_remove;
 
+  plclass->get_cover = melo_playlist_simple_get_cover;
+
   /* Add custom finalize() function */
   oclass->finalize = melo_playlist_simple_finalize;
 }
@@ -108,6 +115,13 @@ melo_playlist_simple_init (MeloPlaylistSimple *self)
 
   /* Init Hash table for names */
   priv->names = g_hash_table_new (g_str_hash, g_str_equal);
+}
+
+void
+melo_playlist_simple_override_cover_url (MeloPlaylistSimple *plsimple,
+                                         gboolean override_url)
+{
+  plsimple->priv->override_cover_url = override_url;
 }
 
 static MeloPlaylistList *
@@ -202,6 +216,10 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *name,
   item->can_remove = TRUE;
   priv->playlist = g_list_prepend (priv->playlist, item);
   g_hash_table_insert (priv->names, final_name, priv->playlist);
+
+  /* Use playlist cover URL if cover data are available */
+  if (priv->override_cover_url && melo_tags_has_cover (tags))
+    melo_tags_set_cover_url (tags, G_OBJECT (playlist), final_name, NULL);
 
   /* Set as current */
   if (is_current)
@@ -321,6 +339,36 @@ melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
   priv->playlist = g_list_remove (priv->playlist, item);
   g_hash_table_remove (priv->names, name);
   melo_playlist_item_unref (item);
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+}
+
+static gboolean
+melo_playlist_simple_get_cover (MeloPlaylist *playlist, const gchar *path,
+                                GBytes **data, gchar **type)
+{
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+  MeloPlaylistItem *item;
+  GList *element;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Find media in hash table */
+  element = g_hash_table_lookup (priv->names, path);
+  if (!element) {
+    g_mutex_unlock (&priv->mutex);
+    return FALSE;
+  }
+
+  /* Get tags from item */
+  item = (MeloPlaylistItem *) element->data;
+  if (item->tags)
+    *data = melo_tags_get_cover (item->tags, type);
 
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
