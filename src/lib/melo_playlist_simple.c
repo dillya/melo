@@ -28,6 +28,9 @@
 
 static MeloPlaylistList *melo_playlist_simple_get_list (MeloPlaylist *playlist,
                                                     MeloTagsFields tags_fields);
+static MeloTags *melo_playlist_simple_get_tags (MeloPlaylist *playlist,
+                                                const gchar *name,
+                                                MeloTagsFields fields);
 static gboolean melo_playlist_simple_add (MeloPlaylist *playlist,
                                           const gchar *name,
                                           const gchar *full_name,
@@ -79,6 +82,7 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   GObjectClass *oclass = G_OBJECT_CLASS (klass);
 
   plclass->get_list = melo_playlist_simple_get_list;
+  plclass->get_tags = melo_playlist_simple_get_tags;
   plclass->add = melo_playlist_simple_add;
   plclass->get_prev = melo_playlist_simple_get_prev;
   plclass->get_next = melo_playlist_simple_get_next;
@@ -132,6 +136,35 @@ melo_playlist_simple_get_list (MeloPlaylist *playlist,
   g_mutex_unlock (&priv->mutex);
 
   return list;
+}
+
+static MeloTags *
+melo_playlist_simple_get_tags (MeloPlaylist *playlist, const gchar *name,
+                               MeloTagsFields fields)
+{
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+  MeloTags *tags = NULL;
+  GList *element;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Find media in hash table */
+  element = g_hash_table_lookup (priv->names, name);
+  if (element) {
+    MeloPlaylistItem *item;
+
+    /* Get tags from item */
+    item = (MeloPlaylistItem *) element->data;
+    if (item->tags)
+      tags = melo_tags_ref (item->tags);
+  }
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return tags;
 }
 
 static gboolean
