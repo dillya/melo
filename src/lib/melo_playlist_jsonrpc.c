@@ -191,6 +191,56 @@ melo_playlist_jsonrpc_get_list (const gchar *method,
 }
 
 static void
+melo_playlist_jsonrpc_get_tags (const gchar *method,
+                                JsonArray *s_params, JsonNode *params,
+                                JsonNode **result, JsonNode **error,
+                                gpointer user_data)
+{
+  MeloTagsFields fields = MELO_TAGS_FIELDS_FULL;
+  MeloTags *tags = NULL;
+  MeloPlaylist *plist;
+  JsonArray *array;
+  JsonObject *obj;
+  const gchar *name;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get playlist from ID */
+  plist = melo_playlist_jsonrpc_get_playlist (obj, error);
+  if (!plist) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get name */
+  name = json_object_get_string_member (obj, "name");
+
+  /* Get fields */
+  if (json_object_has_member (obj, "fields")) {
+    /* Get tags fields array */
+    array = json_object_get_array_member (obj, "fields");
+    if (array)
+      fields = melo_tags_get_fields_from_json_array (array);
+  }
+
+  /* Get tags from playlist */
+  tags = melo_playlist_get_tags (plist, name, fields);
+  json_object_unref (obj);
+  g_object_unref (plist);
+
+  /* Parse list and create array */
+  obj = melo_tags_to_json_object (tags, fields);
+  melo_tags_unref (tags);
+
+  /* Return object */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
+static void
 melo_playlist_jsonrpc_item_action (const gchar *method,
                                   JsonArray *s_params, JsonNode *params,
                                   JsonNode **result, JsonNode **error,
@@ -250,6 +300,20 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_playlist_jsonrpc_get_list,
+    .user_data = NULL,
+  },
+  {
+    .method = "get_tags",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"name\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_playlist_jsonrpc_get_tags,
     .user_data = NULL,
   },
   {

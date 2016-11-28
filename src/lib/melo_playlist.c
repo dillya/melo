@@ -217,6 +217,17 @@ melo_playlist_get_list (MeloPlaylist *playlist, MeloTagsFields tags_fields)
   return pclass->get_list (playlist, tags_fields);
 }
 
+MeloTags *
+melo_playlist_get_tags (MeloPlaylist *playlist, const gchar *name,
+                        MeloTagsFields fields)
+{
+  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
+
+  g_return_val_if_fail (pclass->get_tags, NULL);
+
+  return pclass->get_tags (playlist, name, fields);
+}
+
 gboolean
 melo_playlist_add (MeloPlaylist *playlist, const gchar *name,
                    const gchar *full_name, const gchar *path,
