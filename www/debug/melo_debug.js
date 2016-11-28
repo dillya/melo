@@ -694,8 +694,9 @@ function melo_player_seek(id, pos) {
 }
 
 function melo_get_playlist_list(id, play) {
-  jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '",["full"]]'), null,
-               function(response, data) {
+  jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '",["full"],' +
+                                             '["artist","title","cover_url"]]'),
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
 
@@ -707,13 +708,28 @@ function melo_get_playlist_list(id, play) {
     for (var i = 0; i < list.length; i++) {
       var l = list[i];
       var name = l.name;
+      var item_class = "playlist_media";
 
       /* Use full name when available */
-      if (l.full_name != null)
-        name = l.full_name + ' (' + l.name + ')';
+      if (l.full_name != null) {
+        name = l.full_name;
+        title = name;
+      }
+
+      /* Use artist + title when available */
+      if (l.tags != null &&
+          l.tags.title != null) {
+        if (l.tags.artist != null)
+          name = l.tags.artist + ' - ' + l.tags.title;
+        else
+          name = l.tags.title;
+        title = l.full_name  + ' (' + name + ')';
+        item_class = "playlist_tags";
+      }
 
       /* Generate list item */
-      var item = $('<li><a class="play" href="#">' + name + '</a></li>');
+      var item = $('<li><a class="play '+ item_class +'" href="#" title="' +
+                   title + '">' + name + '</a></li>');
 
       /* Set as current */
       if (l.name == current)
@@ -731,6 +747,15 @@ function melo_get_playlist_list(id, play) {
         item.append(' [<a class="remove" href="#">remove</a>]');
         item.children("a.remove").click([id, l.name, play], function(e) {
           melo_playlist_remove(e.data[0], e.data[1], e.data[2]);
+          return false;
+        });
+      }
+
+      /* Add a link to display tags */
+      if (l.tags != null) {
+        item.append(' [<a class="tags_link" href="#">+</a>]<div class="tags"></div>');
+        item.children("a.tags_link").click([id, l.name, item], function(e) {
+          melo_playlist_get_tags(e.data[0], e.data[1], e.data[2]);
           return false;
         });
       }
@@ -762,6 +787,48 @@ function melo_playlist_remove(id, name, play) {
     /* Update playlist and player */
     melo_update_player (play);
     melo_get_playlist_list (id, play);
+  });
+}
+
+function melo_playlist_get_tags(id, name, item) {
+  jsonrpc_call("playlist.get_tags", JSON.parse('["' + id + '","' + name + '",["full"]]'),
+               null, function(response, data) {
+    item.children("a.tags_link").text("-");
+    item.children("a.tags_link").unbind().click([id, name, item], function(e) {
+      e.data[2].children("a.tags_link").text("+");
+      e.data[2].children("div.tags").text("");
+      item.children("a.tags_link").unbind().click([id, name, item], function(e) {
+        melo_playlist_get_tags(e.data[0], e.data[1], e.data[2]);
+        return false;
+      });
+      return false;
+    });
+
+    if (response.error || !response.result) {
+      item.children("div.tags").html("Error!");
+      return;
+    }
+
+    var tags = response.result;
+    var img_src = "";
+
+    /* Create img src for cover */
+    if (tags.cover_url != null)
+      img_src = "/" + tags.cover_url;
+    else if (tags.cover != null)
+      img_src = "data:" + tags.cover_type + ";base64," + tags.cover;
+
+    /* Update item */
+    item.children("div.tags").html(
+      '<img src="' + img_src + '" alt="cover" class="tags_cover">' +
+      '<div>' +
+        'Title: <span class="ttitle">' + tags.title  + '</span><br>' +
+        'Artist: <span class="artist">' + tags.artist + '</span><br>' +
+        'Album: <span class="album">' + tags.album + '</span><br>' +
+        'Genre: <span class="genre">' + tags.genre + '</span><br>' +
+        'Date: <span class="date">' + tags.date + '</span><br>' +
+        'Track: <span class="track">' + tags.track + '/' + tags.tracks + '</span>' +
+      '</div>');
   });
 }
 
