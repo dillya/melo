@@ -49,6 +49,7 @@ static MeloBrowserList *melo_browser_radio_get_list (MeloBrowser *browser,
 static MeloBrowserList *melo_browser_radio_search (MeloBrowser *browser,
                                                   const gchar *input,
                                                   gint offset, gint count,
+                                                  const gchar *token,
                                                   MeloBrowserTagsMode tags_mode,
                                                   MeloTagsFields tags_fields);
 static gboolean melo_browser_radio_play (MeloBrowser *browser,
@@ -225,7 +226,7 @@ melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
 
 static MeloBrowserList *
 melo_browser_radio_search (MeloBrowser *browser, const gchar *input,
-                           gint offset, gint count,
+                           gint offset, gint count, const gchar *token,
                            MeloBrowserTagsMode tags_mode,
                            MeloTagsFields tags_fields)
 {
