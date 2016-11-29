@@ -241,23 +241,25 @@ melo_playlist_add (MeloPlaylist *playlist, const gchar *name,
 }
 
 gchar *
-melo_playlist_get_prev (MeloPlaylist *playlist, gboolean set)
+melo_playlist_get_prev (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
+                        gboolean set)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->get_prev, NULL);
 
-  return pclass->get_prev (playlist, set);
+  return pclass->get_prev (playlist, name, tags, set);
 }
 
 gchar *
-melo_playlist_get_next (MeloPlaylist *playlist, gboolean set)
+melo_playlist_get_next (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
+                        gboolean set)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->get_next, NULL);
 
-  return pclass->get_next (playlist, set);
+  return pclass->get_next (playlist, name, tags, set);
 }
 
 gboolean

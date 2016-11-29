@@ -37,8 +37,10 @@ static gboolean melo_playlist_simple_add (MeloPlaylist *playlist,
                                           const gchar *path,
                                           MeloTags *tags, gboolean is_current);
 static gchar *melo_playlist_simple_get_prev (MeloPlaylist *playlist,
+                                             gchar **name, MeloTags **tags,
                                              gboolean set);
 static gchar *melo_playlist_simple_get_next (MeloPlaylist *playlist,
+                                             gchar **name, MeloTags **tags,
                                              gboolean set);
 static gboolean melo_playlist_simple_play (MeloPlaylist *playlist,
                                            const gchar *name);
@@ -232,10 +234,12 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *name,
 }
 
 static gchar *
-melo_playlist_simple_get_prev (MeloPlaylist *playlist, gboolean set)
+melo_playlist_simple_get_prev (MeloPlaylist *playlist, gchar **name,
+                               MeloTags **tags, gboolean set)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
+  MeloPlaylistItem *item;
   gchar *path = NULL;
 
   /* Lock playlist */
@@ -243,7 +247,12 @@ melo_playlist_simple_get_prev (MeloPlaylist *playlist, gboolean set)
 
   /* Get next item after current */
   if (priv->current && priv->current->next) {
-    path = g_strdup (((MeloPlaylistItem *) priv->current->next->data)->path);
+    item = (MeloPlaylistItem *) priv->current->next->data;
+    path = g_strdup (item->path);
+    if (name)
+      *name = g_strdup (item->name);
+    if (tags && item->tags)
+      *tags = melo_tags_ref (item->tags);
     if (set)
       priv->current = priv->current->next;
   }
@@ -255,10 +264,12 @@ melo_playlist_simple_get_prev (MeloPlaylist *playlist, gboolean set)
 }
 
 static gchar *
-melo_playlist_simple_get_next (MeloPlaylist *playlist, gboolean set)
+melo_playlist_simple_get_next (MeloPlaylist *playlist, gchar **name,
+                               MeloTags **tags, gboolean set)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
+  MeloPlaylistItem *item;
   gchar *path = NULL;
 
   /* Lock playlist */
@@ -266,7 +277,12 @@ melo_playlist_simple_get_next (MeloPlaylist *playlist, gboolean set)
 
   /* Get previous item before current */
   if (priv->current && priv->current->prev) {
-    path = g_strdup (((MeloPlaylistItem *) priv->current->prev->data)->path);
+    item = (MeloPlaylistItem *) priv->current->prev->data;
+    path = g_strdup (item->path);
+    if (name)
+      *name = g_strdup (item->name);
+    if (tags && item->tags)
+      *tags = melo_tags_ref (item->tags);
     priv->current = priv->current->prev;
   }
 
