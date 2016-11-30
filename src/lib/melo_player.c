@@ -118,15 +118,14 @@ melo_player_set_property (GObject *object, guint property_id,
 {
   MeloPlayer *player = MELO_PLAYER (object);
 
-  switch (property_id)
-    {
+  switch (property_id) {
     case PROP_ID:
       g_free (player->priv->id);
       player->priv->id = g_value_dup_string (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-    }
+  }
 }
 
 static void
@@ -135,15 +134,13 @@ melo_player_get_property (GObject *object, guint property_id, GValue *value,
 {
   MeloPlayer *player = MELO_PLAYER (object);
 
-  switch (property_id)
-    {
+  switch (property_id) {
     case PROP_ID:
       g_value_set_string (value, melo_player_get_id (player));
       break;
-
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-    }
+  }
 }
 
 const MeloPlayerInfo *

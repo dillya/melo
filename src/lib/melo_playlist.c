@@ -105,15 +105,14 @@ melo_playlist_set_property (GObject *object, guint property_id,
 {
   MeloPlaylist *playlist = MELO_PLAYLIST (object);
 
-  switch (property_id)
-    {
+  switch (property_id) {
     case PROP_ID:
       g_free (playlist->priv->id);
       playlist->priv->id = g_value_dup_string (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-    }
+  }
 }
 
 static void
@@ -122,15 +121,13 @@ melo_playlist_get_property (GObject *object, guint property_id, GValue *value,
 {
   MeloPlaylist *playlist = MELO_PLAYLIST (object);
 
-  switch (property_id)
-    {
+  switch (property_id) {
     case PROP_ID:
       g_value_set_string (value, melo_playlist_get_id (playlist));
       break;
-
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-    }
+  }
 }
 
 MeloPlaylist *

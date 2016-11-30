@@ -108,15 +108,14 @@ melo_browser_set_property (GObject *object, guint property_id,
 {
   MeloBrowser *browser = MELO_BROWSER (object);
 
-  switch (property_id)
-    {
+  switch (property_id) {
     case PROP_ID:
       g_free (browser->priv->id);
       browser->priv->id = g_value_dup_string (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-    }
+  }
 }
 
 static void
@@ -125,15 +124,13 @@ melo_browser_get_property (GObject *object, guint property_id, GValue *value,
 {
   MeloBrowser *browser = MELO_BROWSER (object);
 
-  switch (property_id)
-    {
+  switch (property_id) {
     case PROP_ID:
       g_value_set_string (value, melo_browser_get_id (browser));
       break;
-
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-    }
+  }
 }
 
 const MeloBrowserInfo *

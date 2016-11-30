@@ -118,15 +118,14 @@ melo_module_set_property (GObject *object, guint property_id,
 {
   MeloModule *module = MELO_MODULE (object);
 
-  switch (property_id)
-    {
+  switch (property_id) {
     case PROP_ID:
       g_free (module->priv->id);
       module->priv->id = g_value_dup_string (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-    }
+  }
 }
 
 static void
@@ -135,15 +134,13 @@ melo_module_get_property (GObject *object, guint property_id, GValue *value,
 {
   MeloModule *module = MELO_MODULE (object);
 
-  switch (property_id)
-    {
+  switch (property_id) {
     case PROP_ID:
       g_value_set_string (value, melo_module_get_id (module));
       break;
-
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-    }
+  }
 }
 
 const MeloModuleInfo *
