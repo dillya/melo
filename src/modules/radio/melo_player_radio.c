@@ -50,6 +50,7 @@ struct _MeloPlayerRadioPrivate {
   GstElement *pipeline;
   GstElement *src;
   guint bus_watch_id;
+  gchar *title;
 
   /* Browser tags */
   MeloTags *btags;
@@ -76,6 +77,9 @@ melo_player_radio_finalize (GObject *gobject)
   /* Unref browser tags */
   if (priv->btags)
     melo_tags_unref (priv->btags);
+
+  /* Free current title */
+  g_free (priv->title);
 
   /* Free status */
   melo_player_status_unref (priv->status);
@@ -154,7 +158,7 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
   switch (GST_MESSAGE_TYPE (msg)) {
     case GST_MESSAGE_TAG: {
       GstTagList *tags;
-      MeloTags *mtags, *otags;
+      MeloTags *mtags;
       gchar *artist, *title;
 
       /* Get tag list from message */
@@ -178,7 +182,11 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
         melo_tags_set_cover_url (mtags, G_OBJECT (pradio), NULL, NULL);
 
       /* New title */
-      if (mtags->title) {
+      if (mtags->title && g_strcmp0 (priv->title, mtags->title)) {
+        /* Save new title */
+        g_free (priv->title);
+        priv->title = g_strdup (mtags->title);
+
         /* Split title */
         if (!mtags->artist) {
           /* Get title space */
@@ -280,6 +288,8 @@ melo_player_radio_play (MeloPlayer *player, const gchar *path,
     melo_tags_unref (priv->btags);
     priv->btags = NULL;
   }
+  g_free (priv->title);
+  priv->title = NULL;
   melo_player_status_unref (priv->status);
   melo_playlist_empty (player->playlist);
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);

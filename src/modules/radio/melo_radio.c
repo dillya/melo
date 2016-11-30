@@ -22,7 +22,7 @@
 #include "melo_radio.h"
 #include "melo_browser_radio.h"
 #include "melo_player_radio.h"
-#include "melo_playlist_radio.h"
+#include "melo_playlist_simple.h"
 
 /* Module radio info */
 static MeloModuleInfo melo_radio_info = {
@@ -87,11 +87,14 @@ melo_radio_init (MeloRadio *self)
   self->priv = priv;
   priv->radios = melo_browser_new (MELO_TYPE_BROWSER_RADIO, "radio_radios");
   priv->player = melo_player_new (MELO_TYPE_PLAYER_RADIO, "radio_player");
-  priv->playlist =
-                 melo_playlist_new (MELO_TYPE_PLAYLIST_RADIO, "radio_playlist");
+  priv->playlist = melo_playlist_new (MELO_TYPE_PLAYLIST_SIMPLE,
+                                      "radio_playlist");
 
   if (!priv->radios || !priv->player || !priv->player)
     return;
+
+  /* Setup playlist with cover URL override */
+  g_object_set (G_OBJECT (priv->playlist), "override-cover-url", TRUE, NULL);
 
   /* Register browser and player */
   melo_module_register_browser (MELO_MODULE (self), priv->radios);
