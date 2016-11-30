@@ -60,9 +60,8 @@ struct _MeloPlaylistClass {
                                  MeloTagsFields tags_fields);
   MeloTags *(*get_tags) (MeloPlaylist *playlist, const gchar *name,
                          MeloTagsFields fields);
-  gboolean (*add) (MeloPlaylist *playlist, const gchar *name,
-                   const gchar *full_name, const gchar *path, MeloTags *tags,
-                   gboolean is_current);
+  gboolean (*add) (MeloPlaylist *playlist, const gchar *path, const gchar *name,
+                   MeloTags *tags, gboolean is_current);
   gchar *(*get_prev) (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
                       gboolean set);
   gchar *(*get_next) (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
@@ -104,9 +103,9 @@ MeloPlaylistList *melo_playlist_get_list (MeloPlaylist *playlist,
                                           MeloTagsFields tags_fields);
 MeloTags *melo_playlist_get_tags (MeloPlaylist *playlist, const gchar *name,
                                   MeloTagsFields fields);
-gboolean melo_playlist_add (MeloPlaylist *playlist, const gchar *name,
-                            const gchar *full_name, const gchar *path,
-                            MeloTags *tags, gboolean is_current);
+gboolean melo_playlist_add (MeloPlaylist *playlist, const gchar *path,
+                            const gchar *name, MeloTags *tags,
+                            gboolean is_current);
 gchar *melo_playlist_get_prev (MeloPlaylist *playlist, gchar **name,
                                MeloTags **tags, gboolean set);
 gchar *melo_playlist_get_next (MeloPlaylist *playlist, gchar **name,

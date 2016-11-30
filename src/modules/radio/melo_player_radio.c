@@ -166,13 +166,6 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       /* Fill MeloTags with GstTagList */
       mtags = melo_tags_new_from_gst_tag_list (tags, MELO_TAGS_FIELDS_FULL);
 
-      /* Merge with old tags */
-      otags = melo_player_status_get_tags (priv->status);
-      if (otags) {
-        melo_tags_merge (mtags, otags);
-        melo_tags_unref (otags);
-      }
-
       /* Merge with browser tags */
       if (priv->btags)
         melo_tags_merge (mtags, priv->btags);
@@ -186,10 +179,6 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 
       /* New title */
       if (mtags->title) {
-        /* Add title to playlist */
-        melo_playlist_add (player->playlist, mtags->title, NULL, NULL, NULL,
-                           TRUE);
-
         /* Split title */
         if (!mtags->artist) {
           /* Get title space */
@@ -201,6 +190,9 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
             g_free (artist);
           }
         }
+
+        /* Add title to playlist */
+        melo_playlist_add (player->playlist, NULL, mtags->title, mtags, TRUE);
       }
 
       /* Unlock player mutex */

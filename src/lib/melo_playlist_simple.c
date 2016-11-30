@@ -32,9 +32,7 @@ static MeloTags *melo_playlist_simple_get_tags (MeloPlaylist *playlist,
                                                 const gchar *name,
                                                 MeloTagsFields fields);
 static gboolean melo_playlist_simple_add (MeloPlaylist *playlist,
-                                          const gchar *name,
-                                          const gchar *full_name,
-                                          const gchar *path,
+                                          const gchar *path, const gchar *name,
                                           MeloTags *tags, gboolean is_current);
 static gchar *melo_playlist_simple_get_prev (MeloPlaylist *playlist,
                                              gchar **name, MeloTags **tags,
@@ -184,9 +182,9 @@ melo_playlist_simple_get_tags (MeloPlaylist *playlist, const gchar *name,
 }
 
 static gboolean
-melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *name,
-                          const gchar *full_name, const gchar *path,
-                          MeloTags *tags, gboolean is_current)
+melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *path,
+                          const gchar *name, MeloTags *tags,
+                          gboolean is_current)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
@@ -197,9 +195,9 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *name,
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
-  /* Use full_name or path when name is not provided */
+  /* Use path when name is not provided */
   if (!name)
-    name = full_name ? full_name : path;
+    name = path;
 
   /* Generate a new name if current doesn't exists */
   len = strlen (name);
@@ -212,7 +210,7 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *name,
   }
 
   /* Add a new simple to playlist */
-  item = melo_playlist_item_new (NULL, full_name, path, tags);
+  item = melo_playlist_item_new (NULL, name, path, tags);
   item->name = final_name;
   item->can_play = TRUE;
   item->can_remove = TRUE;

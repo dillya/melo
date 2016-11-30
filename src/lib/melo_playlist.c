@@ -229,15 +229,14 @@ melo_playlist_get_tags (MeloPlaylist *playlist, const gchar *name,
 }
 
 gboolean
-melo_playlist_add (MeloPlaylist *playlist, const gchar *name,
-                   const gchar *full_name, const gchar *path,
+melo_playlist_add (MeloPlaylist *playlist, const gchar *path, const gchar *name,
                    MeloTags *tags, gboolean is_current)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->add, FALSE);
 
-  return pclass->add (playlist, name, full_name, path, tags, is_current);
+  return pclass->add (playlist, path, name, tags, is_current);
 }
 
 gchar *
