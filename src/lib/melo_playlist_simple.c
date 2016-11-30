@@ -49,11 +49,29 @@ static gboolean melo_playlist_simple_get_cover (MeloPlaylist *playlist,
                                                 const gchar *path,
                                                 GBytes **data, gchar **type);
 
+static void melo_playlist_simple_set_property (GObject *object,
+                                               guint property_id,
+                                               const GValue *value,
+                                                GParamSpec *pspec);
+static void melo_playlist_simple_get_property (GObject *object,
+                                               guint property_id, GValue *value,
+                                               GParamSpec *pspec);
+
+enum {
+  PROP_0,
+  PROP_PLAYABLE,
+  PROP_REMOVABLE,
+  PROP_OVERRIDE_COVER_URL,
+  PROP_LAST
+};
+
 struct _MeloPlaylistSimplePrivate {
   GMutex mutex;
   GList *playlist;
   GHashTable *names;
   GList *current;
+  gboolean playable;
+  gboolean removable;
   gboolean override_cover_url;
 };
 
@@ -98,6 +116,29 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
 
   /* Add custom finalize() function */
   oclass->finalize = melo_playlist_simple_finalize;
+  oclass->set_property = melo_playlist_simple_set_property;
+  oclass->get_property = melo_playlist_simple_get_property;
+
+  /* Install playable property */
+  g_object_class_install_property (oclass, PROP_PLAYABLE,
+      g_param_spec_boolean ("playable", "Playable",
+                           "Playlist element can be played", FALSE,
+                            G_PARAM_READWRITE | G_PARAM_STATIC_NAME |
+                            G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB));
+
+  /* Install removable property */
+  g_object_class_install_property (oclass, PROP_REMOVABLE,
+      g_param_spec_boolean ("removable", "Removable",
+                           "Playlist element can be removed", FALSE,
+                            G_PARAM_READWRITE | G_PARAM_STATIC_NAME |
+                            G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB));
+
+  /* Install override cover URL property */
+  g_object_class_install_property (oclass, PROP_OVERRIDE_COVER_URL,
+      g_param_spec_boolean ("override-cover-url", "Override cover URL",
+                           "Override cover URL in MeloTags at add", FALSE,
+                            G_PARAM_READWRITE | G_PARAM_STATIC_NAME |
+                            G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB));
 }
 
 static void
@@ -117,11 +158,49 @@ melo_playlist_simple_init (MeloPlaylistSimple *self)
   priv->names = g_hash_table_new (g_str_hash, g_str_equal);
 }
 
-void
-melo_playlist_simple_override_cover_url (MeloPlaylistSimple *plsimple,
-                                         gboolean override_url)
+static void
+melo_playlist_simple_set_property (GObject *object, guint property_id,
+                                   const GValue *value, GParamSpec *pspec)
 {
-  plsimple->priv->override_cover_url = override_url;
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (object);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+
+  switch (property_id) {
+    case PROP_PLAYABLE:
+      priv->playable = g_value_get_boolean (value);
+      break;
+    case PROP_REMOVABLE:
+      priv->removable = g_value_get_boolean (value);
+      break;
+    case PROP_OVERRIDE_COVER_URL:
+      priv->override_cover_url = g_value_get_boolean (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+  }
+}
+
+static void
+melo_playlist_simple_get_property (GObject *object, guint property_id,
+                                   GValue *value, GParamSpec *pspec)
+{
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (object);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+
+  switch (property_id) {
+    case PROP_PLAYABLE:
+      g_value_set_boolean (value, priv->playable);
+      break;
+    case PROP_REMOVABLE:
+      g_value_set_boolean (value, priv->removable);
+      break;
+    case PROP_OVERRIDE_COVER_URL:
+      g_value_set_boolean (value, priv->override_cover_url);
+      break;
+
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+  }
 }
 
 static MeloPlaylistList *
@@ -206,14 +285,15 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *path,
     g_snprintf (final_name + len, MELO_PLAYLIST_SIMPLE_NAME_EXT_SIZE, "_%d", i);
   if (i < 0) {
     g_mutex_unlock (&priv->mutex);
+    g_free (final_name);
     return FALSE;
   }
 
   /* Add a new simple to playlist */
   item = melo_playlist_item_new (NULL, name, path, tags);
   item->name = final_name;
-  item->can_play = TRUE;
-  item->can_remove = TRUE;
+  item->can_play = priv->playable;
+  item->can_remove = priv->removable;
   priv->playlist = g_list_prepend (priv->playlist, item);
   g_hash_table_insert (priv->names, final_name, priv->playlist);
 
@@ -298,6 +378,10 @@ melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
   MeloPlaylistItem *item = NULL;
   GList *element;
 
+  /* Cannot be played */
+  if (!priv->playable)
+    return FALSE;
+
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
@@ -332,6 +416,10 @@ melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
   MeloPlaylistItem *item;
   GList *element;
+
+  /* Cannot be removed */
+  if (!priv->removable)
+    return FALSE;
 
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
