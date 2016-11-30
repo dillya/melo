@@ -44,6 +44,7 @@ static gboolean melo_playlist_simple_play (MeloPlaylist *playlist,
                                            const gchar *name);
 static gboolean melo_playlist_simple_remove (MeloPlaylist *playlist,
                                              const gchar *name);
+static void melo_playlist_simple_empty (MeloPlaylist *playlist);
 
 static gboolean melo_playlist_simple_get_cover (MeloPlaylist *playlist,
                                                 const gchar *path,
@@ -111,6 +112,7 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   plclass->get_next = melo_playlist_simple_get_next;
   plclass->play = melo_playlist_simple_play;
   plclass->remove = melo_playlist_simple_remove;
+  plclass->empty = melo_playlist_simple_empty;
 
   plclass->get_cover = melo_playlist_simple_get_cover;
 
@@ -447,6 +449,24 @@ melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
   g_mutex_unlock (&priv->mutex);
 
   return TRUE;
+}
+
+static void
+melo_playlist_simple_empty (MeloPlaylist *playlist)
+{
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Remove and free all items */
+  g_list_free_full (priv->playlist, (GDestroyNotify) melo_playlist_item_unref);
+  g_hash_table_remove_all (priv->names);
+  priv->playlist = NULL;
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
 }
 
 static gboolean
