@@ -101,6 +101,10 @@ melo_file_init (MeloFile *self)
   if (!priv->files || !priv->player || !priv->player)
     return;
 
+  /* Setup playlist */
+  g_object_set (G_OBJECT (priv->playlist), "playable", TRUE, "removable", TRUE,
+                 NULL);
+
   /* Register browser and player */
   melo_module_register_browser (MELO_MODULE (self), priv->files);
   melo_module_register_player (MELO_MODULE (self), priv->player);
