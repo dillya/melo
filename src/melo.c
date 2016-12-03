@@ -64,7 +64,9 @@ main (int argc, char *argv[])
 {
   /* Command line opetions */
   gboolean verbose = FALSE;
+  gboolean daemonize = FALSE;
   GOptionEntry options[] = {
+    {"daemon", 'd', 0, G_OPTION_ARG_NONE, &daemonize, "Run as daemon", NULL},
     {"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Be verbose", NULL},
     {NULL}
   };
@@ -98,6 +100,10 @@ main (int argc, char *argv[])
 
   /* Free option context */
   g_option_context_free (ctx);
+
+  /* Daemonize */
+  if (daemonize && daemon (1, 0))
+      return -1;
 
   /* Load configuration */
   config = melo_config_main_new ();
