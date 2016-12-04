@@ -36,10 +36,12 @@ static gboolean melo_player_file_next (MeloPlayer *player);
 static MeloPlayerState melo_player_file_set_state (MeloPlayer *player,
                                                    MeloPlayerState state);
 static gint melo_player_file_set_pos (MeloPlayer *player, gint pos);
+static gdouble melo_player_file_set_volume (MeloPlayer *player, gdouble volume);
 
 static MeloPlayerState melo_player_file_get_state (MeloPlayer *player);
 static gchar *melo_player_file_get_name (MeloPlayer *player);
 static gint melo_player_file_get_pos (MeloPlayer *player, gint *duration);
+static gdouble melo_player_file_get_volume (MeloPlayer *player);
 static MeloPlayerStatus *melo_player_file_get_status (MeloPlayer *player);
 static gboolean melo_player_file_get_cover (MeloPlayer *player, GBytes **data,
                                             gchar **type);
@@ -54,6 +56,7 @@ struct _MeloPlayerFilePrivate {
   /* Gstreamer pipeline */
   GstElement *pipeline;
   GstElement *src;
+  GstElement *vol;
   guint bus_watch_id;
 };
 
@@ -98,11 +101,13 @@ melo_player_file_class_init (MeloPlayerFileClass *klass)
   pclass->prev = melo_player_file_prev;
   pclass->next = melo_player_file_next;
   pclass->set_pos = melo_player_file_set_pos;
+  pclass->set_volume = melo_player_file_set_volume;
 
   /* Status */
   pclass->get_state = melo_player_file_get_state;
   pclass->get_name = melo_player_file_get_name;
   pclass->get_pos = melo_player_file_get_pos;
+  pclass->get_volume = melo_player_file_get_volume;
   pclass->get_status = melo_player_file_get_status;
   pclass->get_cover = melo_player_file_get_cover;
 
@@ -125,18 +130,21 @@ melo_player_file_init (MeloPlayerFile *self)
 
   /* Create new status handler */
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
+  priv->status->volume = 1.0;
 
   /* Create pipeline */
   priv->pipeline = gst_pipeline_new ("file_player_pipeline");
   priv->src = gst_element_factory_make ("uridecodebin",
                                         "file_player_uridecodebin");
+  priv->vol = gst_element_factory_make ("volume", "file_player_volume");
   sink = gst_element_factory_make ("autoaudiosink",
                                    "file_player_autoaudiosink");
-  gst_bin_add_many (GST_BIN (priv->pipeline), priv->src, sink, NULL);
+  gst_bin_add_many (GST_BIN (priv->pipeline), priv->src, priv->vol, sink, NULL);
+  gst_element_link (priv->vol, sink);
 
   /* Add signal handler on new pad */
   g_signal_connect(priv->src, "pad-added",
-                   G_CALLBACK (pad_added_handler), sink);
+                   G_CALLBACK (pad_added_handler), priv->vol);
 
   /* Add a message handler */
   bus = gst_pipeline_get_bus (GST_PIPELINE (priv->pipeline));
@@ -307,6 +315,7 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
     name = _name;
   }
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
+  g_object_get (priv->vol, "volume", &priv->status->volume, NULL);
   if (tags)
     melo_player_status_set_tags (priv->status, tags);
 
@@ -416,10 +425,42 @@ melo_player_file_set_pos (MeloPlayer *player, gint pos)
   return melo_player_file_get_pos (player, NULL);
 }
 
+static gdouble
+melo_player_file_set_volume (MeloPlayer *player, gdouble volume)
+{
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set volume */
+  priv->status->volume = volume;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  /* Set pipeline volume */
+  g_object_set (priv->vol, "volume", volume, NULL);
+
+  return volume;
+}
+
 static MeloPlayerState
 melo_player_file_get_state (MeloPlayer *player)
 {
-  return (MELO_PLAYER_FILE (player))->priv->status->state;
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  MeloPlayerState state;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get state */
+  state = priv->status->state;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return state;
 }
 
 static gchar *
@@ -446,15 +487,39 @@ melo_player_file_get_pos (MeloPlayer *player, gint *duration)
   MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
   gint64 pos;
 
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
   /* Get duration */
   if (duration)
     *duration = priv->status->duration;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
 
   /* Get length */
   if (!gst_element_query_position (priv->pipeline, GST_FORMAT_TIME, &pos))
     pos = 0;
 
   return pos / 1000000;
+}
+
+static gdouble
+melo_player_file_get_volume (MeloPlayer *player)
+{
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gdouble volume;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get duration */
+  volume = priv->status->volume;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return volume;
 }
 
 static MeloPlayerStatus *
@@ -468,10 +533,12 @@ melo_player_file_get_status (MeloPlayer *player)
 
   /* Copy status */
   status = melo_player_status_ref (priv->status);
-  status->pos = melo_player_file_get_pos (player, NULL);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
+
+  /* Update position */
+  status->pos = melo_player_file_get_pos (player, NULL);
 
   return status;
 }
