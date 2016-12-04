@@ -506,9 +506,12 @@ function melo_add_players(id, name) {
                             ' [<a href="#">refresh</a>]</p>');
       var stat = $('<p>' +
                      '<div>' +
-                        '<img class="player_cover" src="" alt="cover">' +
-                        '<div class="player_pos">' +
+                        '<img class="player_cover" src="" alt="cover"><br>' +
+                        'pos: <div class="player_pos">' +
                            '<div class="player_cursor"></div>' +
+                        '</div>' +
+                        'vol: <div class="player_volume">' +
+                           '<div class="player_volume_cursor"></div>' +
                         '</div>' +
                         '<a class="playlist" href="#">Playlist &gt;</a><br>' +
                         '<a class="prev" href="#">&lt; Previous</a> | ' +
@@ -607,6 +610,17 @@ function melo_update_player(play) {
       return false;
     });
 
+    /* Set width of player volume */
+    player.find("div.player_volume_cursor").width((s.volume * 100) + "%");
+
+    /* Add action for volume control */
+    player.children("div.player_volume").unbind().click([id], function(e) {
+      var vol = (e.pageX - $(this).offset().left) / $(this).width();
+      melo_player_set_volume(e.data[0], vol);
+      $(this).children("div.player_volume_cursor").width((vol * 100) + "%");
+      return false;
+    });
+
     /* Add link to play / pause */
     player.find("a.play_pause").unbind().click([id, ns, play], function(e) {
       melo_set_player_state(e.data[0], e.data[1], e.data[2]);
@@ -688,6 +702,14 @@ function melo_player_action(action, id, play) {
 function melo_player_seek(id, pos) {
   jsonrpc_call("player.set_pos", JSON.parse('["' + id + '",' + pos + ']'), null,
                function(response, data) {
+    if (response.error || !response.result)
+      return;
+  });
+}
+
+function melo_player_set_volume(id, vol) {
+  jsonrpc_call("player.set_volume", JSON.parse('["' + id + '",' + vol + ']'),
+               null, function(response, data) {
     if (response.error || !response.result)
       return;
   });
