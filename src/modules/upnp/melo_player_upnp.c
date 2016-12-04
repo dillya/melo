@@ -26,10 +26,12 @@
 static MeloPlayerState melo_player_upnp_set_state (MeloPlayer *player,
                                                    MeloPlayerState state);
 static gint melo_player_upnp_set_pos (MeloPlayer *player, gint pos);
+static gdouble melo_player_upnp_set_volume (MeloPlayer *player, gdouble volume);
 
 static MeloPlayerState melo_player_upnp_get_state (MeloPlayer *player);
 static gchar *melo_player_upnp_get_name (MeloPlayer *player);
 static gint melo_player_upnp_get_pos (MeloPlayer *player, gint *duration);
+static gdouble melo_player_upnp_get_volume (MeloPlayer *player);
 static MeloPlayerStatus *melo_player_upnp_get_status (MeloPlayer *player);
 static gboolean melo_player_upnp_get_cover (MeloPlayer *player, GBytes **data,
                                             gchar **type);
@@ -96,11 +98,13 @@ melo_player_upnp_class_init (MeloPlayerUpnpClass *klass)
   /* Control */
   pclass->set_state = melo_player_upnp_set_state;
   pclass->set_pos = melo_player_upnp_set_pos;
+  pclass->set_volume = melo_player_upnp_set_volume;
 
   /* Status */
   pclass->get_state = melo_player_upnp_get_state;
   pclass->get_name = melo_player_upnp_get_name;
   pclass->get_pos = melo_player_upnp_get_pos;
+  pclass->get_volume = melo_player_upnp_get_volume;
   pclass->get_status = melo_player_upnp_get_status;
   pclass->get_cover = melo_player_upnp_get_cover;
 
@@ -190,10 +194,40 @@ melo_player_upnp_set_pos (MeloPlayer *player, gint pos)
  return pos;
 }
 
+static gdouble
+melo_player_upnp_set_volume (MeloPlayer *player, gdouble volume)
+{
+  MeloPlayerUpnpPrivate *priv = (MELO_PLAYER_UPNP (player))->priv;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->player_mutex);
+
+  /* Get volume */
+  if (priv->player)
+    rygel_media_player_set_volume (priv->player, volume);
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->player_mutex);
+
+  return volume;
+}
+
 static MeloPlayerState
 melo_player_upnp_get_state (MeloPlayer *player)
 {
-  return (MELO_PLAYER_UPNP (player))->priv->status->state;
+  MeloPlayerUpnpPrivate *priv = (MELO_PLAYER_UPNP (player))->priv;
+  MeloPlayerState state;
+
+  /* Lock status mutex */
+  g_mutex_lock (&priv->status_mutex);
+
+  /* Get state */
+  state = priv->status->state;
+
+  /* Unlock status mutex */
+  g_mutex_unlock (&priv->status_mutex);
+
+  return state;
 }
 
 static gchar *
@@ -202,13 +236,13 @@ melo_player_upnp_get_name (MeloPlayer *player)
   MeloPlayerUpnpPrivate *priv = (MELO_PLAYER_UPNP (player))->priv;
   gchar *name = NULL;
 
-  /* Lock player mutex */
+  /* Lock status mutex */
   g_mutex_lock (&priv->status_mutex);
 
   /* Copy name */
   name = g_strdup (priv->status->name);
 
-  /* Unlock player mutex */
+  /* Unlock status mutex */
   g_mutex_unlock (&priv->status_mutex);
 
   return name;
@@ -220,9 +254,15 @@ melo_player_upnp_get_pos (MeloPlayer *player, gint *duration)
   MeloPlayerUpnpPrivate *priv = (MELO_PLAYER_UPNP (player))->priv;
   guint32 pos = 0;
 
+  /* Lock status mutex */
+  g_mutex_lock (&priv->status_mutex);
+
   /* Get duration */
   if (duration)
     *duration = priv->status->duration;
+
+  /* Unlock status mutex */
+  g_mutex_unlock (&priv->status_mutex);
 
   /* Lock player mutex */
   g_mutex_lock (&priv->player_mutex);
@@ -237,6 +277,25 @@ melo_player_upnp_get_pos (MeloPlayer *player, gint *duration)
   return pos / 1000;
 }
 
+static gdouble
+melo_player_upnp_get_volume (MeloPlayer *player)
+{
+  MeloPlayerUpnpPrivate *priv = (MELO_PLAYER_UPNP (player))->priv;
+  gdouble volume;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->player_mutex);
+
+  /* Get volume */
+  if (priv->player)
+    volume = rygel_media_player_get_volume (priv->player);
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->player_mutex);
+
+  return volume;
+}
+
 static MeloPlayerStatus *
 melo_player_upnp_get_status (MeloPlayer *player)
 {
@@ -248,10 +307,13 @@ melo_player_upnp_get_status (MeloPlayer *player)
 
   /* Copy status */
   status = melo_player_status_ref (priv->status);
-  status->pos = melo_player_upnp_get_pos (player, NULL);
+  status->volume = melo_player_upnp_get_volume (player);
 
   /* Unlock status mutex */
   g_mutex_unlock (&priv->status_mutex);
+
+  /* Update position */
+  status->pos = melo_player_upnp_get_pos (player, NULL);
 
   return status;
 }
