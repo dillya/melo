@@ -34,10 +34,13 @@ static gboolean melo_player_radio_play (MeloPlayer *player, const gchar *path,
 static MeloPlayerState melo_player_radio_set_state (MeloPlayer *player,
                                                    MeloPlayerState state);
 static gint melo_player_radio_set_pos (MeloPlayer *player, gint pos);
+static gdouble melo_player_radio_set_volume (MeloPlayer *player,
+                                             gdouble volume);
 
 static MeloPlayerState melo_player_radio_get_state (MeloPlayer *player);
 static gchar *melo_player_radio_get_name (MeloPlayer *player);
 static gint melo_player_radio_get_pos (MeloPlayer *player, gint *duration);
+static gdouble melo_player_radio_get_volume (MeloPlayer *player);
 static MeloPlayerStatus *melo_player_radio_get_status (MeloPlayer *player);
 static gboolean melo_player_radio_get_cover (MeloPlayer *player, GBytes **data,
                                              gchar **type);
@@ -49,6 +52,7 @@ struct _MeloPlayerRadioPrivate {
   /* Gstreamer pipeline */
   GstElement *pipeline;
   GstElement *src;
+  GstElement *vol;
   guint bus_watch_id;
   gchar *title;
 
@@ -101,11 +105,13 @@ melo_player_radio_class_init (MeloPlayerRadioClass *klass)
   pclass->play = melo_player_radio_play;
   pclass->set_state = melo_player_radio_set_state;
   pclass->set_pos = melo_player_radio_set_pos;
+  pclass->set_volume = melo_player_radio_set_volume;
 
   /* Status */
   pclass->get_state = melo_player_radio_get_state;
   pclass->get_name = melo_player_radio_get_name;
   pclass->get_pos = melo_player_radio_get_pos;
+  pclass->get_volume = melo_player_radio_get_volume;
   pclass->get_status = melo_player_radio_get_status;
   pclass->get_cover = melo_player_radio_get_cover;
 
@@ -127,18 +133,21 @@ melo_player_radio_init (MeloPlayerRadio *self)
 
   /* Create new status handler */
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
+  priv->status->volume = 1.0;
 
   /* Create pipeline */
   priv->pipeline = gst_pipeline_new ("radio_player_pipeline");
   priv->src = gst_element_factory_make ("uridecodebin",
                                         "radio_player_uridecodebin");
+  priv->vol = gst_element_factory_make ("volume", "radio_player_volume");
   sink = gst_element_factory_make ("autoaudiosink",
                                    "radio_player_autoaudiosink");
-  gst_bin_add_many (GST_BIN (priv->pipeline), priv->src, sink, NULL);
+  gst_bin_add_many (GST_BIN (priv->pipeline), priv->src, priv->vol, sink, NULL);
+  gst_element_link (priv->vol, sink);
 
   /* Add signal handler on new pad */
   g_signal_connect(priv->src, "pad-added",
-                   G_CALLBACK (pad_added_handler), sink);
+                   G_CALLBACK (pad_added_handler), priv->vol);
 
   /* Add a message handler */
   bus = gst_pipeline_get_bus (GST_PIPELINE (priv->pipeline));
@@ -293,6 +302,7 @@ melo_player_radio_play (MeloPlayer *player, const gchar *path,
   melo_player_status_unref (priv->status);
   melo_playlist_empty (player->playlist);
   priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
+  g_object_get (priv->vol, "volume", &priv->status->volume, NULL);
   if (tags) {
     priv->btags = melo_tags_ref (tags);
     melo_player_status_set_tags (priv->status, tags);
@@ -342,10 +352,42 @@ melo_player_radio_set_pos (MeloPlayer *player, gint pos)
   return -1;
 }
 
+static gdouble
+melo_player_radio_set_volume (MeloPlayer *player, gdouble volume)
+{
+  MeloPlayerRadioPrivate *priv = (MELO_PLAYER_RADIO (player))->priv;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set volume */
+  priv->status->volume = volume;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  /* Set pipeline volume */
+  g_object_set (priv->vol, "volume", volume, NULL);
+
+  return volume;
+}
+
 static MeloPlayerState
 melo_player_radio_get_state (MeloPlayer *player)
 {
-  return (MELO_PLAYER_RADIO (player))->priv->status->state;
+  MeloPlayerRadioPrivate *priv = (MELO_PLAYER_RADIO (player))->priv;
+  MeloPlayerState state;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get state */
+  state = priv->status->state;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return state;
 }
 
 static gchar *
@@ -372,15 +414,39 @@ melo_player_radio_get_pos (MeloPlayer *player, gint *duration)
   MeloPlayerRadioPrivate *priv = (MELO_PLAYER_RADIO (player))->priv;
   gint64 pos;
 
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
   /* Get duration */
   if (duration)
     *duration = priv->status->duration;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
 
   /* Get length */
   if (!gst_element_query_position (priv->src, GST_FORMAT_TIME, &pos))
     pos = 0;
 
   return pos / 1000000;
+}
+
+static gdouble
+melo_player_radio_get_volume (MeloPlayer *player)
+{
+  MeloPlayerRadioPrivate *priv = (MELO_PLAYER_RADIO (player))->priv;
+  gdouble volume;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get duration */
+  volume = priv->status->volume;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return volume;
 }
 
 static MeloPlayerStatus *
@@ -394,10 +460,12 @@ melo_player_radio_get_status (MeloPlayer *player)
 
   /* Copy status */
   status = melo_player_status_ref (priv->status);
-  status->pos = melo_player_radio_get_pos (player, NULL);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
+
+  /* Update position */
+  status->pos = melo_player_radio_get_pos (player, NULL);
 
   return status;
 }
