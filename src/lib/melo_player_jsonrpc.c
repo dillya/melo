@@ -27,7 +27,8 @@ typedef enum {
   MELO_PLAYER_JSONRPC_FIELDS_NAME = 2,
   MELO_PLAYER_JSONRPC_FIELDS_POS = 4,
   MELO_PLAYER_JSONRPC_FIELDS_DURATION = 8,
-  MELO_PLAYER_JSONRPC_FIELDS_TAGS = 16,
+  MELO_PLAYER_JSONRPC_FIELDS_VOLUME = 16,
+  MELO_PLAYER_JSONRPC_FIELDS_TAGS = 32,
 
   MELO_PLAYER_JSONRPC_FIELDS_FULL = ~0,
 } MeloPlayerJSONRPCFields;
@@ -138,6 +139,8 @@ melo_player_jsonrpc_get_fields (JsonObject *obj)
       fields |= MELO_PLAYER_JSONRPC_FIELDS_POS;
     else if (!g_strcmp0 (field, "duration"))
       fields |= MELO_PLAYER_JSONRPC_FIELDS_DURATION;
+    else if (!g_strcmp0 (field, "volume"))
+      fields |= MELO_PLAYER_JSONRPC_FIELDS_VOLUME;
     else if (!g_strcmp0 (field, "tags"))
       fields |= MELO_PLAYER_JSONRPC_FIELDS_TAGS;
   }
@@ -164,6 +167,8 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
     json_object_set_int_member (obj, "pos", status->pos);
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_DURATION)
     json_object_set_int_member (obj, "duration", status->duration);
+  if (fields & MELO_PLAYER_JSONRPC_FIELDS_VOLUME)
+    json_object_set_double_member (obj, "volume", status->volume);
   if (fields & MELO_PLAYER_JSONRPC_FIELDS_TAGS) {
     MeloTags *tags;
 
@@ -301,6 +306,45 @@ melo_player_jsonrpc_set_pos (const gchar *method,
 }
 
 static void
+melo_player_jsonrpc_set_volume (const gchar *method,
+                                JsonArray *s_params, JsonNode *params,
+                                JsonNode **result, JsonNode **error,
+                                gpointer user_data)
+{
+  MeloPlayer *play;
+  JsonObject *obj;
+  gdouble volume;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get player from id */
+  play = melo_player_jsonrpc_get_player (obj, error);
+  if (!play) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get requested position */
+  volume = json_object_get_double_member (obj, "volume");
+  json_object_unref (obj);
+
+  /* Set new position */
+  volume = melo_player_set_volume (play, volume);
+  g_object_unref (play);
+
+  /* Create and fill object */
+  obj = json_object_new ();
+  json_object_set_double_member (obj, "volume", volume);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
+static void
 melo_player_jsonrpc_get_status (const gchar *method,
                                 JsonArray *s_params, JsonNode *params,
                                 JsonNode **result, JsonNode **error,
@@ -428,6 +472,16 @@ static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_player_jsonrpc_set_pos,
+    .user_data = NULL,
+  },
+  {
+    .method = "set_volume",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"volume\", \"type\": \"double\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_player_jsonrpc_set_volume,
     .user_data = NULL,
   },
   {

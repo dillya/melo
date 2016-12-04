@@ -299,6 +299,16 @@ melo_player_set_pos (MeloPlayer *player, gint pos)
   return pclass->set_pos (player, pos);
 }
 
+gdouble
+melo_player_set_volume (MeloPlayer *player, gdouble volume)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->set_volume, 0);
+
+  return pclass->set_volume (player, volume);
+}
+
 MeloPlayerState
 melo_player_get_state (MeloPlayer *player)
 {
@@ -331,6 +341,16 @@ melo_player_get_pos (MeloPlayer *player, gint *duration)
   }
 
   return pclass->get_pos (player, duration);
+}
+
+gdouble
+melo_player_get_volume (MeloPlayer *player)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->get_volume, 0);
+
+  return pclass->get_volume (player);
 }
 
 MeloPlayerStatus *

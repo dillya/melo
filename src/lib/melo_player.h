@@ -79,11 +79,13 @@ struct _MeloPlayerClass {
   gboolean (*prev) (MeloPlayer *player);
   gboolean (*next) (MeloPlayer *player);
   gint (*set_pos) (MeloPlayer *player, gint pos);
+  gdouble (*set_volume) (MeloPlayer *player, gdouble volume);
 
   /* Status callbacks */
   MeloPlayerState (*get_state) (MeloPlayer *player);
   gchar *(*get_name) (MeloPlayer *player);
   gint (*get_pos) (MeloPlayer *player, gint *duration);
+  gdouble (*get_volume) (MeloPlayer *player);
   MeloPlayerStatus *(*get_status) (MeloPlayer *player);
   gboolean (*get_cover) (MeloPlayer *player, GBytes **cover, gchar **type);
 };
@@ -98,6 +100,7 @@ struct _MeloPlayerStatus {
   gchar *name;
   gint pos;
   gint duration;
+  gdouble volume;
 
   /*< private >*/
   MeloPlayerStatusPrivate *priv;
@@ -124,11 +127,13 @@ MeloPlayerState melo_player_set_state (MeloPlayer *player,
 gboolean melo_player_prev (MeloPlayer *player);
 gboolean melo_player_next (MeloPlayer *player);
 gint melo_player_set_pos (MeloPlayer *player, gint pos);
+gdouble melo_player_set_volume (MeloPlayer *player, gdouble volume);
 
 /* Player status */
 MeloPlayerState melo_player_get_state (MeloPlayer *player);
 gchar *melo_player_get_name (MeloPlayer *player);
 gint melo_player_get_pos (MeloPlayer *player, gint *duration);
+gdouble melo_player_get_volume (MeloPlayer *player);
 MeloPlayerStatus *melo_player_get_status (MeloPlayer *player);
 gboolean melo_player_get_cover (MeloPlayer *player, GBytes **cover,
                                 gchar **type);
