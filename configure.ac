@@ -27,94 +27,100 @@ LT_INIT([disable-static])
 dnl Check for header files
 AC_HEADER_STDC
 
-dnl Check for GLib
+dnl Library requirements
 GLIB_REQ=2.40.0
-PKG_CHECK_MODULES([GLIB],
-  glib-2.0 >= $GLIB_REQ gobject-2.0 gmodule-no-export-2.0, [],
-  [
-    AC_MSG_ERROR(GLib $GLIB_REQ or later is required)
-  ])
-
-dnl Check for LibSoup
-SOUP_REQ=2.40.0
-PKG_CHECK_MODULES([LIBSOUP],
-  libsoup-2.4 >= $SOUP_REQ, [],
-  [
-    AC_MSG_ERROR(LibSoup $SOUP_REQ or later is required)
-  ])
-
-dnl Check for Json-glib
 JSON_GLIB_REQ=1.0.2
-PKG_CHECK_MODULES([LIBJSON_GLIB],
-  json-glib-1.0 >= $JSON_GLIB_REQ, [],
-  [
-    AC_MSG_ERROR(Libjson-glib $JSON_GLIB_REQ or later is required)
-  ])
-
-dnl Check for Gstreamer
-GST_REQ=1.4.4
-PKG_CHECK_MODULES([GST],
-  gstreamer-1.0 >= $GST_REQ, [],
-  [
-    AC_MSG_ERROR(Gstreamer $GST_REQ or later is required)
-  ])
-
-dnl Check for Gstreamer tag
-PKG_CHECK_MODULES([GST_TAG],
-  gstreamer-tag-1.0 >= $GST_REQ, [],
-  [
-    AC_MSG_ERROR(Gstreamer-tag $GST_REQ or later is required)
-  ])
-
-dnl Check for Gstreamer Base Utils
-PKG_CHECK_MODULES([GST_PBUTILS],
-  gstreamer-pbutils-1.0 >= $GST_REQ, [],
-  [
-    AC_MSG_ERROR(Gstreamer-pbutils $GST_REQ or later is required)
-  ])
-
-dnl Check for Avahi gobject
+GSTREAMER_REQ=1.4.4
 AVAHI_GOBJECT_REQ=0.6.31
-PKG_CHECK_MODULES([AVAHI_GOBJECT],
-  avahi-gobject >= $AVAHI_GOBJECT_REQ, [],
-  [
-    AC_MSG_ERROR(Avahi-gobject $AVAHI_OBJECT_REQ or later is required)
-  ])
 
-dnl Check for SQLite3
-SQLITE_REQ=3.6.19
-PKG_CHECK_MODULES([SQLITE],
-  sqlite3 >= $SQLITE_REQ, [],
-  [
-    AC_MSG_ERROR(SQLite3 $SQLITE_REQ or later is required)
-  ])
+dnl Check library dependencies
+PKG_CHECK_MODULES([LIBMELO_DEPS],
+  glib-2.0 >= $GLIB_REQ
+  gobject-2.0
+  gmodule-no-export-2.0
+  json-glib-1.0 >= $JSON_GLIB_REQ
+  gstreamer-1.0 >= $GSTREAMER_REQ
+  gstreamer-tag-1.0 >= $GSTREAMER_REQ
+  gstreamer-pbutils-1.0 >= $GSTREAMER_REQ
+  avahi-gobject >= $AVAHI_GOBJECT_REQ)
 
-dnl Check for Rygel renderer
-AC_ARG_WITH([rygel_2.6],
-  AS_HELP_STRING([--with-rygel-2.6],[Use Rygel 2.6 instead of 2.4]),
-  [RYGEL_VERSION=2.6],[RYGEL_VERSION=2.4]
-)
-PKG_CHECK_MODULES([RYGEL],
-  rygel-renderer-gst-$RYGEL_VERSION, [],
-  [
-    AC_MSG_ERROR(Rygel renderer is required)
-  ])
+dnl disable modules if not needed
+AC_ARG_ENABLE([melo],
+  AS_HELP_STRING([--disable-melo],[Disable Melo program]),
+  enable_melo=no, enable_melo=yes)
+AC_ARG_ENABLE([module-file],
+  AS_HELP_STRING([--disable-module-file],[Disable File module]),
+  enable_module_file=no, enable_module_file=yes)
+AC_ARG_ENABLE([module-radio],
+  AS_HELP_STRING([--disable-module-radio],[Disable Radio module]),
+  enable_module_radio=no, enable_module_radio=yes)
+AC_ARG_ENABLE([module-upnp],
+  AS_HELP_STRING([--disable-module-upnp],[Disable UPnP module]),
+  enable_module_upnp=no, enable_module_upnp=yes)
 
-dnl Generate CFLAGS and LIBS for libraries
-MELO_ALL_CFLAGS="-I\$(top_srcdir)/src/lib \$(GLIB_CFLAGS) \$(GST_CFLAGS) \$(GST_TAG_CFLAGS) \$(GST_PBUTILS_CFLAGS) \$(AVAHI_GOBJECT_CFLAGS) \$(LIBJSON_GLIB_CFLAGS)"
-MELO_ALL_LIBS="\$(GLIB_LIBS) \$(GST_LIBS) \$(GST_TAG_LIBS) \$(GST_PBUTILS_LIBS) \$(AVAHI_GOBJECT_LIBS) \$(LIBJSON_GLIB_LIBS)"
-AC_SUBST(MELO_ALL_CFLAGS)
-AC_SUBST(MELO_ALL_LIBS)
+dnl Check for melo dependencies
+if test "x$enable_melo" = "xyes"; then
+  MELO_LIBSOUP_REQ=2.40.0
+  PKG_CHECK_MODULES([MELO_DEPS],
+    libsoup-2.4 >= $MELO_LIBSOUP_REQ,
+    [enable_melo=yes])
+fi
+
+dnl Check for File module dependencies
+if test "x$enable_module_file" = "xyes"; then
+  MELO_MODULE_FILE_SQLITE3_REQ=3.6.19
+  PKG_CHECK_MODULES([MELO_MODULE_FILE_DEPS],
+    sqlite3 >= $MELO_MODULE_FILE_SQLITE3_REQ,
+    [enable_module_file=yes])
+  AC_DEFINE([HAVE_MELO_MODULE_FILE], 1, [Use File module])
+fi
+
+dnl Check for Radio module dependencies
+if test "x$enable_module_radio" = "xyes"; then
+  MELO_MODULE_RADIO_LIBSOUP_REQ=2.40.0
+  PKG_CHECK_MODULES([MELO_MODULE_RADIO_DEPS],
+    libsoup-2.4 >= $MELO_MODULE_RADIO_LIBSOUP_REQ,
+    [enable_module_radio=yes])
+  AC_DEFINE([HAVE_MELO_MODULE_RADIO], 1, [Use Radio module])
+fi
+
+dnl Check for UPnP module dependencies
+if test "x$enable_module_upnp" = "xyes"; then
+  MELO_MODULE_UPNP_GUPNP_REQ=0.20.12
+  MELO_MODULE_UPNP_LIBSOUP_REQ=2.40.0
+  AC_ARG_WITH([rygel_2.6],
+    AS_HELP_STRING([--with-rygel-2.6],[Use Rygel 2.6 instead of 2.4]),
+    [MELO_MODULE_UPNP_RYGEL_VERSION=2.6],[MELO_MODULE_UPNP_RYGEL_VERSION=2.4]
+  )
+  PKG_CHECK_MODULES([MELO_MODULE_UPNP_DEPS],
+    gupnp-1.0 >= $MELO_MODULE_UPNP_GUPNP_REQ
+    libsoup-2.4 >= $MELO_MODULE_UPNP_LIBSOUP_REQ
+    rygel-renderer-gst-$MELO_MODULE_UPNP_RYGEL_VERSION,
+    [enable_module_upnp=yes])
+  AC_DEFINE([HAVE_MELO_MODULE_UPNP], 1, [Use UPnP module])
+fi
+
+dnl Build modules
+AM_CONDITIONAL([BUILD_MELO], [test "x$enable_melo" = "xyes"])
+AM_CONDITIONAL([BUILD_MODULE_FILE], [test "x$enable_module_file" = "xyes"])
+AM_CONDITIONAL([BUILD_MODULE_RADIO], [test "x$enable_module_radio" = "xyes"])
+AM_CONDITIONAL([BUILD_MODULE_UPNP], [test "x$enable_module_upnp" = "xyes"])
+
+dnl Generate CFLAGS and LIBS for Melo library
+LIBMELO_CFLAGS="-I\$(top_srcdir)/src/lib \$(LIBMELO_DEPS_CFLAGS)"
+LIBMELO_LIBS="\$(LIBMELO_DEPS_LIBS)"
+AC_SUBST(LIBMELO_CFLAGS)
+AC_SUBST(LIBMELO_LIBS)
 
 dnl Set Melo libraries directory
 melolibdir="\$(libdir)/melo"
 AC_SUBST(melolibdir)
 
 dnl Generate CFLAGS and LIBS for libmelo based programs
-MELO_LIB_CFLAGS="\$(MELO_ALL_CFLAGS)"
-MELO_LIB_LIBS="\$(top_builddir)/src/lib/libmelo.la \$(MELO_ALL_LIBS)"
-AC_SUBST(MELO_LIB_CFLAGS)
-AC_SUBST(MELO_LIB_LIBS)
+MELO_CFLAGS="\$(MELO_DEPS_CFLAGS)"
+MELO_LIBS="\$(top_builddir)/src/lib/libmelo.la \$(MELO_DEPS_LIBS)"
+AC_SUBST(MELO_CFLAGS)
+AC_SUBST(MELO_LIBS)
 
 AC_CONFIG_FILES(
 Makefile
@@ -129,3 +135,17 @@ tests/Makefile
 www/Makefile
 )
 AC_OUTPUT
+
+echo "
+   ${PACKAGE} - ${VERSION} configuration:
+
+   Built-in modules:
+   -----------------
+     file:      ${enable_module_file}
+     radio:     ${enable_module_radio}
+     upnp:      ${enable_module_upnp}
+
+   Melo program:
+   --------------
+     melo:      ${enable_melo}
+"

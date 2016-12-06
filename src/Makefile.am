@@ -3,7 +3,9 @@ SUBDIRS = \
 	modules
 
 # Main program
+if BUILD_MELO
 bin_PROGRAMS = melo
+endif
 
 melo_SOURCES = \
 	melo_httpd.c \
@@ -14,19 +16,24 @@ melo_SOURCES = \
 	melo.c
 
 melo_CFLAGS = \
-	$(MELO_LIB_CFLAGS) \
-	$(LIBSOUP_CFLAGS) \
+	$(MELO_CFLAGS) \
+	$(LIBMELO_CFLAGS) \
 	-DMELO_DATA_DIR=\"$(pkgdatadir)\"
 
 melo_LDADD = \
-	$(MELO_LIB_LIBS) \
-	$(LIBSOUP_LIBS)
+	$(MELO_LIBS) \
+	$(LIBMELO_LIBS)
 
 # Built in modules
-melo_LDADD += \
-	modules/file/libmelo_file.la \
-	modules/radio/libmelo_radio.la \
-	modules/upnp/libmelo_upnp.la
+if BUILD_MODULE_FILE
+melo_LDADD += modules/file/libmelo_file.la
+endif
+if BUILD_MODULE_RADIO
+melo_LDADD += modules/radio/libmelo_radio.la
+endif
+if BUILD_MODULE_UPNP
+melo_LDADD += modules/upnp/libmelo_upnp.la
+endif
 
 noinst_HEADERS = \
 	melo_config_main.h \

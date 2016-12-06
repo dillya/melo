@@ -1,4 +1,6 @@
+if BUILD_MODULE_UPNP
 melolib_LTLIBRARIES = libmelo_upnp.la
+endif
 
 # UPnP / DNLA module library
 libmelo_upnp_la_DEPENDENCIES = \
@@ -10,12 +12,12 @@ libmelo_upnp_la_SOURCES = \
 	melo_upnp.c
 
 libmelo_upnp_la_CFLAGS = \
-	$(RYGEL_CFLAGS) \
-	$(MELO_ALL_CFLAGS)
+	$(MELO_MODULE_UPNP_DEPS_CFLAGS) \
+	$(LIBMELO_CFLAGS)
 
 libmelo_upnp_la_LIBADD = \
-	$(RYGEL_LIBS) \
-	$(MELO_ALL_LIBS)
+	$(MELO_MODULE_UPNP_DEPS_LIBS) \
+	$(LIBMELO_LIBS)
 
 noinst_HEADERS = \
 	melo_upnp.h \

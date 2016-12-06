@@ -32,10 +32,6 @@
 #include "melo_plugin.h"
 #include "melo_config_main.h"
 
-#include "modules/file/melo_file.h"
-#include "modules/radio/melo_radio.h"
-#include "modules/upnp/melo_upnp.h"
-
 #include "melo_config_jsonrpc.h"
 #include "melo_module_jsonrpc.h"
 #include "melo_browser_jsonrpc.h"
@@ -44,6 +40,16 @@
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
+
+#if HAVE_MELO_MODULE_FILE
+#include "modules/file/melo_file.h"
+#endif
+#if HAVE_MELO_MODULE_RADIO
+#include "modules/radio/melo_radio.h"
+#endif
+#if HAVE_MELO_MODULE_UPNP
+#include "modules/upnp/melo_upnp.h"
 #endif
 
 #ifdef G_OS_UNIX
@@ -126,9 +132,15 @@ main (int argc, char *argv[])
   melo_playlist_register_methods ();
 
   /* Register built-in modules */
+#if HAVE_MELO_MODULE_FILE
   melo_module_register (MELO_TYPE_FILE, "file");
+#endif
+#if HAVE_MELO_MODULE_RADIO
   melo_module_register (MELO_TYPE_RADIO, "radio");
+#endif
+#if HAVE_MELO_MODULE_UPNP
   melo_module_register (MELO_TYPE_UPNP, "upnp");
+#endif
 
   /* Load plugins */
   melo_plugin_load_all (TRUE);
@@ -176,9 +188,15 @@ end:
   melo_plugin_unload_all ();
 
   /* Unregister built-in modules */
+#if HAVE_MELO_MODULE_UPNP
   melo_module_unregister ("upnp");
+#endif
+#if HAVE_MELO_MODULE_RADIO
   melo_module_unregister ("radio");
+#endif
+#if HAVE_MELO_MODULE_FILE
   melo_module_unregister ("file");
+#endif
 
   /* Unregister standard JSON-RPC methods */
   melo_playlist_unregister_methods ();

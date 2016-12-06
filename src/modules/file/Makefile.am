@@ -1,4 +1,6 @@
+if BUILD_MODULE_FILE
 melolib_LTLIBRARIES = libmelo_file.la
+endif
 
 # File module library
 libmelo_file_la_DEPENDENCIES = \
@@ -12,11 +14,11 @@ libmelo_file_la_SOURCES = \
 	melo_file.c
 
 libmelo_file_la_CFLAGS = \
-	$(SQLITE_CFLAGS) \
-	$(MELO_ALL_CFLAGS)
+	$(MELO_MODULE_FILE_DEPS_CFLAGS) \
+	$(LIBMELO_CFLAGS)
 libmelo_file_la_LIBADD = \
-	$(SQLITE_LIBS) \
-	$(MELO_ALL_LIBS)
+	$(MELO_MODULE_FILE_DEPS_LIBS) \
+	$(LIBMELO_LIBS)
 
 noinst_HEADERS = \
 	melo_file.h \
