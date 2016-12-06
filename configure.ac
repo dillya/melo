@@ -90,8 +90,12 @@ PKG_CHECK_MODULES([SQLITE],
   ])
 
 dnl Check for Rygel renderer
+AC_ARG_WITH([rygel_2.6],
+  AS_HELP_STRING([--with-rygel-2.6],[Use Rygel 2.6 instead of 2.4]),
+  [RYGEL_VERSION=2.6],[RYGEL_VERSION=2.4]
+)
 PKG_CHECK_MODULES([RYGEL],
-  rygel-renderer-gst-2.4, [],
+  rygel-renderer-gst-$RYGEL_VERSION, [],
   [
     AC_MSG_ERROR(Rygel renderer is required)
   ])
