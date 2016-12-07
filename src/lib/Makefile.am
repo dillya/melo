@@ -20,8 +20,11 @@ libmelo_la_SOURCES = \
 	melo_rtsp.c \
 	melo_jsonrpc.c
 
-libmelo_la_CFLAGS = $(LIBMELO_CFLAGS)
-libmelo_la_LIBADD = $(LIBMELO_LIBS)
+libmelo_la_CFLAGS = \
+	$(LIBMELO_CFLAGS) \
+	-DMELO_PLUGIN_PATH=\"$(melolibdir)\"
+libmelo_la_LIBADD = \
+	$(LIBMELO_LIBS)
 
 meloincludedir = $(includedir)/melo
 meloinclude_HEADERS = \
