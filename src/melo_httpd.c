@@ -25,6 +25,7 @@
 
 #include <glib.h>
 
+#include "melo_tags.h"
 #include "melo_avahi.h"
 #include "melo_httpd.h"
 #include "melo_httpd_file.h"

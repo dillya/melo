@@ -844,7 +844,7 @@ melo_rtsp_basic_auth_check (MeloRTSPClient *client, const gchar *username,
   gchar *pass;
   gsize len;
 
-  g_return_val_if_fail (client, NULL);
+  g_return_val_if_fail (client, FALSE);
 
   /* Get authorization header */
   auth = melo_rtsp_get_header (client, "Authorization");

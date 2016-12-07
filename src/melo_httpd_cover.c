@@ -23,6 +23,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include "melo_tags.h"
+
 #include "melo_httpd_cover.h"
 
 void
