@@ -77,6 +77,8 @@ GType melo_rtsp_get_type (void);
 
 MeloRTSP *melo_rtsp_new (void);
 
+guint melo_rtsp_attach (MeloRTSP *rtsp, GMainContext *context);
+
 gboolean melo_rtsp_start (MeloRTSP *rtsp, guint port);
 void melo_rtsp_stop (MeloRTSP *rtsp);
 

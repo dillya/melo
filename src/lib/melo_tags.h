@@ -67,6 +67,7 @@ MeloTags *melo_tags_ref (MeloTags *tags);
 void melo_tags_unref (MeloTags *tags);
 
 /* Cover access */
+void melo_tags_set_cover (MeloTags *tags, GBytes *cover, const gchar *type);
 void melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type);
 gboolean melo_tags_has_cover (MeloTags *tags);
 GBytes *melo_tags_get_cover (MeloTags *tags, gchar **type);
