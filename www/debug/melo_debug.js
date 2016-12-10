@@ -876,12 +876,71 @@ function melo_playlist_poll(state) {
   }
 }
 
+function melo_network() {
+  jsonrpc_call("network.get_device_list", JSON.parse('[["full"]]'), null,
+               function(response, data) {
+    if (response.error || !response.result)
+      return;
+
+    var list = response.result;
+
+    /* Dipslay interfaces list */
+    var ifaces = $("#network").html("");
+    for (var i = 0; i < list.length; i++) {
+      /* Add interface name */
+      ifaces.append('<p>' +
+                     '<span class="title">' + list[i].iface + ' (' +
+                                              list[i].type + ')' +
+                     '</span>' +
+                   '</p>');
+
+      /* Get Wifi AP list */
+      if (list[i].type == "wifi") {
+        var aps = $('<div>Wifi list <a href="#">[refresh]</a>:<ul></ul></div>');
+        var aps_list = aps.children("ul");
+        aps.children("a").click([list[i].iface, aps_list], function(e) {
+          melo_network_scan_wifi(e.data[0], e.data[1])
+          return false;
+        });
+        ifaces.append(aps);
+        melo_network_scan_wifi(list[i].iface, aps_list)
+      }
+    }
+  });
+}
+
+function melo_network_scan_wifi(iface, element)
+{
+  jsonrpc_call("network.scan_wifi", JSON.parse('["' + iface + '",["full"]]'),
+               null, function(response, data) {
+    if (response.error || !response.result)
+      return;
+
+    var list = response.result;
+
+    /* Fill list */
+    element.html("");
+    for (var i = 0; i < list.length; i++) {
+      var item_class = list[i].status == "connected" ? "current": "";
+          element.append('<li class="' + item_class + '">' +
+                         '[' + list[i].mode + '] ' +
+                         '<b>' + list[i].ssid  + '</b> '+
+                         '(' + list[i].security + ') ' +
+                         '(' + list[i].frequency + 'MHz / ' +
+                               list[i].strength + '% / ' +
+                               list[i].bitrate / 1000 + ' Mbps)' +
+                         '</li>');
+    }
+
+  });
+}
+
 function melo_get_config(id) {
   jsonrpc_call("config.get", JSON.parse('["' + id + '"]'), null,
                function(response, data) {
     if (response.error || !response.result)
       return;
-    var groups = response.result
+    var groups = response.result;
 
     /* Display configuration */
     $("#config").html("");
@@ -996,6 +1055,7 @@ $(document).ready(function() {
   melo_update_list();
 
   /* Add click events */
+  $("#main_network").click(function() {melo_network(); return false;});
   $("#main_config").click(function() {melo_get_config("main"); return false;});
   $("#module_refresh").click(function() {melo_update_list(); return false;});
   $("#browser_prev").click(function() {melo_browser_previous(); return false;});

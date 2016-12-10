@@ -101,6 +101,7 @@
       <div class="block">
         <h2>Menu</h2>
         <ul>
+          <li><a id="main_network" href="#">Network</a></li>
           <li><a id="main_config" href="#">Settings</a></li>
         </ul>
       </div>
@@ -146,6 +147,11 @@
         <input type="checkbox" id="playlist_poll" value="enabled">
         <label for="playlist_poll">Enable playlist status poll (every 1s)</label>
         <ul id="playlist_list"></ul>
+      </div>
+      <div class="block">
+        <h2>Network</h2>
+        <div id="network_error" class='error_ok'></div>
+        <div id="network"></div>
       </div>
       <div class="block">
         <h2>Config</h2>
