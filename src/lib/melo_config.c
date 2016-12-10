@@ -276,7 +276,10 @@ melo_config_load_default (MeloConfig *config)
 
     /* Set default values */
     for (j = 0; j < groups[i].items_count; j++)
-      values[j] = items[j].def;
+      if (items[j].type == MELO_CONFIG_TYPE_STRING)
+        values[j]._string = g_strdup (items[j].def._string);
+      else
+        values[j] = items[j].def;
   }
 
   /* Unlock config access */
