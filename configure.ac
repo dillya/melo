@@ -59,6 +59,11 @@ AC_ARG_ENABLE([module-upnp],
   AS_HELP_STRING([--disable-module-upnp],[Disable UPnP module]),
   enable_module_upnp=no, enable_module_upnp=yes)
 
+dnl Optional libraries
+AC_ARG_WITH([libnm-glib],
+  AS_HELP_STRING([--with-libnm-glib],[use libnm-glib @<:@default=check@:>@]),,
+  with_libnm_glib=check)
+
 dnl Check for melo dependencies
 if test "x$enable_melo" = "xyes"; then
   MELO_LIBSOUP_REQ=2.40.0
@@ -101,11 +106,25 @@ if test "x$enable_module_upnp" = "xyes"; then
   AC_DEFINE([HAVE_MELO_MODULE_UPNP], 1, [Use UPnP module])
 fi
 
+dnl Use NetworkManager if available
+if test "x$with_libnm_glib" != "xno"; then
+  LIBNM_GLIB_REQ=0.9.10.0
+  PKG_CHECK_MODULES([LIBNM_GLIB],
+    libnm-glib >= $LIBNM_GLIB_REQ,
+    [with_libnm_glib=yes
+     AC_DEFINE([HAVE_LIBNM_GLIB], 1, [LibNM Glib is available])],
+    [if test "x$with_libnm_glib" != "xcheck"; then
+       AC_MSG_FAILURE([--with-libnm-glib was given, but package is not found])
+     fi
+     with_libnm_glib=no])
+fi
+
 dnl Build modules
 AM_CONDITIONAL([BUILD_MELO], [test "x$enable_melo" = "xyes"])
 AM_CONDITIONAL([BUILD_MODULE_FILE], [test "x$enable_module_file" = "xyes"])
 AM_CONDITIONAL([BUILD_MODULE_RADIO], [test "x$enable_module_radio" = "xyes"])
 AM_CONDITIONAL([BUILD_MODULE_UPNP], [test "x$enable_module_upnp" = "xyes"])
+AM_CONDITIONAL([WITH_LIBNM_GLIB], [test "x$with_libnm_glib" = "xyes"])
 
 dnl Generate CFLAGS and LIBS for Melo library
 LIBMELO_CFLAGS="-I\$(top_srcdir)/src/lib \$(LIBMELO_DEPS_CFLAGS)"
@@ -142,11 +161,15 @@ echo "
 
    Built-in modules:
    -----------------
-     file:      ${enable_module_file}
-     radio:     ${enable_module_radio}
-     upnp:      ${enable_module_upnp}
+     file:              ${enable_module_file}
+     radio:             ${enable_module_radio}
+     upnp:              ${enable_module_upnp}
 
    Melo program:
-   --------------
-     melo:      ${enable_melo}
+   -------------
+     melo:              ${enable_melo}
+
+   Optional libraries:
+   -------------------
+     libnm-glib:        ${with_libnm_glib}
 "

@@ -42,6 +42,10 @@
 #include "config.h"
 #endif
 
+#if HAVE_LIBNM_GLIB
+#include "melo_network.h"
+#endif
+
 #if HAVE_MELO_MODULE_FILE
 #include "modules/file/melo_file.h"
 #endif
@@ -78,6 +82,10 @@ main (int argc, char *argv[])
   };
   GOptionContext *ctx;
   GError *err = NULL;
+#if HAVE_LIBNM_GLIB
+  /* Network configuration */
+  MeloNetwork *net;
+#endif
   /* Main configuration */
   MeloConfig *config;
   /* Melo context */
@@ -130,6 +138,12 @@ main (int argc, char *argv[])
   melo_browser_register_methods ();
   melo_player_register_methods ();
   melo_playlist_register_methods ();
+
+#if HAVE_LIBNM_GLIB
+  /* Add network controler and register its JSON-RPC methods */
+  net = melo_network_new ();
+  melo_network_jsonrpc_register_methods (net);
+#endif
 
   /* Register built-in modules */
 #if HAVE_MELO_MODULE_FILE
@@ -196,6 +210,12 @@ end:
 #endif
 #if HAVE_MELO_MODULE_FILE
   melo_module_unregister ("file");
+#endif
+
+#if HAVE_LIBNM_GLIB
+  /* Unregister network controler and its JSON-RPC methods */
+  melo_network_jsonrpc_unregister_methods ();
+  g_object_unref (net);
 #endif
 
   /* Unregister standard JSON-RPC methods */

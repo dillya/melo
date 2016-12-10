@@ -24,6 +24,15 @@ melo_LDADD = \
 	$(MELO_LIBS) \
 	$(LIBMELO_LIBS)
 
+# Network support
+if WITH_LIBNM_GLIB
+melo_SOURCES += \
+	melo_network.c \
+	melo_network_jsonrpc.c
+melo_CFLAGS += $(LIBNM_GLIB_CFLAGS)
+melo_LDADD += $(LIBNM_GLIB_LIBS)
+endif
+
 # Built in modules
 if BUILD_MODULE_FILE
 melo_LDADD += modules/file/libmelo_file.la
@@ -37,6 +46,8 @@ endif
 
 noinst_HEADERS = \
 	melo_config_main.h \
+	melo_network.h \
+	melo_network_jsonrpc.h \
 	melo_httpd.h \
 	melo_httpd_file.h \
 	melo_httpd_cover.h \
