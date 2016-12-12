@@ -90,8 +90,6 @@ main (int argc, char *argv[])
   MeloConfig *config;
   /* Melo context */
   MeloContext context;
-  gchar *name;
-  gint64 port;
   /* Main loop */
   GMainLoop *loop;
 
@@ -125,12 +123,13 @@ main (int argc, char *argv[])
     melo_config_load_default (config);
 
   /* Get name */
-  if (!melo_config_get_string (config, "general", "name", &name) || !name)
-    name = g_strdup ("Melo");
+  if (!melo_config_get_string (config, "general", "name", &context.name) ||
+      !context.name)
+    context.name = g_strdup ("Melo");
 
   /* Get HTTP server port */
-  if (!melo_config_get_integer (config, "http", "port", &port))
-    port = 8080;
+  if (!melo_config_get_integer (config, "http", "port", &context.port))
+    context.port = 8080;
 
   /* Register standard JSON-RPC methods */
   melo_config_register_methods ();
@@ -161,7 +160,7 @@ main (int argc, char *argv[])
 
   /* Create and start HTTP server */
   context.server = melo_httpd_new ();
-  if (!melo_httpd_start (context.server, port, name))
+  if (!melo_httpd_start (context.server, context.port, context.name))
     goto end;
 
   /* Load HTTP server configuration */

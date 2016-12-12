@@ -121,8 +121,11 @@ melo_config_main_update_general (MeloConfigContext *context, gpointer user_data)
 
   /* Update name */
   if (melo_config_get_updated_string (context, "name", &new, &old) &&
-      g_strcmp0 (new, old))
+      g_strcmp0 (new, old)) {
     melo_httpd_set_name (ctx->server, new);
+    g_free (ctx->name);
+    ctx->name = g_strdup (new);
+  }
 }
 
 /* HTTP server section */
