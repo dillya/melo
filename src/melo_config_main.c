@@ -30,6 +30,13 @@ static MeloConfigItem melo_config_general[] = {
     .element = MELO_CONFIG_ELEMENT_TEXT,
     .def._string = "Melo",
   },
+  {
+    .id = "register",
+    .name = "Register device on Melo website",
+    .type = MELO_CONFIG_TYPE_BOOLEAN,
+    .element = MELO_CONFIG_ELEMENT_CHECKBOX,
+    .def._boolean = TRUE,
+  },
 };
 
 static MeloConfigItem melo_config_http[] = {
@@ -118,6 +125,7 @@ melo_config_main_update_general (MeloConfigContext *context, gpointer user_data)
 {
   MeloContext *ctx = (MeloContext *) user_data;
   const gchar *old, *new;
+  gboolean bold, bnew;
 
   /* Update name */
   if (melo_config_get_updated_string (context, "name", &new, &old) &&
@@ -125,6 +133,14 @@ melo_config_main_update_general (MeloConfigContext *context, gpointer user_data)
     melo_httpd_set_name (ctx->server, new);
     g_free (ctx->name);
     ctx->name = g_strdup (new);
+  }
+
+  /* Update discoverer */
+  if (melo_config_get_updated_boolean (context, "register", &bnew, &bold)) {
+    if (bnew)
+      melo_discover_register_device (ctx->disco, ctx->name, ctx->port);
+    else if (bold)
+      melo_discover_unregister_device (ctx->disco);
   }
 }
 

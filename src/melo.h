@@ -23,10 +23,12 @@
 #define __MELO_H__
 
 #include "melo_httpd.h"
+#include "melo_discover.h"
 
 typedef struct _MeloContext MeloContext;
 
 struct _MeloContext {
+  MeloDiscover *disco;
   MeloHTTPD *server;
   gchar *name;
   gint64 port;

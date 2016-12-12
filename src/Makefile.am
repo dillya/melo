@@ -13,6 +13,7 @@ melo_SOURCES = \
 	melo_httpd_cover.c \
 	melo_httpd_jsonrpc.c \
 	melo_config_main.c \
+	melo_discover.c \
 	melo.c
 
 melo_CFLAGS = \
@@ -45,6 +46,7 @@ melo_LDADD += modules/upnp/libmelo_upnp.la
 endif
 
 noinst_HEADERS = \
+	melo_discover.h \
 	melo_config_main.h \
 	melo_network.h \
 	melo_network_jsonrpc.h \

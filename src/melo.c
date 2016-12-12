@@ -90,6 +90,7 @@ main (int argc, char *argv[])
   MeloConfig *config;
   /* Melo context */
   MeloContext context;
+  gboolean reg;
   /* Main loop */
   GMainLoop *loop;
 
@@ -130,6 +131,11 @@ main (int argc, char *argv[])
   /* Get HTTP server port */
   if (!melo_config_get_integer (config, "http", "port", &context.port))
     context.port = 8080;
+
+  /* Add discoverer */
+  context.disco = melo_discover_new ();
+  if (melo_config_get_boolean (config, "general", "register",&reg) && reg)
+    melo_discover_register_device (context.disco, context.name, context.port);
 
   /* Register standard JSON-RPC methods */
   melo_config_register_methods ();
@@ -223,6 +229,9 @@ end:
   melo_browser_unregister_methods ();
   melo_module_unregister_methods ();
   melo_config_unregister_methods ();
+
+  /* Free discoverer */
+  g_object_unref (context.disco);
 
   /* Save configuration */
   melo_config_save_to_def_file (config);
