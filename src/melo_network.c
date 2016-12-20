@@ -23,6 +23,7 @@
 #include <nm-client.h>
 #include <nm-device-ethernet.h>
 #include <nm-device-wifi.h>
+#include <nm-setting-ip4-config.h>
 
 #include "melo_network.h"
 
@@ -71,6 +72,81 @@ MeloNetwork *
 melo_network_new ()
 {
   return g_object_new (MELO_TYPE_NETWORK, NULL);
+}
+
+static gchar *
+melo_network_format_ipv4 (guint32 address)
+{
+  char ip[NM_UTILS_INET_ADDRSTRLEN];
+
+  return g_strdup (nm_utils_inet4_ntop ((in_addr_t) address, ip));
+}
+
+static gchar *
+melo_network_format_ipv6 (const struct in6_addr *address, guint32 prefix)
+{
+  char ip[NM_UTILS_INET_ADDRSTRLEN];
+
+  if (prefix)
+    return g_strdup_printf ("%s/%d", nm_utils_inet6_ntop (address, ip), prefix);
+  return g_strdup (nm_utils_inet6_ntop (address, ip));
+}
+
+static gboolean
+melo_network_get_addresses (NMDevice *dev, MeloNetworkDevice *device)
+{
+  NMIP4Config *ipv4_cfg;
+  NMIP6Config *ipv6_cfg;
+
+  /* Get IPv4 configuration */
+  ipv4_cfg = nm_device_get_ip4_config (dev);
+  if (ipv4_cfg) {
+    const GSList *adds;
+
+    /* Get IP addresses */
+    adds = nm_ip4_config_get_addresses (ipv4_cfg);
+    if (adds) {
+      NMIP4Address *add = adds->data;
+      guint32 ip;
+
+      /* Add IP address */
+      ip = nm_ip4_address_get_address (add);
+      device->ipv4.ip = melo_network_format_ipv4 (ip);
+
+      /* Add netmask */
+      ip = nm_utils_ip4_prefix_to_netmask (nm_ip4_address_get_prefix (add));
+      device->ipv4.mask = melo_network_format_ipv4 (ip);
+
+      /* Add IP gateway address */
+      ip = nm_ip4_address_get_gateway (add);
+      device->ipv4.gateway = melo_network_format_ipv4 (ip);
+    }
+  }
+
+  /* Get IPv6 configuration */
+  ipv6_cfg = nm_device_get_ip6_config (dev);
+  if (ipv6_cfg) {
+    const GSList *adds;
+
+    /* Get IP addresses */
+    adds = nm_ip6_config_get_addresses (ipv6_cfg);
+    if (adds) {
+      NMIP6Address *add = adds->data;
+      const struct in6_addr *ip;
+      guint32 prefix;
+
+      /* Add IP address */
+      ip = nm_ip6_address_get_address (add);
+      prefix = nm_ip6_address_get_prefix (add);
+      device->ipv6.ip = melo_network_format_ipv6 (ip, prefix);
+
+      /* Add IP gateway address */
+      ip = nm_ip6_address_get_gateway (add);
+      device->ipv6.gateway = melo_network_format_ipv6 (ip, 0);
+    }
+  }
+
+  return TRUE;
 }
 
 GList *
@@ -124,6 +200,9 @@ melo_network_get_device_list (MeloNetwork *net)
         /* Not supported */
         item->type = MELO_NETWORK_DEVICE_TYPE_UNKNOWN;
     }
+
+    /* Get device settings */
+    melo_network_get_addresses (dev, item);
 
     /* Add to list */
     list = g_list_prepend (list, item);
@@ -255,11 +334,21 @@ melo_network_device_new (const gchar *iface)
   return dev;
 }
 
+static void
+melo_network_ip_free (MeloNetworkIP *ip)
+{
+  g_free (ip->ip);
+  g_free (ip->mask);
+  g_free (ip->gateway);
+}
+
 void
 melo_network_device_free (MeloNetworkDevice *dev)
 {
   g_free (dev->iface);
   g_free (dev->name);
+  melo_network_ip_free (&dev->ipv4);
+  melo_network_ip_free (&dev->ipv6);
   g_slice_free (MeloNetworkDevice, dev);
 }
 

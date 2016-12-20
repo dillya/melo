@@ -28,6 +28,8 @@ typedef enum {
   MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_IFACE = 1,
   MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_NAME = 2,
   MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_TYPE = 4,
+  MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_IPV4 = 8,
+  MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_IPV6 = 16,
 
   MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_FULL = ~0,
 } MeloNetworkJSONRPCDeviceListFields;
@@ -82,6 +84,10 @@ melo_network_jsonrpc_get_device_list_fields (JsonObject *obj)
       fields |= MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_NAME;
     else if (!g_strcmp0 (field, "type"))
       fields |= MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_TYPE;
+    else if (!g_strcmp0 (field, "ipv4"))
+      fields |= MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_IPV4;
+    else if (!g_strcmp0 (field, "ipv6"))
+      fields |= MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_IPV6;
   }
 
   return fields;
@@ -137,6 +143,25 @@ melo_network_jsonrpc_get_ap_list_fields (JsonObject *obj)
 
   return fields;
 }
+static void
+melo_network_jsonrpc_object_set_ip_member (JsonObject *obj, const gchar *name,
+                                           const MeloNetworkIP *ip)
+{
+  JsonObject *o;
+
+  /* Create new object */
+  o = json_object_new ();
+  if (!o)
+    return;
+
+  /* Fill object */
+  json_object_set_string_member (o, "ip", ip->ip);
+  json_object_set_string_member (o, "mask", ip->mask);
+  json_object_set_string_member (o, "gateway", ip->gateway);
+
+  /* Add to parent object */
+  json_object_set_object_member (obj, name, o);
+}
 
 static JsonArray *
 melo_network_jsonrpc_device_list_to_array (GList *list,
@@ -171,6 +196,10 @@ melo_network_jsonrpc_device_list_to_array (GList *list,
       }
       json_object_set_string_member (o, "type", type);
     }
+    if (fields & MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_IPV4)
+      melo_network_jsonrpc_object_set_ip_member (o, "ipv4", &dev->ipv4);
+    if (fields & MELO_NETWORK_JSONRPC_DEVICE_LIST_FIELDS_IPV6)
+      melo_network_jsonrpc_object_set_ip_member (o, "ipv6", &dev->ipv6);
 
     /* Add object to array */
     json_array_add_object_element (array, o);

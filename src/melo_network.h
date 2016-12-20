@@ -43,6 +43,7 @@ typedef struct _MeloNetworkPrivate MeloNetworkPrivate;
 
 typedef enum _MeloNetworkDeviceType MeloNetworkDeviceType;
 typedef struct _MeloNetworkDevice MeloNetworkDevice;
+typedef struct _MeloNetworkIP MeloNetworkIP;
 
 typedef enum _MeloNetworkAPMode MeloNetworkAPMode;
 typedef enum _MeloNetworkAPStatus MeloNetworkAPStatus;
@@ -66,10 +67,18 @@ enum _MeloNetworkDeviceType {
   MELO_NETWORK_DEVICE_TYPE_WIFI,
 };
 
+struct _MeloNetworkIP {
+  gchar *ip;
+  gchar *mask;
+  gchar *gateway;
+};
+
 struct _MeloNetworkDevice {
   gchar *iface;
   gchar *name;
   MeloNetworkDeviceType type;
+  MeloNetworkIP ipv4;
+  MeloNetworkIP ipv6;
 };
 
 enum _MeloNetworkAPMode {
