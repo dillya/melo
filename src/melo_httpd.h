@@ -48,6 +48,8 @@ struct _MeloHTTPDClass {
   GObjectClass parent_class;
 };
 
+GType melo_httpd_get_type (void);
+
 MeloHTTPD *melo_httpd_new (void);
 
 gboolean melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name);

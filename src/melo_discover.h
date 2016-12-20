@@ -52,6 +52,8 @@ struct _MeloDiscoverClass {
   GObjectClass parent_class;
 };
 
+GType melo_discover_get_type (void);
+
 MeloDiscover *melo_discover_new (void);
 
 gboolean melo_discover_register_device (MeloDiscover *disco, const gchar *name,

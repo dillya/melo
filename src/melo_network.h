@@ -112,6 +112,8 @@ struct _MeloNetworkAP {
   MeloNetworkAPStatus status;
 };
 
+GType melo_network_get_type (void);
+
 MeloNetwork *melo_network_new (void);
 
 GList *melo_network_get_device_list (MeloNetwork *net);
