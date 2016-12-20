@@ -213,19 +213,27 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
     /* Get interface */
     iface = l->data;
 
-    /* Prepare request for address registration */
-    req = g_strdup_printf (MELO_DISCOVER_URL "?action=add_address&"
-                           "serial=%s&hw_address=%s&address=%s",
-                           serial, iface->hw_address, iface->address);
+    /* Add or remove device address on Melo website */
+    if (iface->hw_address) {
+      /* Prepare request for address registration / removal */
+      if (iface->address)
+        req = g_strdup_printf (MELO_DISCOVER_URL "?action=add_address&"
+                               "serial=%s&hw_address=%s&address=%s",
+                               serial, iface->hw_address, iface->address);
+      else
+        req = g_strdup_printf (MELO_DISCOVER_URL "?action=remove_address&"
+                               "serial=%s&hw_address=%s",
+                               serial, iface->hw_address);
 
-    /* Add device address on Melo website */
-    msg = soup_message_new ("GET", req);
-    soup_session_send_message (priv->session, msg);
-    g_object_unref (msg);
+      /* Send request */
+      msg = soup_message_new ("GET", req);
+      soup_session_send_message (priv->session, msg);
+      g_object_unref (msg);
+      g_free (req);
+    }
     g_free (iface->hw_address);
     g_free (iface->address);
     g_slice_free (MeloDiscoverInterface, iface);
-    g_free (req);
   }
 
   /* Free intarfaces list */
