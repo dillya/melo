@@ -891,7 +891,14 @@ function melo_network() {
       ifaces.append('<p>' +
                      '<span class="title">' + list[i].iface + ' (' +
                                               list[i].type + ')' +
-                     '</span>' +
+                     '</span><br>' +
+                     '<u>IPv4 config:</u><br>' +
+                     'IP address: ' + list[i].ipv4.ip + '<br>' +
+                     'Netmask: ' + list[i].ipv4.mask + '<br>' +
+                     'IP gateway address: ' + list[i].ipv4.gateway + '<br>' +
+                     '<u>IPv6 config:</u><br>' +
+                     'IP address: ' + list[i].ipv6.ip + '<br>' +
+                     'IP gateway address: ' + list[i].ipv6.gateway + '<br>' +
                    '</p>');
 
       /* Get Wifi AP list */
