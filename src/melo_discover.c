@@ -181,7 +181,7 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
   /* List all interfaces */
   for (i = ifap; i != NULL; i = i->ifa_next) {
     /* Skip loopback interface */
-    if (i->ifa_flags & IFF_LOOPBACK)
+    if (i->ifa_flags & IFF_LOOPBACK || !i->ifa_addr)
       continue;
 
     /* Get addresses */
