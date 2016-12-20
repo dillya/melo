@@ -799,6 +799,7 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   MeloBrowserList *list;
+  GList *l;
 
   /* Create browser list */
   list = melo_browser_list_new (path);
@@ -845,6 +846,25 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
     /* Volume path: "/VOLUME_ID/" */
     list->items = melo_browser_file_get_volume_list (bfile, path, tags_mode,
                                                      tags_fields);
+  }
+
+  /* Keep only requested part of list */
+  l = list->items;
+  while (l != NULL) {
+    GList *next = l->next;
+
+    /* Remove item when not in requested part */
+    if (!count || list->count < offset) {
+      MeloBrowserItem *item = (MeloBrowserItem *) l->data;
+      list->items = g_list_delete_link (list->items, l);
+      melo_browser_item_free (item);
+    }
+    else
+      count--;
+
+    /* Update items count */
+    list->count++;
+    l = next;
   }
 
   return list;
