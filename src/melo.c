@@ -43,7 +43,7 @@
 #endif
 
 #if HAVE_LIBNM_GLIB
-#include "melo_network.h"
+#include "melo_network_jsonrpc.h"
 #endif
 
 #if HAVE_MELO_MODULE_FILE
