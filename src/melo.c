@@ -123,6 +123,9 @@ main (int argc, char *argv[])
   if (!melo_config_load_from_def_file (config))
     melo_config_load_default (config);
 
+  /* Save automatically configuration to file */
+  melo_config_save_to_def_file_at_update (config, TRUE);
+
   /* Get name */
   if (!melo_config_get_string (config, "general", "name", &context.name) ||
       !context.name)
