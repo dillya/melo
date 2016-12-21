@@ -19,27 +19,40 @@
  * Boston, MA  02110-1301, USA.
  */
 
-#include <linux/if_packet.h>
+#include <string.h>
 #include <sys/types.h>
 #include <net/if.h>
 #include <ifaddrs.h>
 #include <arpa/inet.h>
+#include <linux/if_packet.h>
+#include <linux/rtnetlink.h>
 
 #include <libsoup/soup.h>
 
 #include "melo_discover.h"
 
+#define MELO_DISCOVER_BUFFER_SIZE 4096
 #define MELO_DISCOVER_URL "http://www.sparod.com/melo/discover.php"
 
 struct _MeloDiscoverPrivate {
+  GMutex mutex;
+  gboolean registered;
   SoupSession *session;
+  guint netlink_id;
+  int netlink_fd;
+  gchar *serial;
+  GList *ifaces;
 };
 
 typedef struct {
-  const gchar *name;
+  gchar *name;
   gchar *hw_address;
   gchar *address;
 } MeloDiscoverInterface;
+
+static void melo_discover_interface_free (MeloDiscoverInterface *iface);
+static gboolean melo_netlink_event (gint fd, GIOCondition condition,
+                                    gpointer user_data);
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloDiscover, melo_discover, G_TYPE_OBJECT)
 
@@ -49,8 +62,26 @@ melo_discover_finalize (GObject *gobject)
   MeloDiscover *disco = MELO_DISCOVER (gobject);
   MeloDiscoverPrivate *priv = melo_discover_get_instance_private (disco);
 
+  /* Remove netlink source event */
+  if (priv->netlink_id)
+    g_source_remove (priv->netlink_id);
+
+  /* Close netlink socket */
+  if (priv->netlink_fd > 0)
+    close (priv->netlink_fd);
+
   /* Free Soup session */
   g_object_unref (priv->session);
+
+  /* Free serial */
+  g_free (priv->serial);
+
+  /* Free interfaces list */
+  g_list_free_full (priv->ifaces,
+                    (GDestroyNotify) melo_discover_interface_free);
+
+  /* Clear mutex */
+  g_mutex_clear (&priv->mutex);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_discover_parent_class)->finalize (gobject);
@@ -72,10 +103,30 @@ melo_discover_init (MeloDiscover *self)
 
   self->priv = priv;
 
+  /* Initialize mutex */
+  g_mutex_init (&priv->mutex);
+
   /* Create a new Soup session */
   priv->session = soup_session_new_with_options (
                                 SOUP_SESSION_USER_AGENT, "Melo",
                                 NULL);
+
+
+  /* Open netlink socket */
+  priv->netlink_fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+  if (priv->netlink_fd > 0) {
+    struct sockaddr_nl sock_addr;
+
+    /* Set netlink socket to monitor interfaces and their addresses */
+    memset(&sock_addr, 0, sizeof(sock_addr));
+    sock_addr.nl_family = AF_NETLINK;
+    sock_addr.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR;
+    bind(priv->netlink_fd, (struct sockaddr *) &sock_addr, sizeof(sock_addr));
+
+    /* Add netlink socket source event */
+    priv->netlink_id = g_unix_fd_add (priv->netlink_fd, G_IO_IN,
+                                      melo_netlink_event, self);
+  }
 }
 
 MeloDiscover *
@@ -85,22 +136,21 @@ melo_discover_new ()
 }
 
 static gchar *
-melo_discover_get_hw_address (struct sockaddr_ll *s)
+melo_discover_get_hw_address (unsigned char *addr)
 {
-  return g_strdup_printf ("%02x:%02x:%02x:%02x:%02x:%02x", s->sll_addr[0],
-                          s->sll_addr[1], s->sll_addr[2], s->sll_addr[3],
-                          s->sll_addr[4], s->sll_addr[5]);
+  return g_strdup_printf ("%02x:%02x:%02x:%02x:%02x:%02x", addr[0], addr[1],
+                          addr[2], addr[3], addr[4], addr[5]);
 }
 
 static gchar *
-melo_discover_get_address (struct sockaddr_in *s)
+melo_discover_get_address (struct in_addr *addr)
 {
   gchar *address;
 
   /* Get address string */
   address = g_malloc (INET_ADDRSTRLEN);
   if (address)
-    inet_ntop(AF_INET, &s->sin_addr, address, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, addr, address, INET_ADDRSTRLEN);
 
   return address;
 }
@@ -115,7 +165,7 @@ melo_discover_get_serial (struct ifaddrs *ifap)
     if (i && i->ifa_addr->sa_family == AF_PACKET &&
         !(i->ifa_flags & IFF_LOOPBACK)) {
       struct sockaddr_ll *s = (struct sockaddr_ll*) i->ifa_addr;
-      return melo_discover_get_hw_address (s);
+      return melo_discover_get_hw_address (s->sll_addr);
     }
   }
 
@@ -123,13 +173,14 @@ melo_discover_get_serial (struct ifaddrs *ifap)
 }
 
 static MeloDiscoverInterface *
-melo_discover_interface_get (GList **ifaces, const gchar *name)
+melo_discover_interface_get (MeloDiscover *disco, const gchar *name)
 {
+  MeloDiscoverPrivate *priv = disco->priv;
   MeloDiscoverInterface *iface;
   GList *l;
 
   /* Find interface in list */
-  for (l = *ifaces; l != NULL; l = l->next) {
+  for (l = priv->ifaces; l != NULL; l = l->next) {
     iface = l->data;
     if (!g_strcmp0 (iface->name, name))
       return iface;
@@ -138,11 +189,197 @@ melo_discover_interface_get (GList **ifaces, const gchar *name)
   /* Create a new item */
   iface = g_slice_new0 (MeloDiscoverInterface);
   if (iface) {
-    iface->name = name;
-    *ifaces = g_list_prepend (*ifaces, iface);
+    iface->name = g_strdup (name);
+    priv->ifaces = g_list_prepend (priv->ifaces, iface);
   }
 
   return iface;
+}
+
+static void
+melo_discover_interface_free (MeloDiscoverInterface *iface)
+{
+  g_free (iface->name);
+  g_free (iface->hw_address);
+  g_free (iface->address);
+  g_slice_free (MeloDiscoverInterface, iface);
+}
+
+static gboolean
+melo_discover_add_address (MeloDiscover *disco, MeloDiscoverInterface *iface)
+{
+  MeloDiscoverPrivate *priv = disco->priv;
+  SoupMessage *msg;
+  gchar *req;
+
+  /* No serial */
+  if (!priv->serial)
+    return FALSE;
+
+  /* Prepare request for address registration */
+  req = g_strdup_printf (MELO_DISCOVER_URL "?action=add_address&"
+                         "serial=%s&hw_address=%s&address=%s",
+                         priv->serial, iface->hw_address, iface->address);
+
+  /* Send request */
+  msg = soup_message_new ("GET", req);
+  soup_session_queue_message (priv->session, msg, NULL, NULL);
+  g_free (req);
+
+  return TRUE;
+}
+
+static gboolean
+melo_discover_remove_address (MeloDiscover *disco, MeloDiscoverInterface *iface)
+{
+  MeloDiscoverPrivate *priv = disco->priv;
+  SoupMessage *msg;
+  gchar *req;
+
+  /* No serial */
+  if (!priv->serial)
+    return FALSE;
+
+  /* Prepare request for address removal */
+  req = g_strdup_printf (MELO_DISCOVER_URL "?action=remove_address&"
+                         "serial=%s&hw_address=%s",
+                         priv->serial, iface->hw_address);
+
+  /* Send request */
+  msg = soup_message_new ("GET", req);
+  soup_session_queue_message (priv->session, msg, NULL, NULL);
+  g_free (req);
+
+  return TRUE;
+}
+
+static gboolean
+melo_netlink_event (gint fd, GIOCondition condition, gpointer user_data)
+{
+  MeloDiscover *disco = user_data;
+  MeloDiscoverPrivate *priv = disco->priv;
+  char buffer[MELO_DISCOVER_BUFFER_SIZE];
+  struct nlmsghdr *nh;
+  ssize_t len;
+
+  /* Get next message from netlink socket */
+  len = recv (fd, buffer, MELO_DISCOVER_BUFFER_SIZE, 0);
+  if (len <= 0)
+    return FALSE;
+
+  /* Lock interface list access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Parse messages */
+  for (nh = (struct nlmsghdr *) buffer; NLMSG_OK (nh, len);
+       nh = NLMSG_NEXT (nh, len)) {
+    static MeloDiscoverInterface *iface;
+    char name[IF_NAMESIZE];
+    struct rtattr *ra;
+    int rlen;
+
+    /* Process message */
+    switch (nh->nlmsg_type) {
+      case RTM_NEWLINK: {
+        struct ifinfomsg *msg = (struct ifinfomsg *) NLMSG_DATA (nh);
+
+        /* Get interface */
+        if_indextoname (msg->ifi_index, name);
+        iface = melo_discover_interface_get (disco, name);
+
+        /* Update interface */
+        if (iface) {
+          /* Extract hardware address */
+          ra = IFLA_RTA (msg);
+          rlen = IFLA_PAYLOAD (nh);
+          for (; rlen && RTA_OK (ra, rlen); ra = RTA_NEXT (ra,rlen)) {
+            if (ra->rta_type != IFLA_ADDRESS)
+              continue;
+
+            /* Set hardware address */
+            g_free (iface->hw_address);
+            iface->hw_address = melo_discover_get_hw_address (
+                                               (unsigned char *) RTA_DATA (ra));
+          }
+        }
+        break;
+      }
+      case RTM_DELLINK:
+        break;
+      case RTM_NEWADDR: {
+        struct ifaddrmsg *msg = (struct ifaddrmsg *) NLMSG_DATA (nh);
+        struct in_addr addr;
+
+        /* Get interface */
+        if_indextoname (msg->ifa_index, name);
+        iface = melo_discover_interface_get (disco, name);
+
+        /* Update IP address */
+        if (iface) {
+          /* Extract local address */
+          ra = IFA_RTA (msg);
+          rlen = IFA_PAYLOAD (nh);
+          for (; rlen && RTA_OK (ra, rlen); ra = RTA_NEXT (ra,rlen)) {
+            if (ra->rta_type != IFA_LOCAL)
+              continue;
+
+            /* Get address */
+            addr.s_addr = *((uint32_t *) RTA_DATA (ra));
+
+            /* Set address */
+            g_free (iface->address);
+            iface->address = melo_discover_get_address (&addr);
+            if (priv->registered && iface->hw_address)
+              melo_discover_add_address (disco, iface);
+          }
+        }
+        break;
+      }
+      case RTM_DELADDR: {
+        struct ifaddrmsg *msg = (struct ifaddrmsg *) NLMSG_DATA (nh);
+
+        /* Get interface */
+        if_indextoname (msg->ifa_index, name);
+        iface = melo_discover_interface_get (disco, name);
+
+        /* Remove IP address */
+        if (iface) {
+          g_free (iface->address);
+          iface->address = NULL;
+          if (priv->registered && iface->hw_address)
+            melo_discover_remove_address (disco, iface);
+        }
+        break;
+      }
+      case NLMSG_DONE:
+      case NLMSG_ERROR:
+        goto end;
+      default:
+        break;
+    }
+  }
+
+end:
+  /* Unock interface list access */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+}
+
+static void
+melo_device_register_callback (SoupSession *session, SoupMessage *msg,
+                               gpointer user_data)
+{
+  MeloDiscoverPrivate *priv = user_data;
+
+  /* Lock interface list access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Device is now registered */
+  priv->registered = TRUE;
+
+  /* Unlock interface list access */
+  g_mutex_unlock (&priv->mutex);
 }
 
 gboolean
@@ -151,18 +388,22 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
 {
   MeloDiscoverPrivate *priv = disco->priv;
   MeloDiscoverInterface *iface;
-  GList *l, *ifaces = NULL;
   struct ifaddrs *ifap, *i;
-  gchar *serial, *req;
   const gchar *host;
   SoupMessage *msg;
+  gchar *req;
+  GList *l;
 
   /* Get network interfaces */
   if (getifaddrs (&ifap))
     return FALSE;
 
+  /* Lock interface list access */
+  g_mutex_lock (&priv->mutex);
+
   /* Get serial */
-  serial = melo_discover_get_serial (ifap);
+  if (!priv->serial)
+    priv->serial = melo_discover_get_serial (ifap);
 
   /* Get hostname */
   host = g_get_host_name ();
@@ -170,12 +411,13 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
   /* Prepare request for device registration */
   req = g_strdup_printf (MELO_DISCOVER_URL "?action=add_device&"
                          "serial=%s&name=%s&hostname=%s&port=%u",
-                         serial, name, host, port);
+                         priv->serial, name, host, port);
 
   /* Register device on Melo website */
   msg = soup_message_new ("GET", req);
   soup_session_send_message (priv->session, msg);
-  g_object_unref (msg);
+  soup_session_queue_message (priv->session, msg,
+                              melo_device_register_callback, priv);
   g_free (req);
 
   /* List all interfaces */
@@ -189,57 +431,46 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
       struct sockaddr_ll *s = (struct sockaddr_ll *) i->ifa_addr;
 
       /* Find interface in list */
-      iface = melo_discover_interface_get (&ifaces, i->ifa_name);
+      iface = melo_discover_interface_get (disco, i->ifa_name);
       if (!iface)
         continue;
 
       /* Get hardware address */
-      iface->hw_address = melo_discover_get_hw_address (s);
+      g_free (iface->hw_address);
+      iface->hw_address = melo_discover_get_hw_address (s->sll_addr);
     } else if (i->ifa_addr->sa_family == AF_INET) {
       struct sockaddr_in *s = (struct sockaddr_in *) i->ifa_addr;
 
       /* Find interface in list */
-      iface = melo_discover_interface_get (&ifaces, i->ifa_name);
+      iface = melo_discover_interface_get (disco, i->ifa_name);
       if (!iface)
         continue;
 
-      /* Get hardware address */
-      iface->address = melo_discover_get_address (s);
+      /* Get address */
+      g_free (iface->address);
+      iface->address = melo_discover_get_address (&s->sin_addr);
     }
   }
 
   /* Add device addresses on Sparod */
-  for (l = ifaces; l != NULL; l = l->next) {
+  for (l = priv->ifaces; l != NULL; l = l->next) {
     /* Get interface */
     iface = l->data;
 
     /* Add or remove device address on Melo website */
     if (iface->hw_address) {
-      /* Prepare request for address registration / removal */
       if (iface->address)
-        req = g_strdup_printf (MELO_DISCOVER_URL "?action=add_address&"
-                               "serial=%s&hw_address=%s&address=%s",
-                               serial, iface->hw_address, iface->address);
+        melo_discover_add_address (disco, iface);
       else
-        req = g_strdup_printf (MELO_DISCOVER_URL "?action=remove_address&"
-                               "serial=%s&hw_address=%s",
-                               serial, iface->hw_address);
-
-      /* Send request */
-      msg = soup_message_new ("GET", req);
-      soup_session_send_message (priv->session, msg);
-      g_object_unref (msg);
-      g_free (req);
+        melo_discover_remove_address (disco, iface);
     }
-    g_free (iface->hw_address);
-    g_free (iface->address);
-    g_slice_free (MeloDiscoverInterface, iface);
   }
 
+  /* Unock interface list access */
+  g_mutex_unlock (&priv->mutex);
+
   /* Free intarfaces list */
-  g_list_free (ifaces);
   freeifaddrs (ifap);
-  g_free (serial);
 
   return TRUE;
 }
@@ -248,30 +479,32 @@ gboolean
 melo_discover_unregister_device (MeloDiscover *disco)
 {
   MeloDiscoverPrivate *priv = disco->priv;
-  struct ifaddrs *ifap;
-  gchar *serial, *req;
   SoupMessage *msg;
+  gchar *req;
 
-  /* Get network interfaces */
-  if (getifaddrs (&ifap))
+  /* Lock interface list access */
+  g_mutex_lock (&priv->mutex);
+
+  /* No serial found */
+  if (!priv->serial) {
+    g_mutex_unlock (&priv->mutex);
     return FALSE;
+  }
 
-  /* Get serial */
-  serial = melo_discover_get_serial (ifap);
+  /* Device is not registered */
+  priv->registered = FALSE;
 
   /* Prepare request for device removal */
   req = g_strdup_printf (MELO_DISCOVER_URL "?action=remove_device&serial=%s",
-                         serial);
+                         priv->serial);
 
   /* Unregister device from Melo website */
   msg = soup_message_new ("GET", req);
-  soup_session_send_message (priv->session, msg);
-  g_object_unref (msg);
-  g_free (serial);
+  soup_session_queue_message (priv->session, msg, NULL, NULL);
   g_free (req);
 
-  /* Free intarfaces list */
-  freeifaddrs (ifap);
+  /* Unock interface list access */
+  g_mutex_unlock (&priv->mutex);
 
   return TRUE;
 }
