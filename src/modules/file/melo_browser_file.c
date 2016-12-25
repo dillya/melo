@@ -287,6 +287,24 @@ async_done (GObject *obj, GAsyncResult *res, gpointer user_data)
   g_mutex_unlock (mutex);
 }
 
+static void
+ask_password (GMountOperation *op, const char *message,
+              const char *default_user, const char *default_domain,
+              GAskPasswordFlags flags)
+{
+  /* We have already tried to connect anonymously */
+  if (g_mount_operation_get_anonymous (op)) {
+    g_mount_operation_reply (op, G_MOUNT_OPERATION_ABORTED);
+    return;
+  }
+
+  /* Try to connect anonymously */
+  if ((flags & G_ASK_PASSWORD_ANONYMOUS_SUPPORTED))
+    g_mount_operation_set_anonymous (op, TRUE);
+
+  g_mount_operation_reply (op, G_MOUNT_OPERATION_HANDLED);
+}
+
 static const gchar *
 melo_brower_file_fix_path (const gchar *path)
 {
@@ -695,6 +713,7 @@ melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
   return list;
 }
 
+
 static gchar *
 melo_browser_file_get_network_uri (MeloBrowserFile *bfile, const gchar *path)
 {
@@ -739,18 +758,25 @@ melo_browser_file_get_network_uri (MeloBrowserFile *bfile, const gchar *path)
     info = g_file_query_info (dir, G_FILE_ATTRIBUTE_STANDARD_TYPE,
                               0, NULL, &error);
     if (!info && error->code != G_IO_ERROR_NOT_FOUND) {
+      GMountOperation *op;
       GMutex mutex;
+
+      /* Create mount operation for authentication */
+      op = g_mount_operation_new ();
+      g_signal_connect (op, "ask_password", G_CALLBACK (ask_password), NULL);
 
       /* Mount */
       g_mutex_init (&mutex);
       g_mutex_lock (&mutex);
-      g_file_mount_enclosing_volume (dir, 0, NULL, NULL, async_done, &mutex);
+      g_file_mount_enclosing_volume (dir, 0, op, NULL, async_done, &mutex);
 
       /* Wait end of operation */
       g_mutex_lock (&mutex);
       g_clear_error (&error);
       g_mutex_unlock (&mutex);
       g_mutex_clear (&mutex);
+
+      g_object_unref (op);
     } else {
       g_object_unref (info);
     }
