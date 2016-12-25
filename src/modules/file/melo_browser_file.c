@@ -748,6 +748,7 @@ melo_browser_file_get_network_uri (MeloBrowserFile *bfile, const gchar *path)
     GError *error = NULL;
     GFileInfo *info;
     GFile *dir;
+    gchar *furi, *uri;
 
     /* Get file from shortcut */
     dir = g_file_new_for_uri (shortcut);
@@ -780,10 +781,14 @@ melo_browser_file_get_network_uri (MeloBrowserFile *bfile, const gchar *path)
     } else {
       g_object_unref (info);
     }
-    g_object_unref (dir);
 
     /* Generate final URI */
-     return g_strdup_printf ("%s/%s", shortcut, path);
+    furi = g_file_get_uri (dir);
+    uri = g_strdup_printf ("%s%s", furi, path);
+    g_object_unref (dir);
+    g_free (furi);
+
+    return uri;
   }
 
   /* Generate default URI */
