@@ -299,9 +299,7 @@ ask_password (GMountOperation *op, const char *message,
   }
 
   /* Try to connect anonymously */
-  if ((flags & G_ASK_PASSWORD_ANONYMOUS_SUPPORTED))
-    g_mount_operation_set_anonymous (op, TRUE);
-
+  g_mount_operation_set_anonymous (op, TRUE);
   g_mount_operation_reply (op, G_MOUNT_OPERATION_HANDLED);
 }
 
