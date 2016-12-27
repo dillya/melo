@@ -300,7 +300,7 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *path,
   g_hash_table_insert (priv->names, final_name, priv->playlist);
 
   /* Use playlist cover URL if cover data are available */
-  if (priv->override_cover_url && melo_tags_has_cover (tags))
+  if (priv->override_cover_url && tags && melo_tags_has_cover (tags))
     melo_tags_set_cover_url (tags, G_OBJECT (playlist), final_name, NULL);
 
   /* Set as current */
