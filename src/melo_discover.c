@@ -27,6 +27,7 @@
 #include <linux/if_packet.h>
 #include <linux/rtnetlink.h>
 
+#include <glib-unix.h>
 #include <libsoup/soup.h>
 
 #include "melo_discover.h"
@@ -36,11 +37,14 @@
 
 struct _MeloDiscoverPrivate {
   GMutex mutex;
+  gboolean register_device;
   gboolean registered;
   SoupSession *session;
   guint netlink_id;
   int netlink_fd;
   gchar *serial;
+  gchar *name;
+  guint port;
   GList *ifaces;
 };
 
@@ -53,6 +57,8 @@ typedef struct {
 static void melo_discover_interface_free (MeloDiscoverInterface *iface);
 static gboolean melo_netlink_event (gint fd, GIOCondition condition,
                                     gpointer user_data);
+
+static gboolean melo_discover_add_device (MeloDiscover *disco);
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloDiscover, melo_discover, G_TYPE_OBJECT)
 
@@ -73,7 +79,8 @@ melo_discover_finalize (GObject *gobject)
   /* Free Soup session */
   g_object_unref (priv->session);
 
-  /* Free serial */
+  /* Free name and serial */
+  g_free (priv->name);
   g_free (priv->serial);
 
   /* Free interfaces list */
@@ -109,6 +116,7 @@ melo_discover_init (MeloDiscover *self)
   /* Create a new Soup session */
   priv->session = soup_session_new_with_options (
                                 SOUP_SESSION_USER_AGENT, "Melo",
+                                SOUP_SESSION_MAX_CONNS, 1,
                                 NULL);
 
 
@@ -270,6 +278,16 @@ melo_netlink_event (gint fd, GIOCondition condition, gpointer user_data)
   /* Lock interface list access */
   g_mutex_lock (&priv->mutex);
 
+  /* Do not register device */
+  if (!priv->register_device)
+    goto end;
+
+  /* Device is not yet registered */
+  if (!priv->registered) {
+    melo_discover_add_device (disco);
+    goto end;
+  }
+
   /* Parse messages */
   for (nh = (struct nlmsghdr *) buffer; NLMSG_OK (nh, len);
        nh = NLMSG_NEXT (nh, len)) {
@@ -329,7 +347,7 @@ melo_netlink_event (gint fd, GIOCondition condition, gpointer user_data)
             /* Set address */
             g_free (iface->address);
             iface->address = melo_discover_get_address (&addr);
-            if (priv->registered && iface->hw_address)
+            if (iface->hw_address)
               melo_discover_add_address (disco, iface);
           }
         }
@@ -346,7 +364,7 @@ melo_netlink_event (gint fd, GIOCondition condition, gpointer user_data)
         if (iface) {
           g_free (iface->address);
           iface->address = NULL;
-          if (priv->registered && iface->hw_address)
+          if (iface->hw_address)
             melo_discover_remove_address (disco, iface);
         }
         break;
@@ -372,6 +390,10 @@ melo_device_register_callback (SoupSession *session, SoupMessage *msg,
 {
   MeloDiscoverPrivate *priv = user_data;
 
+  /* Failed to send message */
+  if (msg->status_code != SOUP_STATUS_OK)
+    return;
+
   /* Lock interface list access */
   g_mutex_lock (&priv->mutex);
 
@@ -382,9 +404,8 @@ melo_device_register_callback (SoupSession *session, SoupMessage *msg,
   g_mutex_unlock (&priv->mutex);
 }
 
-gboolean
-melo_discover_register_device (MeloDiscover *disco, const gchar *name,
-                               guint port)
+static gboolean
+melo_discover_add_device (MeloDiscover *disco)
 {
   MeloDiscoverPrivate *priv = disco->priv;
   MeloDiscoverInterface *iface;
@@ -398,9 +419,6 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
   if (getifaddrs (&ifap))
     return FALSE;
 
-  /* Lock interface list access */
-  g_mutex_lock (&priv->mutex);
-
   /* Get serial */
   if (!priv->serial)
     priv->serial = melo_discover_get_serial (ifap);
@@ -411,11 +429,10 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
   /* Prepare request for device registration */
   req = g_strdup_printf (MELO_DISCOVER_URL "?action=add_device&"
                          "serial=%s&name=%s&hostname=%s&port=%u",
-                         priv->serial, name, host, port);
+                         priv->serial, priv->name, host, priv->port);
 
   /* Register device on Melo website */
   msg = soup_message_new ("GET", req);
-  soup_session_send_message (priv->session, msg);
   soup_session_queue_message (priv->session, msg,
                               melo_device_register_callback, priv);
   g_free (req);
@@ -466,13 +483,35 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
     }
   }
 
-  /* Unock interface list access */
-  g_mutex_unlock (&priv->mutex);
-
   /* Free intarfaces list */
   freeifaddrs (ifap);
 
   return TRUE;
+}
+
+gboolean
+melo_discover_register_device (MeloDiscover *disco, const gchar *name,
+                               guint port)
+{
+  MeloDiscoverPrivate *priv = disco->priv;
+  gboolean ret;
+
+  /* Lock interface list access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Register device */
+  g_free (priv->name);
+  priv->register_device = TRUE;
+  priv->name = g_strdup (name);
+  priv->port = port;
+
+  /* Add device to Melo website */
+  ret = melo_discover_add_device (disco);
+
+  /* Unlock interface list access */
+  g_mutex_unlock (&priv->mutex);
+
+  return ret;
 }
 
 gboolean
@@ -492,6 +531,7 @@ melo_discover_unregister_device (MeloDiscover *disco)
   }
 
   /* Device is not registered */
+  priv->register_device = FALSE;
   priv->registered = FALSE;
 
   /* Prepare request for device removal */
