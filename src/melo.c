@@ -141,11 +141,11 @@ main (int argc, char *argv[])
     melo_discover_register_device (context.disco, context.name, context.port);
 
   /* Register standard JSON-RPC methods */
-  melo_config_register_methods ();
-  melo_module_register_methods ();
-  melo_browser_register_methods ();
-  melo_player_register_methods ();
-  melo_playlist_register_methods ();
+  melo_config_jsonrpc_register_methods ();
+  melo_module_jsonrpc_register_methods ();
+  melo_browser_jsonrpc_register_methods ();
+  melo_player_jsonrpc_register_methods ();
+  melo_playlist_jsonrpc_register_methods ();
 
 #if HAVE_LIBNM_GLIB
   /* Add network controler and register its JSON-RPC methods */
@@ -227,11 +227,11 @@ end:
 #endif
 
   /* Unregister standard JSON-RPC methods */
-  melo_playlist_unregister_methods ();
-  melo_player_unregister_methods ();
-  melo_browser_unregister_methods ();
-  melo_module_unregister_methods ();
-  melo_config_unregister_methods ();
+  melo_playlist_jsonrpc_unregister_methods ();
+  melo_player_jsonrpc_unregister_methods ();
+  melo_browser_jsonrpc_unregister_methods ();
+  melo_module_jsonrpc_unregister_methods ();
+  melo_config_jsonrpc_unregister_methods ();
 
   /* Free discoverer */
   g_object_unref (context.disco);

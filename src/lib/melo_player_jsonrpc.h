@@ -41,7 +41,7 @@ JsonObject *melo_player_jsonrpc_info_to_object (
                                             MeloPlayerJSONRPCInfoFields fields);
 
 /* JSON-RPC methods */
-void melo_player_register_methods (void);
-void melo_player_unregister_methods (void);
+void melo_player_jsonrpc_register_methods (void);
+void melo_player_jsonrpc_unregister_methods (void);
 
 #endif /* __MELO_PLAYER_JSONRPC_H__ */

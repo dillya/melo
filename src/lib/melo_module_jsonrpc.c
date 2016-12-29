@@ -516,14 +516,14 @@ static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
 
 /* Register / Unregister methods */
 void
-melo_module_register_methods (void)
+melo_module_jsonrpc_register_methods (void)
 {
   melo_jsonrpc_register_methods ("module", melo_module_jsonrpc_methods,
                                  G_N_ELEMENTS (melo_module_jsonrpc_methods));
 }
 
 void
-melo_module_unregister_methods (void)
+melo_module_jsonrpc_unregister_methods (void)
 {
   melo_jsonrpc_unregister_methods ("module", melo_module_jsonrpc_methods,
                                    G_N_ELEMENTS (melo_module_jsonrpc_methods));

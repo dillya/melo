@@ -68,7 +68,7 @@ JsonObject *melo_browser_jsonrpc_info_to_object (
                                            MeloBrowserJSONRPCInfoFields fields);
 
 /* JSON-RPC methods */
-void melo_browser_register_methods (void);
-void melo_browser_unregister_methods (void);
+void melo_browser_jsonrpc_register_methods (void);
+void melo_browser_jsonrpc_unregister_methods (void);
 
 #endif /* __MELO_BROWSER_JSONRPC_H__ */

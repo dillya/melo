@@ -340,14 +340,14 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
 
 /* Register / Unregister methods */
 void
-melo_playlist_register_methods (void)
+melo_playlist_jsonrpc_register_methods (void)
 {
   melo_jsonrpc_register_methods ("playlist", melo_playlist_jsonrpc_methods,
                                  G_N_ELEMENTS (melo_playlist_jsonrpc_methods));
 }
 
 void
-melo_playlist_unregister_methods (void)
+melo_playlist_jsonrpc_unregister_methods (void)
 {
   melo_jsonrpc_unregister_methods ("playlist", melo_playlist_jsonrpc_methods,
                                    G_N_ELEMENTS (melo_playlist_jsonrpc_methods));

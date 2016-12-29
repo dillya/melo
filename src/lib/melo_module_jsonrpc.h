@@ -26,8 +26,8 @@
 #include "melo_jsonrpc.h"
 
 /* JSON-RPC methods */
-void melo_module_register_methods (void);
-void melo_module_unregister_methods (void);
+void melo_module_jsonrpc_register_methods (void);
+void melo_module_jsonrpc_unregister_methods (void);
 
 
 #endif /* __MELO_MODULE_JSONRPC_H__ */

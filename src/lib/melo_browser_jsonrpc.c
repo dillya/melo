@@ -641,14 +641,14 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
 
 /* Register / Unregister methods */
 void
-melo_browser_register_methods (void)
+melo_browser_jsonrpc_register_methods (void)
 {
   melo_jsonrpc_register_methods ("browser", melo_browser_jsonrpc_methods,
                                  G_N_ELEMENTS (melo_browser_jsonrpc_methods));
 }
 
 void
-melo_browser_unregister_methods (void)
+melo_browser_jsonrpc_unregister_methods (void)
 {
   melo_jsonrpc_unregister_methods ("browser", melo_browser_jsonrpc_methods,
                                    G_N_ELEMENTS (melo_browser_jsonrpc_methods));

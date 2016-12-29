@@ -26,7 +26,7 @@
 #include "melo_jsonrpc.h"
 
 /* JSON-RPC methods */
-void melo_playlist_register_methods (void);
-void melo_playlist_unregister_methods (void);
+void melo_playlist_jsonrpc_register_methods (void);
+void melo_playlist_jsonrpc_unregister_methods (void);
 
 #endif /* __MELO_PLAYLIST_JSONRPC_H__ */
