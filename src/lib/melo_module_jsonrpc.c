@@ -107,6 +107,140 @@ melo_module_jsonrpc_info_to_object (const gchar *id, const MeloModuleInfo *info,
   return obj;
 }
 
+static JsonArray *
+melo_module_jsonrpc_browser_list_to_array (GList *list,
+                                           MeloBrowserJSONRPCInfoFields fields)
+{
+  JsonArray *array;
+  GList *l;
+
+  /* Create array */
+  array = json_array_new ();
+  if (!array)
+    return NULL;
+
+  /* Generate object list and fill array */
+  for (l = list; l != NULL; l = l->next) {
+    MeloBrowser *bro = (MeloBrowser *) l->data;
+    const MeloBrowserInfo *info;
+    const gchar *id;
+    JsonObject *obj;
+
+    /* Get browser info and ID */
+    info = melo_browser_get_info (bro);
+    id = melo_browser_get_id (bro);
+
+    /* Generate object with browser info */
+    obj = melo_browser_jsonrpc_info_to_object (id, info, fields);
+
+    /* Add object to array */
+    json_array_add_object_element (array, obj);
+  }
+
+  return array;
+}
+
+static JsonArray *
+melo_module_jsonrpc_player_list_to_array (GList *list,
+                                          MeloPlayerJSONRPCInfoFields fields)
+{
+  JsonArray *array;
+  GList *l;
+
+  /* Create array */
+  array = json_array_new ();
+  if (!array)
+    return NULL;
+
+  /* Generate object list and fill array */
+  for (l = list; l != NULL; l = l->next) {
+    MeloPlayer *play = (MeloPlayer *) l->data;
+    const MeloPlayerInfo *info;
+    const gchar *id;
+    JsonObject *obj;
+
+    /* Get player info and ID */
+    info = melo_player_get_info (play);
+    id = melo_player_get_id (play);
+
+    /* Generate object with player info */
+    obj = melo_player_jsonrpc_info_to_object (id, info, fields);
+
+    /* Add object to array */
+    json_array_add_object_element (array, obj);
+  }
+
+  return array;
+}
+
+static JsonArray *
+melo_module_jsonrpc_list_to_array (GList *list, MeloModuleJSONRPCFields fields,
+                                   MeloBrowserJSONRPCInfoFields bfields,
+                                   MeloPlayerJSONRPCInfoFields pfields)
+{
+  JsonArray *array;
+  GList *l;
+
+  /* Create array */
+  array = json_array_new ();
+  if (!array)
+    return NULL;
+
+  /* Generate object list and fill array */
+  for (l = list; l != NULL; l = l->next) {
+    MeloModule *mod = (MeloModule *) l->data;
+    const MeloModuleInfo *info;
+    const gchar *id;
+    JsonObject *obj;
+
+    /* Get module info and ID */
+    info = melo_module_get_info (mod);
+    id = melo_module_get_id (mod);
+
+    /* Generate object with module info */
+    obj = melo_module_jsonrpc_info_to_object (id, info, fields);
+
+    /* Add browser list to object */
+    if (bfields != MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE) {
+      JsonArray *a = NULL;
+      GList *list;
+
+      /* Generate browser list */
+      list = melo_module_get_browser_list (mod);
+      if (list) {
+        a = melo_module_jsonrpc_browser_list_to_array (list, fields);
+        g_list_free_full (list, g_object_unref);
+      }
+
+      /* Add array to object */
+      if (a)
+        json_object_set_array_member (obj, "browser_list", a);
+    }
+
+    /* Add player list to object */
+    if (pfields != MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE) {
+      JsonArray *a = NULL;
+      GList *list;
+
+      /* Generate player list */
+      list = melo_module_get_player_list (mod);
+      if (list) {
+        a = melo_module_jsonrpc_player_list_to_array (list, fields);
+        g_list_free_full (list, g_object_unref);
+      }
+
+      /* Add array to object */
+      if (a)
+        json_object_set_array_member (obj, "player_list", a);
+    }
+
+    /* Add object to array */
+    json_array_add_object_element (array, obj);
+  }
+
+  return array;
+}
+
 /* Method callbacks */
 static void
 melo_module_jsonrpc_get_list (const gchar *method,
@@ -115,19 +249,16 @@ melo_module_jsonrpc_get_list (const gchar *method,
                               gpointer user_data)
 {
   MeloModuleJSONRPCFields fields = MELO_MODULE_JSONRPC_FIELDS_NONE;
-  const MeloModuleInfo *info = NULL;
-  MeloModule *mod;
   JsonArray *array;
   JsonObject *obj;
-  const gchar *id;
   GList *list;
-  GList *l;
 
-  /* Get fields */
+  /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
   if (!obj)
     return;
 
+  /* Get fields */
   fields = melo_module_jsonrpc_get_fields (obj);
   json_object_unref (obj);
 
@@ -135,15 +266,9 @@ melo_module_jsonrpc_get_list (const gchar *method,
   list = melo_module_get_module_list ();
 
   /* Generate list */
-  array = json_array_new ();
-  for (l = list; l != NULL; l = l->next) {
-    mod = (MeloModule *) l->data;
-    id = melo_module_get_id (mod);
-    if (fields != MELO_MODULE_JSONRPC_FIELDS_NONE)
-      info = melo_module_get_info (mod);
-    obj = melo_module_jsonrpc_info_to_object (id, info, fields);
-    json_array_add_object_element (array, obj);
-  }
+  array = melo_module_jsonrpc_list_to_array (list, fields,
+                                         MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE,
+                                         MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE);
 
   /* Free module list */
   g_list_free_full (list, g_object_unref);
@@ -164,11 +289,12 @@ melo_module_jsonrpc_get_info (const gchar *method,
   MeloModule *mod;
   JsonObject *obj;
 
-  /* Get module from id */
+  /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
   if (!obj)
     return;
 
+  /* Get module from id */
   mod = melo_module_jsonrpc_get_module (obj, error);
   if (!mod) {
     json_object_unref (obj);
@@ -196,20 +322,17 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
                                       gpointer user_data)
 {
   MeloBrowserJSONRPCInfoFields fields = MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE;
-  const MeloBrowserInfo *info = NULL;
-  MeloBrowser *bro;
   MeloModule *mod;
   JsonArray *array;
   JsonObject *obj;
-  const gchar *id;
   GList *list;
-  GList *l;
 
-  /* Get module from id */
+  /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
   if (!obj)
     return;
 
+  /* Get module from id */
   mod = melo_module_jsonrpc_get_module (obj, error);
   if (!mod) {
     json_object_unref (obj);
@@ -217,7 +340,7 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
   }
 
   /* Get fields */
-  fields = melo_browser_jsonrpc_get_info_fields (obj);
+  fields = melo_browser_jsonrpc_get_info_fields (obj, "fields");
 
   /* Get browser list */
   list = melo_module_get_browser_list (mod);
@@ -225,15 +348,7 @@ melo_module_jsonrpc_get_browser_list (const gchar *method,
   g_object_unref (mod);
 
   /* Generate list */
-  array = json_array_new ();
-  for (l = list; l != NULL; l = l->next) {
-    bro = (MeloBrowser *) l->data;
-    id = melo_browser_get_id (bro);
-    if (fields != MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE)
-      info = melo_browser_get_info (bro);
-    obj = melo_browser_jsonrpc_info_to_object (id, info, fields);
-    json_array_add_object_element (array, obj);
-  }
+  array = melo_module_jsonrpc_browser_list_to_array (list, fields);
 
   /* Free browser list */
   g_list_free_full (list, g_object_unref);
@@ -250,20 +365,17 @@ melo_module_jsonrpc_get_player_list (const gchar *method,
                                      gpointer user_data)
 {
   MeloPlayerJSONRPCInfoFields fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
-  const MeloPlayerInfo *info = NULL;
-  MeloPlayer *play;
   MeloModule *mod;
   JsonArray *array;
   JsonObject *obj;
-  const gchar *id;
   GList *list;
-  GList *l;
 
-  /* Get module from id */
+  /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
   if (!obj)
     return;
 
+  /* Get module from id */
   mod = melo_module_jsonrpc_get_module (obj, error);
   if (!mod) {
     json_object_unref (obj);
@@ -271,7 +383,7 @@ melo_module_jsonrpc_get_player_list (const gchar *method,
   }
 
   /* Get fields */
-  fields = melo_player_jsonrpc_get_info_fields (obj);
+  fields = melo_player_jsonrpc_get_info_fields (obj, "fields");
 
   /* Get player list */
   list = melo_module_get_player_list (mod);
@@ -279,17 +391,47 @@ melo_module_jsonrpc_get_player_list (const gchar *method,
   g_object_unref (mod);
 
   /* Generate list */
-  array = json_array_new ();
-  for (l = list; l != NULL; l = l->next) {
-    play = MELO_PLAYER (l->data);
-    id = melo_player_get_id (play);
-    if (fields != MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE)
-      info = melo_player_get_info (play);
-    obj = melo_player_jsonrpc_info_to_object (id, info, fields);
-    json_array_add_object_element (array, obj);
-  }
+  array = melo_module_jsonrpc_player_list_to_array (list, fields);
 
   /* Free player list */
+  g_list_free_full (list, g_object_unref);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_ARRAY);
+  json_node_take_array (*result, array);
+}
+
+static void
+melo_module_jsonrpc_get_full_list (const gchar *method,
+                                   JsonArray *s_params, JsonNode *params,
+                                   JsonNode **result, JsonNode **error,
+                                   gpointer user_data)
+{
+  MeloModuleJSONRPCFields fields = MELO_MODULE_JSONRPC_FIELDS_NONE;
+  MeloBrowserJSONRPCInfoFields bfields = MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE;
+  MeloPlayerJSONRPCInfoFields pfields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
+  JsonArray *array;
+  JsonObject *obj;
+  GList *list;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get fields */
+  fields = melo_module_jsonrpc_get_fields (obj);
+  bfields = melo_browser_jsonrpc_get_info_fields (obj, "browser_fields");
+  pfields = melo_player_jsonrpc_get_info_fields (obj, "player_fields");
+  json_object_unref (obj);
+
+  /* Get module list */
+  list = melo_module_get_module_list ();
+
+  /* Generate full list */
+  array = melo_module_jsonrpc_list_to_array (list, fields, bfields, pfields);
+
+  /* Free module list */
   g_list_free_full (list, g_object_unref);
 
   /* Return result */
@@ -348,6 +490,26 @@ static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"array\"}",
     .callback = melo_module_jsonrpc_get_player_list,
+    .user_data = NULL,
+  },
+  {
+    .method = "get_full_list",
+    .params = "["
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"browser_fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"player_fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"array\"}",
+    .callback = melo_module_jsonrpc_get_full_list,
     .user_data = NULL,
   },
 };

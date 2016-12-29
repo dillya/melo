@@ -52,7 +52,7 @@ melo_player_jsonrpc_get_player (JsonObject *obj, JsonNode **error)
 }
 
 MeloPlayerJSONRPCInfoFields
-melo_player_jsonrpc_get_info_fields (JsonObject *obj)
+melo_player_jsonrpc_get_info_fields (JsonObject *obj, const gchar *name)
 {
   MeloPlayerJSONRPCInfoFields fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
   const gchar *field;
@@ -60,11 +60,11 @@ melo_player_jsonrpc_get_info_fields (JsonObject *obj)
   guint count, i;
 
   /* Check if fields is available */
-  if (!json_object_has_member (obj, "fields"))
+  if (!json_object_has_member (obj, name))
     return fields;
 
   /* Get fields array */
-  array = json_object_get_array_member (obj, "fields");
+  array = json_object_get_array_member (obj, name);
   if (!array)
     return fields;
 
@@ -211,7 +211,7 @@ melo_player_jsonrpc_get_info (const gchar *method,
   }
 
   /* Get info fields */
-  fields = melo_player_jsonrpc_get_info_fields (obj);
+  fields = melo_player_jsonrpc_get_info_fields (obj, "fields");
   json_object_unref (obj);
 
   /* Generate object */

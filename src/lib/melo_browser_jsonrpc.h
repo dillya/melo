@@ -60,7 +60,8 @@ typedef enum {
 } MeloBrowserJSONRPCTags;
 
 MeloBrowserJSONRPCInfoFields melo_browser_jsonrpc_get_info_fields (
-                                                               JsonObject *obj);
+                                                             JsonObject *obj,
+                                                             const gchar *name);
 JsonObject *melo_browser_jsonrpc_info_to_object (
                                            const gchar *id,
                                            const MeloBrowserInfo *info,

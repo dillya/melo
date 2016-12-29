@@ -40,7 +40,7 @@ melo_browser_jsonrpc_get_browser (JsonObject *obj, JsonNode **error)
 }
 
 MeloBrowserJSONRPCInfoFields
-melo_browser_jsonrpc_get_info_fields (JsonObject *obj)
+melo_browser_jsonrpc_get_info_fields (JsonObject *obj, const gchar *name)
 {
   MeloBrowserJSONRPCInfoFields fields = MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE;
   const gchar *field;
@@ -48,11 +48,11 @@ melo_browser_jsonrpc_get_info_fields (JsonObject *obj)
   guint count, i;
 
   /* Check if fields is available */
-  if (!json_object_has_member (obj, "fields"))
+  if (!json_object_has_member (obj, name))
     return fields;
 
   /* Get fields array */
-  array = json_object_get_array_member (obj, "fields");
+  array = json_object_get_array_member (obj, name);
   if (!array)
     return fields;
 
@@ -290,7 +290,7 @@ melo_browser_jsonrpc_get_info (const gchar *method,
   }
 
   /* Get fields */
-  fields = melo_browser_jsonrpc_get_info_fields (obj);
+  fields = melo_browser_jsonrpc_get_info_fields (obj, "fields");
   json_object_unref (obj);
 
   /* Generate list */
