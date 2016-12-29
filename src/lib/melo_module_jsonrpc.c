@@ -24,12 +24,13 @@
 #include "melo_player_jsonrpc.h"
 
 typedef enum {
-  MELO_MODULE_JSONRPC_FIELDS_NONE = 0,
-  MELO_MODULE_JSONRPC_FIELDS_NAME = 1,
-  MELO_MODULE_JSONRPC_FIELDS_DESCRIPTION = 2,
-  MELO_MODULE_JSONRPC_FIELDS_CONFIG_ID = 4,
-  MELO_MODULE_JSONRPC_FIELDS_FULL = 255,
-} MeloModuleJSONRPCFields;
+  MELO_MODULE_JSONRPC_INFO_FIELDS_NONE = 0,
+  MELO_MODULE_JSONRPC_INFO_FIELDS_NAME = 1,
+  MELO_MODULE_JSONRPC_INFO_FIELDS_DESCRIPTION = 2,
+  MELO_MODULE_JSONRPC_INFO_FIELDS_CONFIG_ID = 4,
+
+  MELO_MODULE_JSONRPC_INFO_FIELDS_FULL = ~0,
+} MeloModuleJSONRPCInfoFields;
 
 static MeloModule *
 melo_module_jsonrpc_get_module (JsonObject *obj, JsonNode **error)
@@ -49,22 +50,22 @@ melo_module_jsonrpc_get_module (JsonObject *obj, JsonNode **error)
   return NULL;
 }
 
-static MeloModuleJSONRPCFields
+static MeloModuleJSONRPCInfoFields
 melo_module_jsonrpc_get_fields (JsonObject *obj)
 {
-  MeloModuleJSONRPCFields fields = MELO_MODULE_JSONRPC_FIELDS_NONE;
+  MeloModuleJSONRPCInfoFields fields = MELO_MODULE_JSONRPC_INFO_FIELDS_NONE;
   const gchar *field;
   JsonArray *array;
   guint count, i;
 
   /* Check if fields is available */
   if (!json_object_has_member (obj, "fields"))
-    return MELO_MODULE_JSONRPC_FIELDS_NONE;
+    return MELO_MODULE_JSONRPC_INFO_FIELDS_NONE;
 
   /* Get fields array */
   array = json_object_get_array_member (obj, "fields");
   if (!array)
-    return MELO_MODULE_JSONRPC_FIELDS_NONE;
+    return MELO_MODULE_JSONRPC_INFO_FIELDS_NONE;
 
   /* Parse array */
   count = json_array_get_length (array);
@@ -73,17 +74,17 @@ melo_module_jsonrpc_get_fields (JsonObject *obj)
     if (!field)
       break;
     if (!g_strcmp0 (field, "none")) {
-      fields = MELO_MODULE_JSONRPC_FIELDS_NONE;
+      fields = MELO_MODULE_JSONRPC_INFO_FIELDS_NONE;
       break;
     } else if (!g_strcmp0 (field, "full")) {
-      fields = MELO_MODULE_JSONRPC_FIELDS_FULL;
+      fields = MELO_MODULE_JSONRPC_INFO_FIELDS_FULL;
       break;
     } else if (!g_strcmp0 (field, "name"))
-      fields |= MELO_MODULE_JSONRPC_FIELDS_NAME;
+      fields |= MELO_MODULE_JSONRPC_INFO_FIELDS_NAME;
     else if (!g_strcmp0 (field, "description"))
-      fields |= MELO_MODULE_JSONRPC_FIELDS_DESCRIPTION;
+      fields |= MELO_MODULE_JSONRPC_INFO_FIELDS_DESCRIPTION;
     else if (!g_strcmp0 (field, "config_id"))
-      fields |= MELO_MODULE_JSONRPC_FIELDS_CONFIG_ID;
+      fields |= MELO_MODULE_JSONRPC_INFO_FIELDS_CONFIG_ID;
   }
 
   return fields;
@@ -91,17 +92,17 @@ melo_module_jsonrpc_get_fields (JsonObject *obj)
 
 static JsonObject *
 melo_module_jsonrpc_info_to_object (const gchar *id, const MeloModuleInfo *info,
-                                    MeloModuleJSONRPCFields fields)
+                                    MeloModuleJSONRPCInfoFields fields)
 {
   JsonObject *obj = json_object_new ();
   if (id)
     json_object_set_string_member (obj, "id", id);
   if (info) {
-    if (fields & MELO_MODULE_JSONRPC_FIELDS_NAME)
+    if (fields & MELO_MODULE_JSONRPC_INFO_FIELDS_NAME)
       json_object_set_string_member (obj, "name", info->name);
-    if (fields & MELO_MODULE_JSONRPC_FIELDS_DESCRIPTION)
+    if (fields & MELO_MODULE_JSONRPC_INFO_FIELDS_DESCRIPTION)
       json_object_set_string_member (obj, "description", info->description);
-    if (fields & MELO_MODULE_JSONRPC_FIELDS_CONFIG_ID)
+    if (fields & MELO_MODULE_JSONRPC_INFO_FIELDS_CONFIG_ID)
       json_object_set_string_member (obj, "config_id", info->config_id);
   }
   return obj;
@@ -174,7 +175,8 @@ melo_module_jsonrpc_player_list_to_array (GList *list,
 }
 
 static JsonArray *
-melo_module_jsonrpc_list_to_array (GList *list, MeloModuleJSONRPCFields fields,
+melo_module_jsonrpc_list_to_array (GList *list,
+                                   MeloModuleJSONRPCInfoFields fields,
                                    MeloBrowserJSONRPCInfoFields bfields,
                                    MeloPlayerJSONRPCInfoFields pfields)
 {
@@ -248,7 +250,7 @@ melo_module_jsonrpc_get_list (const gchar *method,
                               JsonNode **result, JsonNode **error,
                               gpointer user_data)
 {
-  MeloModuleJSONRPCFields fields = MELO_MODULE_JSONRPC_FIELDS_NONE;
+  MeloModuleJSONRPCInfoFields fields = MELO_MODULE_JSONRPC_INFO_FIELDS_NONE;
   JsonArray *array;
   JsonObject *obj;
   GList *list;
@@ -284,7 +286,7 @@ melo_module_jsonrpc_get_info (const gchar *method,
                               JsonNode **result, JsonNode **error,
                               gpointer user_data)
 {
-  MeloModuleJSONRPCFields fields = MELO_MODULE_JSONRPC_FIELDS_NONE;
+  MeloModuleJSONRPCInfoFields fields = MELO_MODULE_JSONRPC_INFO_FIELDS_NONE;
   const MeloModuleInfo *info = NULL;
   MeloModule *mod;
   JsonObject *obj;
@@ -407,7 +409,7 @@ melo_module_jsonrpc_get_full_list (const gchar *method,
                                    JsonNode **result, JsonNode **error,
                                    gpointer user_data)
 {
-  MeloModuleJSONRPCFields fields = MELO_MODULE_JSONRPC_FIELDS_NONE;
+  MeloModuleJSONRPCInfoFields fields = MELO_MODULE_JSONRPC_INFO_FIELDS_NONE;
   MeloBrowserJSONRPCInfoFields bfields = MELO_BROWSER_JSONRPC_INFO_FIELDS_NONE;
   MeloPlayerJSONRPCInfoFields pfields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
   JsonArray *array;
