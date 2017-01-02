@@ -219,17 +219,42 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       gst_tag_list_unref (tags);
       break;
     }
+    case GST_MESSAGE_STREAM_START:
+      /* Playback is started */
+      g_mutex_lock (&priv->mutex);
+      priv->status->state = MELO_PLAYER_STATE_PLAYING;
+      g_mutex_unlock (&priv->mutex);
+      break;
+    case GST_MESSAGE_BUFFERING: {
+      gint percent;
+
+      /* Get current buffer state */
+      gst_message_parse_buffering (msg, &percent);
+
+      /* Update status */
+      g_mutex_lock (&priv->mutex);
+      if (percent < 100)
+        priv->status->state = MELO_PLAYER_STATE_BUFFERING;
+      else
+        priv->status->state = MELO_PLAYER_STATE_PLAYING;
+      priv->status->buffer_percent = percent;
+      g_mutex_unlock (&priv->mutex);
+
+      break;
+    }
     case GST_MESSAGE_EOS:
       /* Stop playing */
+      g_mutex_lock (&priv->mutex);
       gst_element_set_state (priv->pipeline, GST_STATE_NULL);
       priv->status->state = MELO_PLAYER_STATE_STOPPED;
+      g_mutex_unlock (&priv->mutex);
       break;
     case GST_MESSAGE_ERROR:
-      /* End of stream */
-      priv->status->state = MELO_PLAYER_STATE_ERROR;
-
       /* Lock player mutex */
       g_mutex_lock (&priv->mutex);
+
+      /* End of stream */
+      priv->status->state = MELO_PLAYER_STATE_ERROR;
 
       /* Update error message */
       g_free (priv->status->error);
@@ -301,7 +326,7 @@ melo_player_radio_play (MeloPlayer *player, const gchar *path,
   priv->title = NULL;
   melo_player_status_unref (priv->status);
   melo_playlist_empty (player->playlist);
-  priv->status = melo_player_status_new (MELO_PLAYER_STATE_PLAYING, name);
+  priv->status = melo_player_status_new (MELO_PLAYER_STATE_LOADING, name);
   g_object_get (priv->vol, "volume", &priv->status->volume, NULL);
   if (tags) {
     priv->btags = melo_tags_ref (tags);
