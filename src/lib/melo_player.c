@@ -475,6 +475,8 @@ melo_player_status_unref (MeloPlayerStatus *status)
 
 static const gchar *melo_player_state_str[] = {
   [MELO_PLAYER_STATE_NONE] = "none",
+  [MELO_PLAYER_STATE_LOADING] = "loading",
+  [MELO_PLAYER_STATE_BUFFERING] = "buffering",
   [MELO_PLAYER_STATE_PLAYING] = "playing",
   [MELO_PLAYER_STATE_PAUSED] = "paused",
   [MELO_PLAYER_STATE_STOPPED] = "stopped",

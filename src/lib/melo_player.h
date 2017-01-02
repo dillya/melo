@@ -46,6 +46,8 @@ typedef struct _MeloPlayerStatusPrivate MeloPlayerStatusPrivate;
 
 typedef enum {
   MELO_PLAYER_STATE_NONE,
+  MELO_PLAYER_STATE_LOADING,
+  MELO_PLAYER_STATE_BUFFERING,
   MELO_PLAYER_STATE_PLAYING,
   MELO_PLAYER_STATE_PAUSED,
   MELO_PLAYER_STATE_STOPPED,
@@ -96,6 +98,7 @@ struct _MeloPlayerInfo {
 
 struct _MeloPlayerStatus {
   MeloPlayerState state;
+  gint buffer_percent;
   gchar *error;
   gchar *name;
   gint pos;

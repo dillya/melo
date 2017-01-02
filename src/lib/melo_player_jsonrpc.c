@@ -160,6 +160,7 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
                                    melo_player_state_to_string (status->state));
     if (status->state == MELO_PLAYER_STATE_ERROR)
       json_object_set_string_member (obj, "error", status->error);
+    json_object_set_int_member (obj, "buffer", status->buffer_percent);
   }
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_NAME)
     json_object_set_string_member (obj, "name", status->name);
