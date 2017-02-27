@@ -1,4 +1,7 @@
-/* Melo JS core - Core functions for Melo JS */
+/* Melo JS core - Core functions for Melo JS
+ * Exported functions:
+ *  - melo_jsonrpc_request()
+ */
 
 function melo_jsonrpc_request(method, params, callback) {
     /*  Prepare JSON-RPC request */

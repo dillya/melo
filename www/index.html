@@ -3,31 +3,124 @@
 <head>
   <title>Melo: your personal music hub</title>
 
+  <!-- Meta -->
   <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- Melo CSS style -->
+  <link rel="stylesheet" type="text/css" href="main.css">
+<!-- TEMP START -->
   <style type="text/css">
-    .center {
-      text-align: center;
+    .block {
+      text-align: left;
+      border: 1px solid black;
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 0px 10px;
+      box-sizing: border-box;
     }
   </style>
+<!-- TEMP STOP -->
 
+  <!-- Melo scripts -->
   <script src="jquery-3.0.0.min.js"></script>
   <script src="js/core.js"></script>
   <script src="js/module.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/tmp.js"></script>
   <script src="js/main.js"></script>
 </head>
-<body>
-  <div class="center">
-    <h1>Melo: your personal music hub</h1>
-    <i>No content available... Please use <a href="debug/">debug page</a></i>
-  </div>
-  <ul id="nav_head">
-    <li>Home</li>
-  </ul>
-  <ul id="nav_module_list"></ul>
-  <ul id="nav_tail">
-    <li>Settings</li>
-    <li>Help</li>
-  </ul>
+<body class="page">
+  <!-- Page menu on left side -->
+  <section id="page-side">
+    <div id="side-menu">
+      <!-- Logo menu -->
+      <div id="menu-logo">
+        Melo
+      </div>
+
+      <!-- Navigation menu -->
+      <div id="menu-nav">
+        <div class="scroll-content">
+          <!-- Menu head -->
+          <ul class="nav" id="nav-head">
+            <li><a class="nav-link nav-active" id="nav-home" href="#">Home</a></li>
+          </ul>
+          <!-- Menu body (dynamic part with all modules) -->
+          <ul class="nav" id="nav-modules">
+          </ul>
+          <!-- Menu tail -->
+          <ul class="nav" id="nav-tail">
+            <li><a class="nav-link" id="nav-config" href="#">Settings</a></li>
+            <li><a class="nav-link" id="nav-help" href="#">Help</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Player status / control in menu -->
+      <div id="menu-player">
+        <!-- Player cover -->
+        <div id="player-cover">
+        </div>
+        <!-- Player position -->
+        <div id="player-position">
+        </div>
+        <!-- Player control -->
+        <div id="player-control">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Page overlay -->
+  <div id="page-overlay"></div>
+
+  <!-- Page main content -->
+  <section id="page-main">
+    <!-- Top bar -->
+    <div id="main-top">
+      <span class="open-side">&#9776;</span>
+      Melo
+    </div>
+
+    <!-- Main content -->
+    <div id="main-content">
+<!-- TEMP START -->
+      <div class="center">
+        <h1>Melo: your personal music hub</h1>
+        <i>No content available... Please use <a href="debug/">debug page</a></i>
+      </div>
+      <div class="block">
+        <h2>Browser</h2>
+        <div id="browser_go"></div>
+        <div id="browser_search"></div>
+        <a id="browser_prev" href="#">&lt; Previous</a><br>
+        <span id="bnav"></span>
+        <ul id="browser_list"></ul>
+      </div>
+      <div class="block">
+        <h2>Playlist</h2>
+        <p><span class="title">Playlist list:</span> [ <a id="playlist_refresh" href="#">refresh</a> ]</p>
+        <input type="checkbox" id="playlist_poll" value="enabled">
+        <label for="playlist_poll">Enable playlist status poll (every 1s)</label>
+        <ul id="playlist_list"></ul>
+      </div>
+      <div class="block">
+        <h2>Network</h2>
+        <div id="network_error" class='error_ok'></div>
+        <div id="network"></div>
+      </div>
+      <div class="block">
+        <h2>Config</h2>
+        <div id="config_error" class='error_ok'></div>
+        <div id="config"></div>
+      </div>
+<!-- TEMP END -->
+    </div>
+
+    <!-- Bottom bar -->
+    <div id="main-bottom">
+    </div>
+  </section>
 </body>
 </html>
