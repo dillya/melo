@@ -181,6 +181,24 @@ melo_player_get_player_by_id (const gchar *id)
   return play;
 }
 
+GList *
+melo_player_get_list ()
+{
+  GList *list = NULL;
+
+  /* Lock player list */
+  G_LOCK (melo_player_mutex);
+
+  /* Copy list */
+  if (melo_player_list)
+    list = g_list_copy_deep (melo_player_list, (GCopyFunc) g_object_ref, NULL);
+
+  /* Unlock player list */
+  G_UNLOCK (melo_player_mutex);
+
+  return list;
+}
+
 MeloPlayer *
 melo_player_new (GType type, const gchar *id)
 {

@@ -115,6 +115,7 @@ MeloPlayer *melo_player_new (GType type, const gchar *id);
 const gchar *melo_player_get_id (MeloPlayer *player);
 const MeloPlayerInfo *melo_player_get_info (MeloPlayer *player);
 MeloPlayer *melo_player_get_player_by_id (const gchar *id);
+GList *melo_player_get_list (void);
 
 /* Playlist */
 void melo_player_set_playlist (MeloPlayer *player, MeloPlaylist *playlist);

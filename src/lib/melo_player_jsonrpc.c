@@ -103,7 +103,7 @@ melo_player_jsonrpc_info_to_object (const gchar *id,
 }
 
 static MeloPlayerJSONRPCStatusFields
-melo_player_jsonrpc_get_fields (JsonObject *obj)
+melo_player_jsonrpc_get_status_fields (JsonObject *obj, const char *name)
 {
   MeloPlayerJSONRPCStatusFields fields = MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE;
   const gchar *field;
@@ -111,11 +111,11 @@ melo_player_jsonrpc_get_fields (JsonObject *obj)
   guint count, i;
 
   /* Check if fields is available */
-  if (!json_object_has_member (obj, "fields"))
+  if (!json_object_has_member (obj, name))
     return MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE;
 
   /* Get fields array */
-  array = json_object_get_array_member (obj, "fields");
+  array = json_object_get_array_member (obj, name);
   if (!array)
     return MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE;
 
@@ -187,7 +187,107 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
   return obj;
 }
 
+static JsonArray *
+melo_player_jsonrpc_list_to_array (GList *list,
+                                   MeloPlayerJSONRPCInfoFields fields,
+                                   MeloPlayerJSONRPCStatusFields sfields,
+                                   MeloTagsFields tags_fields)
+{
+  JsonArray *array;
+  GList *l;
+
+  /* Create array */
+  array = json_array_new ();
+  if (!array)
+    return NULL;
+
+  /* Generate object list and fill array */
+  for (l = list; l != NULL; l = l->next) {
+    MeloPlayer *play = (MeloPlayer *) l->data;
+    const MeloPlayerInfo *info;
+    const gchar *id;
+    JsonObject *obj;
+
+    /* Get player info and ID */
+    info = melo_player_get_info (play);
+    id = melo_player_get_id (play);
+
+    /* Generate object with player info */
+    obj = melo_player_jsonrpc_info_to_object (id, info, fields);
+
+    /* Add status to object */
+    if (sfields != MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE) {
+      MeloPlayerStatus *status;
+      JsonObject *o;
+
+      /* Get status */
+      status = melo_player_get_status (play);
+      if (status) {
+        /* Generate status */
+        o = melo_player_jsonrpc_status_to_object (status, sfields, tags_fields,
+                                                  0);
+        melo_player_status_unref (status);
+
+        /* Add status */
+        if (o)
+          json_object_set_object_member (obj, "status", o);
+      }
+    }
+
+    /* Add object to array */
+    json_array_add_object_element (array, obj);
+  }
+
+  return array;
+}
+
 /* Method callbacks */
+static void
+melo_player_jsonrpc_get_list (const gchar *method,
+                              JsonArray *s_params, JsonNode *params,
+                              JsonNode **result, JsonNode **error,
+                              gpointer user_data)
+{
+  MeloPlayerJSONRPCInfoFields fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
+  MeloPlayerJSONRPCStatusFields sfields =
+                                         MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE;
+  MeloTagsFields tfields = MELO_TAGS_FIELDS_NONE;
+  const MeloPlayerInfo *info = NULL;
+  JsonArray *array;
+  JsonObject *obj;
+  GList *list;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get fields */
+  fields = melo_player_jsonrpc_get_info_fields (obj, "fields");
+  sfields = melo_player_jsonrpc_get_status_fields (obj, "status_fields");
+  if (sfields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS &&
+      json_object_has_member (obj, "tags_fields")) {
+    /* Get tags fields array */
+    array = json_object_get_array_member (obj, "tags_fields");
+    if (array)
+      tfields = melo_tags_get_fields_from_json_array (array);
+  }
+  json_object_unref (obj);
+
+  /* Get player list */
+  list = melo_player_get_list ();
+
+  /* Generate list */
+  array = melo_player_jsonrpc_list_to_array (list, fields, sfields, tfields);
+
+  /* Free player list */
+  g_list_free_full (list, g_object_unref);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_ARRAY);
+  json_node_take_array (*result, array);
+}
+
 static void
 melo_player_jsonrpc_get_info (const gchar *method,
                               JsonArray *s_params, JsonNode *params,
@@ -372,7 +472,7 @@ melo_player_jsonrpc_get_status (const gchar *method,
   }
 
   /* Get fields */
-  fields = melo_player_jsonrpc_get_fields (obj);
+  fields = melo_player_jsonrpc_get_status_fields (obj, "fields");
 
   /* Get tags fields */
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS &&
@@ -440,8 +540,29 @@ melo_player_jsonrpc_action (const gchar *method,
   *result = json_node_new (JSON_NODE_OBJECT);
   json_node_take_object (*result, obj);
 }
+
 /* List of methods */
 static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
+  {
+    .method = "get_list",
+    .params = "["
+              "  {"
+              "    \"name\": \"fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"status_fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"tags_fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"array\"}",
+    .callback = melo_player_jsonrpc_get_list,
+    .user_data = NULL,
+  },
   {
     .method = "get_info",
     .params = "["
