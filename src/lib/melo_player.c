@@ -327,6 +327,16 @@ melo_player_set_volume (MeloPlayer *player, gdouble volume)
   return pclass->set_volume (player, volume);
 }
 
+gboolean
+melo_player_set_mute (MeloPlayer *player, gboolean mute)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->set_mute, FALSE);
+
+  return pclass->set_mute (player, mute);
+}
+
 MeloPlayerState
 melo_player_get_state (MeloPlayer *player)
 {

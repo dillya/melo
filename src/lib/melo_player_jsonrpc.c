@@ -28,7 +28,8 @@ typedef enum {
   MELO_PLAYER_JSONRPC_STATUS_FIELDS_POS = 4,
   MELO_PLAYER_JSONRPC_STATUS_FIELDS_DURATION = 8,
   MELO_PLAYER_JSONRPC_STATUS_FIELDS_VOLUME = 16,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS = 32,
+  MELO_PLAYER_JSONRPC_STATUS_FIELDS_MUTE = 32,
+  MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS = 64,
 
   MELO_PLAYER_JSONRPC_STATUS_FIELDS_FULL = ~0,
 } MeloPlayerJSONRPCStatusFields;
@@ -141,6 +142,8 @@ melo_player_jsonrpc_get_status_fields (JsonObject *obj, const char *name)
       fields |= MELO_PLAYER_JSONRPC_STATUS_FIELDS_DURATION;
     else if (!g_strcmp0 (field, "volume"))
       fields |= MELO_PLAYER_JSONRPC_STATUS_FIELDS_VOLUME;
+    else if (!g_strcmp0 (field, "mute"))
+      fields |= MELO_PLAYER_JSONRPC_STATUS_FIELDS_MUTE;
     else if (!g_strcmp0 (field, "tags"))
       fields |= MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS;
   }
@@ -170,6 +173,8 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
     json_object_set_int_member (obj, "duration", status->duration);
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_VOLUME)
     json_object_set_double_member (obj, "volume", status->volume);
+  if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_MUTE)
+    json_object_set_boolean_member (obj, "mute", status->mute);
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS) {
     MeloTags *tags;
 
@@ -428,17 +433,56 @@ melo_player_jsonrpc_set_volume (const gchar *method,
     return;
   }
 
-  /* Get requested position */
+  /* Get requested volume */
   volume = json_object_get_double_member (obj, "volume");
   json_object_unref (obj);
 
-  /* Set new position */
+  /* Set new volume */
   volume = melo_player_set_volume (play, volume);
   g_object_unref (play);
 
   /* Create and fill object */
   obj = json_object_new ();
   json_object_set_double_member (obj, "volume", volume);
+
+  /* Return result */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
+static void
+melo_player_jsonrpc_set_mute (const gchar *method,
+                                JsonArray *s_params, JsonNode *params,
+                                JsonNode **result, JsonNode **error,
+                                gpointer user_data)
+{
+  MeloPlayer *play;
+  JsonObject *obj;
+  gboolean mute;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get player from id */
+  play = melo_player_jsonrpc_get_player (obj, error);
+  if (!play) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get requested mute */
+  mute = json_object_get_boolean_member (obj, "mute");
+  json_object_unref (obj);
+
+  /* Set new mute setting */
+  mute = melo_player_set_mute (play, mute);
+  g_object_unref (play);
+
+  /* Create and fill object */
+  obj = json_object_new ();
+  json_object_set_double_member (obj, "mute", mute);
 
   /* Return result */
   *result = json_node_new (JSON_NODE_OBJECT);
@@ -604,6 +648,16 @@ static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_player_jsonrpc_set_volume,
+    .user_data = NULL,
+  },
+  {
+    .method = "set_mute",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"mute\", \"type\": \"boolean\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_player_jsonrpc_set_mute,
     .user_data = NULL,
   },
   {
