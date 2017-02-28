@@ -61,12 +61,63 @@
       <div id="menu-player">
         <!-- Player cover -->
         <div id="player-cover">
+          <img id="player-cover-img" src="">
+          <div id="player-track"></div>
+          <!-- Integrated player tabs (dynamic loaded) -->
+          <div id="player-ptabs">
+            <div id="player-tabs"></div>
+          </div>
+          <div id="player-time-handle">00:00</div>
         </div>
         <!-- Player position -->
         <div id="player-position">
+          <div id="player-position-bar"></div>
+          <div id="player-position-handle"></div>
+          <div id="player-status" class="player-status player-status-left"></div>
+          <div id="player-time" class="player-status player-status-right">00:00 / 00:00</div>
+        <div id="player-position-overlay"></div>
         </div>
         <!-- Player control -->
         <div id="player-control">
+          <!-- Player controler (prev / play / pause / next) -->
+          <div id="player-control-main">
+            <svg class="player-button player-button-disabled" viewBox="0 0 32 32" width="22" height="22">
+              <path d="M4 0 H8 V14 L28 0 V32 L8 18 V32 H4 Z"/>
+            </svg>
+            <svg class="player-button" id="player-play" width="32" height="32">
+              <path d="M4.3 0 V32 L32 16 Z"/>
+            </svg>
+            <svg class="player-button" viewBox="0 0 32 32" width="22" height="22">
+              <path d="M4 0 L24 14 V0 H28 V32 H24 V18 L4 32 Z"/>
+            </svg>
+          </div>
+          <!-- Player control (volume / playlist) -->
+          <div id="player-control-second">
+            <div id="player-control-volume">
+              <svg id="player-mute" class="player-button" viewBox="0 0 32 32" width="20" height="20">
+                <path d="M0 10 H8 L20 0 V32 L8 22 H0 Z
+                         M24 6 Q32 16, 24 26"/>
+                <line x1="0" y1="32" x2="32" y2="0" stroke="2" style="stroke: #f00; stroke-width: 5px; display: none"/>
+              </svg>
+              <div id="player-volume">
+                <div id="player-volume-bar">
+                  <div id="player-volume-value"></div>
+                </div>
+                <div id="player-volume-handle"></div>
+              </div>
+              <div id="player-volume-overlay"></div>
+            </div>
+            <div id="player-playlist" class="player-button">
+              <svg viewBox="0 0 32 32" width="20" height="20">
+                <path d="M0 0 H32 v6 H0 Z
+                         M0 8 H32 v6 H0 Z
+                         M15.85 16 H32 v6 H15.85 Z
+                         M15.85 24 H32 v6 H15.85 Z
+                         M0 16 L13.85 24 L0 32 Z"/>
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

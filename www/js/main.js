@@ -1,4 +1,12 @@
 /* Melo JS main - Main task for Melo JS */
 
-/* Load Module list for menu */
-melo_module_update_list();
+$(document).ready(function() {
+    /* Init player */
+    melo_player_init();
+
+    /* Load Module list for menu */
+    melo_module_update_list();
+
+    /* */
+    melo_player_update_list();
+});

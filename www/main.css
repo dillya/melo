@@ -46,9 +46,9 @@ a {
   overflow: hidden;
 }
 
-/*
- * Side bar
- */
+/************
+ * Side bar *
+ ************/
 #page-side {
   background-color: #23232C;
   top: 0;
@@ -64,6 +64,7 @@ a {
 @-webkit-keyframes animateleft{from{left:-300px;opacity:0} to{left:0;opacity:1}}
 @keyframes animateleft{from{left:-300px;opacity:0} to{left:0;opacity:1}}
 
+/* Menu logo */
 #menu-logo {
   color: #FFFFFF;
   text-align: center;
@@ -71,6 +72,7 @@ a {
   padding: 10px;
 }
 
+/* Menu navigation */
 #menu-nav {
   top: 50px;
   bottom: 310px;
@@ -146,18 +148,7 @@ a {
   color: #FFFFFF;
 }
 
-/*
-.scroll-bar {
-  top: 0;
-  bottom: 0;
-  right: 0;
-  position: absolute;
-  width: 12px;
-}
-
-/*
- * Player
- */
+/* Player */
 #menu-player {
   bottom: 0;
   left: 0;
@@ -166,13 +157,14 @@ a {
   height: 310px;
 }
 
+/* Player cover */
 #player-cover {
   position: relative;
   width: 220px;
   height: 220px;
 }
-/*
-#player-cover img {
+
+#player-cover-img {
   width: 220px;
   height: 220px;
 }
@@ -190,26 +182,25 @@ a {
   overflow: hidden;
 }
 
-.player-track h2 {
+#player-track h2 {
   margin: 0px;
 }
-.player-track h3 {
+#player-track h3 {
   margin: 0px;
 }
 
-.player-ttabs {
+#player-ptabs {
   background-color: rgba(0,0,0,0.4);
   overflow: hidden;
   width: 220px;
   height: 220px;
   position: absolute;
   display: none;
-
   top: 0;
   left: 0;
 }
 
-.player-tabs {
+#player-tabs {
   height: 220px;
   width: 236px;
   overflow-x: hidden;
@@ -256,8 +247,8 @@ a {
   box-shadow: inset 0px 0px 0px 4px rgba(0, 127, 235, .8);
 
 }
-*/
 
+/* Player position */
 #player-position {
   width: 220px;
   height: 16px;
@@ -268,9 +259,9 @@ a {
   line-height: 16px;
   user-select: none;
 }
-/*
+
 #player-position-bar {
-  width: 40%;
+  width: 0;
   height: 16px;
   background-color: #2784d4;
   position: absolute;
@@ -291,7 +282,6 @@ a {
 
 .player-status-left {
   left: 0;
-  FIXME
   display: none;
 }
 
@@ -319,19 +309,20 @@ a {
   border-radius: 4px;
   display: none;
 }
-*/
 
+/* Player control */
 #player-control {
   width: 220px;
 }
-/*
-.player-control-main {
+
+#player-control-main {
   height: 32px;
   line-height: 32px;
   text-align: center;
   padding: 6px 0;
 }
-.player-control-main svg {
+
+#player-control-main svg {
   height: 32px;
   margin: 0 6px;
 }
@@ -348,12 +339,12 @@ a {
   fill: #61616d;
 }
 
-.player-control-second {
+#player-control-second {
   height: 20px;
   padding: 5px 0;
 }
 
-.player-control-volume {
+#player-control-volume {
   width: 180px;
   padding: 0 5px;
   float: left;
@@ -371,6 +362,7 @@ a {
   cursor: pointer;
   margin: 0 8px;
 }
+
 #player-volume-overlay {
   position: relative;
   left: 20px;
@@ -386,11 +378,13 @@ a {
   background-color: #61616d;
   margin: 8px 0;
 }
+
 #player-volume-value {
   width: 50%;
   background-color: #fff;
   height: 4px;
 }
+
 #player-volume-handle {
   position: absolute;
   top: 5px;
@@ -400,7 +394,6 @@ a {
   background-color: #fff;
   border-radius: 5px;
 }
-*/
 
 /*
  * Overlay

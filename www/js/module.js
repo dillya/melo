@@ -65,7 +65,7 @@ function melo_module_render_list(result) {
 
 function melo_module_update_list() {
     /* Get module list */
-    melo_jsonrpc_request("module.get_full_list", '[["full"],["full"],["full"]]',
+    melo_jsonrpc_request("module.get_full_list", '[["full"],["full"],["none"]]',
         function(result) {
             /* Update module list */
             melo_module_render_list(result);
