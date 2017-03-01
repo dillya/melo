@@ -111,6 +111,8 @@ struct _MeloPlayerStatus {
   gchar *name;
   gint pos;
   gint duration;
+  gboolean has_prev;
+  gboolean has_next;
   gdouble volume;
   gboolean mute;
 

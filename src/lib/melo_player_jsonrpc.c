@@ -27,9 +27,10 @@ typedef enum {
   MELO_PLAYER_JSONRPC_STATUS_FIELDS_NAME = 2,
   MELO_PLAYER_JSONRPC_STATUS_FIELDS_POS = 4,
   MELO_PLAYER_JSONRPC_STATUS_FIELDS_DURATION = 8,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_VOLUME = 16,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_MUTE = 32,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS = 64,
+  MELO_PLAYER_JSONRPC_STATUS_FIELDS_PLAYLIST = 16,
+  MELO_PLAYER_JSONRPC_STATUS_FIELDS_VOLUME = 32,
+  MELO_PLAYER_JSONRPC_STATUS_FIELDS_MUTE = 64,
+  MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS = 128,
 
   MELO_PLAYER_JSONRPC_STATUS_FIELDS_FULL = ~0,
 } MeloPlayerJSONRPCStatusFields;
@@ -156,6 +157,8 @@ melo_player_jsonrpc_get_status_fields (JsonObject *obj, const char *name)
       fields |= MELO_PLAYER_JSONRPC_STATUS_FIELDS_POS;
     else if (!g_strcmp0 (field, "duration"))
       fields |= MELO_PLAYER_JSONRPC_STATUS_FIELDS_DURATION;
+    else if (!g_strcmp0 (field, "playlist"))
+      fields |= MELO_PLAYER_JSONRPC_STATUS_FIELDS_PLAYLIST;
     else if (!g_strcmp0 (field, "volume"))
       fields |= MELO_PLAYER_JSONRPC_STATUS_FIELDS_VOLUME;
     else if (!g_strcmp0 (field, "mute"))
@@ -187,6 +190,10 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
     json_object_set_int_member (obj, "pos", status->pos);
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_DURATION)
     json_object_set_int_member (obj, "duration", status->duration);
+  if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_PLAYLIST) {
+    json_object_set_boolean_member (obj, "has_prev", status->has_prev);
+    json_object_set_boolean_member (obj, "has_next", status->has_next);
+  }
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_VOLUME)
     json_object_set_double_member (obj, "volume", status->volume);
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_MUTE)

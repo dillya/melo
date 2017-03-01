@@ -66,6 +66,8 @@ struct _MeloPlaylistClass {
                       gboolean set);
   gchar *(*get_next) (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
                       gboolean set);
+  gboolean (*has_prev) (MeloPlaylist *playlist);
+  gboolean (*has_next) (MeloPlaylist *playlist);
   gboolean (*play) (MeloPlaylist *playlist, const gchar *name);
   gboolean (*remove) (MeloPlaylist *playlist, const gchar *name);
   void (*empty) (MeloPlaylist *playlist);
@@ -110,6 +112,8 @@ gchar *melo_playlist_get_prev (MeloPlaylist *playlist, gchar **name,
                                MeloTags **tags, gboolean set);
 gchar *melo_playlist_get_next (MeloPlaylist *playlist, gchar **name,
                                MeloTags **tags, gboolean set);
+gboolean melo_playlist_has_prev (MeloPlaylist *playlist);
+gboolean melo_playlist_has_next (MeloPlaylist *playlist);
 gboolean melo_playlist_play (MeloPlaylist *playlist, const gchar *name);
 gboolean melo_playlist_remove (MeloPlaylist *playlist, const gchar *name);
 void melo_playlist_empty (MeloPlaylist *playlist);

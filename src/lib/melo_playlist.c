@@ -259,6 +259,26 @@ melo_playlist_get_next (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
 }
 
 gboolean
+melo_playlist_has_prev (MeloPlaylist *playlist)
+{
+  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
+
+  g_return_val_if_fail (pclass->has_prev, FALSE);
+
+  return pclass->has_prev (playlist);
+}
+
+gboolean
+melo_playlist_has_next (MeloPlaylist *playlist)
+{
+  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
+
+  g_return_val_if_fail (pclass->has_next, FALSE);
+
+  return pclass->has_next (playlist);
+}
+
+gboolean
 melo_playlist_play (MeloPlaylist *playlist, const gchar *path)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);

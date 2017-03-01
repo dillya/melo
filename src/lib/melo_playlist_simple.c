@@ -40,6 +40,8 @@ static gchar *melo_playlist_simple_get_prev (MeloPlaylist *playlist,
 static gchar *melo_playlist_simple_get_next (MeloPlaylist *playlist,
                                              gchar **name, MeloTags **tags,
                                              gboolean set);
+static gboolean melo_playlist_simple_has_prev (MeloPlaylist *playlist);
+static gboolean melo_playlist_simple_has_next (MeloPlaylist *playlist);
 static gboolean melo_playlist_simple_play (MeloPlaylist *playlist,
                                            const gchar *name);
 static gboolean melo_playlist_simple_remove (MeloPlaylist *playlist,
@@ -110,6 +112,8 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   plclass->add = melo_playlist_simple_add;
   plclass->get_prev = melo_playlist_simple_get_prev;
   plclass->get_next = melo_playlist_simple_get_next;
+  plclass->has_prev = melo_playlist_simple_has_prev;
+  plclass->has_next = melo_playlist_simple_has_next;
   plclass->play = melo_playlist_simple_play;
   plclass->remove = melo_playlist_simple_remove;
   plclass->empty = melo_playlist_simple_empty;
@@ -370,6 +374,44 @@ melo_playlist_simple_get_next (MeloPlaylist *playlist, gchar **name,
   g_mutex_unlock (&priv->mutex);
 
   return path;
+}
+
+static gboolean
+melo_playlist_simple_has_prev (MeloPlaylist *playlist)
+{
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+  gboolean val;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Have anitem after current */
+  val = priv->current && priv->current->next;
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return val;
+}
+
+static gboolean
+melo_playlist_simple_has_next (MeloPlaylist *playlist)
+{
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+  gboolean val;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Have anitem before current */
+  val = priv->current && priv->current->prev;
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return val;
 }
 
 static gboolean
