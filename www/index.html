@@ -11,6 +11,9 @@
   <link rel="stylesheet" type="text/css" href="main.css">
 <!-- TEMP START -->
   <style type="text/css">
+    .center {
+      text-align: center;
+    }
     .block {
       text-align: left;
       border: 1px solid black;
@@ -19,6 +22,33 @@
       padding: 0px 10px;
       box-sizing: border-box;
     }
+    .current {
+      background-color: #ccc;
+      border: 1px solid black;
+    }
+    .browser_category {
+      font-weight: bold;
+    }
+    .browser_media, .playlist_media {
+      color: #ff9933;
+    }
+    .browser_tags, .playlist_tags {
+      color: #00b300;
+    }
+    .tags_cover {
+      width: 100px;
+      height: 100px;
+      float: left;
+      margin: 2px;
+    }
+    .error_ok {
+      background-color: #6bbd4c;
+      color: #fff;
+    }
+    .error_msg {
+      background-color: #ff3a3a;
+    }
+
   </style>
 <!-- TEMP STOP -->
 
@@ -81,13 +111,16 @@
         <div id="player-control">
           <!-- Player controler (prev / play / pause / next) -->
           <div id="player-control-main">
-            <svg class="player-button player-button-disabled" viewBox="0 0 32 32" width="22" height="22">
+            <svg id="player-prev" class="player-button player-button-disabled" viewBox="0 0 32 32" width="22" height="22">
               <path d="M4 0 H8 V14 L28 0 V32 L8 18 V32 H4 Z"/>
             </svg>
-            <svg class="player-button" id="player-play" width="32" height="32">
+            <svg id="player-play" class="player-button" width="32" height="32">
               <path d="M4.3 0 V32 L32 16 Z"/>
             </svg>
-            <svg class="player-button" viewBox="0 0 32 32" width="22" height="22">
+            <svg id="player-stop" class="player-button" viewBox="0 0 32 32"width="20" height="20">
+              <path d="M0 0 V32 H32 V0 Z"/>
+            </svg>
+            <svg id="player-next" class="player-button" viewBox="0 0 32 32" width="22" height="22">
               <path d="M4 0 L24 14 V0 H28 V32 H24 V18 L4 32 Z"/>
             </svg>
           </div>
@@ -105,6 +138,7 @@
                 </div>
                 <div id="player-volume-handle"></div>
               </div>
+              <div id="player-mute-overlay"></div>
               <div id="player-volume-overlay"></div>
             </div>
             <div id="player-playlist" class="player-button">

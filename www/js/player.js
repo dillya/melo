@@ -2,6 +2,8 @@
  *
  * Exported functions:
  *  - melo_player_init()
+ *  - melo_player_timer_start()
+ *  - melo_player_timer_stop()
  *  - melo_player_update_list()
  */
 
@@ -9,6 +11,9 @@
 var melo_player_position_length = 220;
 var melo_player_max_handle_position = 216;
 var melo_player_volume_handle_half_width = 5;
+
+/* Timer */
+var melo_player_timer = null;
 
 /* Current player */
 var melo_player_current_id = "";
@@ -24,19 +29,25 @@ var melo_player_current_duration = 0;
  * Helpers
  */
 function melo_player_print_time(time_s) {
-    var m = Math.floor(time_s / 60);
-    var s = Math.floor(time_s) - (m * 60);
-    return ('0' + m).slice(-2) + ":" + ('0' + s).slice(-2);
+    time_s = Math.floor(time_s);
+    var h = Math.floor(time_s / 3600)
+    var m = Math.floor((time_s - (h * 60)) / 60);
+    var s = time_s - (h * 3600) - (m * 60);
+    if (!h)
+        return ('0' + m).slice(-2) + ":" + ('0' + s).slice(-2);
+    return ('0' + h).slice(-2) + ":" + ('0' + m).slice(-2) + ":" +
+        ('0' + s).slice(-2);
 }
 
 /*
  * Control helpers
  */
-function melo_player_set_state(id, play) {
-    melo_jsonrpc_request("player.set_state",
-        '["' + id + '","' + (play ? "playing" : "paused") + '"]',
+function melo_player_set_state(id, state) {
+    melo_jsonrpc_request("player.set_state", '["' + id + '","' + state + '"]',
         function(result) {
-            melo_player_update_state(result.state, 0, "");
+            melo_player_update_state(result.state, null);
+            /* FIXME */
+            melo_player_update_player();
         }
     );
 }
@@ -45,14 +56,16 @@ function melo_player_prev(id) {
     melo_jsonrpc_request("player.prev", '["' + id + '"]',
         function(result) {
             /* TODO */
+            melo_player_update_player();
         }
     );
 }
 
 function melo_player_next(id) {
-    melo_jsonrpc_request("player.prev", '["' + id + '"]',
+    melo_jsonrpc_request("player.next", '["' + id + '"]',
         function(result) {
             /* TODO */
+            melo_player_update_player();
         }
     );
 }
@@ -84,7 +97,37 @@ function melo_player_set_mute(id, mute) {
 /*
  * Player Rendering
  */
-function melo_player_update_state(state, buffer, error) {
+function melo_player_update_control(playlist, controls) {
+    if (playlist && playlist != "")
+        $("#player-playlist").removeClass("player-button-disabled");
+    else
+        $("#player-playlist").addClass("player-button-disabled");
+    if (controls.state) {
+        $("#player-play").removeClass("player-button-disabled");
+        $("#player-stop").show();
+    } else {
+        $("#player-play").addClass("player-button-disabled");
+        $("#player-stop").hide();
+    }
+    if (controls.prev)
+        $("#player-prev").removeClass("player-button-disabled");
+    else
+        $("#player-prev").addClass("player-button-disabled");
+    if (controls.next)
+        $("#player-next").removeClass("player-button-disabled");
+    else
+        $("#player-next").addClass("player-button-disabled");
+    if (controls.volume)
+        $("#player-volume-overlay").hide();
+    else
+        $("#player-volume-overlay").show();
+    if (controls.mute)
+        $("#player-mute-overlay").hide();
+    else
+        $("#player-mute-overlay").show();
+}
+
+function melo_player_update_state(state, result) {
     melo_player_current_state = state;
 
     /* Display message */
@@ -92,21 +135,39 @@ function melo_player_update_state(state, buffer, error) {
         $("#player-status").text("Loading...").show();
     else if (state == "buffering")
         $("#player-status")
-            .text("Buffering... (" + buffer + " %)").show();
+            .text("Buffering... (" + result.buffer + " %)").show();
     else if (state == "error")
-        $("#player-status").text("Error: " + error).show();
+        $("#player-status").text("Error: " + result.error).show();
     else
         $("#player-status").text("").hide();
-
 
     /* Player is playing */
     if (state == "loading" || state == "buffering" || state == "playing") {
         $("#player-play").children()
             .attr("d", "M4 0 h10 v32 h-10 Z M18 0 h10 v32 h-10 Z");
         melo_player_current_is_playing = true;
+        $("#player-stop").removeClass("player-button-disabled");
     } else {
         $("#player-play").children().attr("d", "M4.3 0 V32 L32 16 Z");
         melo_player_current_is_playing = false;
+
+        /* Player is stopped */
+        if (state != "paused")
+            $("#player-stop").addClass("player-button-disabled");
+        else
+            $("#player-stop").removeClass("player-button-disabled");
+    }
+
+    /* Update playlist control */
+    if (result) {
+        if (result.has_prev)
+            $("#player-prev").removeClass("player-button-disabled");
+        else
+            $("#player-prev").addClass("player-button-disabled");
+        if (result.has_next)
+            $("#player-next").removeClass("player-button-disabled");
+        else
+            $("#player-next").addClass("player-button-disabled");
     }
 }
 
@@ -152,7 +213,7 @@ function melo_player_render_player(result) {
     }
 
     /* Update state */
-    melo_player_update_state(result.state, result.buffer, result.error);
+    melo_player_update_state(result.state, result);
 
     /* Update position */
     melo_player_current_duration = result.duration;
@@ -209,11 +270,8 @@ function melo_player_render_list(result) {
     for (var i = 0; i < result.length; i++) {
         var img = "";
         if (result[i].status.tags && result[i].status.tags.cover_url)
-            img = result[i].status.tags.cover_url;
-
-        /* Current player */
-        if (result[i].id == melo_player_current_id)
-            player_found = true;
+            img = result[i].status.tags.cover_url +'?t=' +
+                result[i].status.tags.timestamp;
 
         /* Create tab */
         var tab = $(
@@ -232,7 +290,14 @@ function melo_player_render_list(result) {
                     $(this).next().hide();
                 })
             .data("id", result[i].id)
-            .data("playlist_id", result[i].playlist);
+            .data("playlist_id", result[i].playlist)
+            .data("controls", result[i].controls);
+
+        /* Current player */
+        if (result[i].id == melo_player_current_id) {
+            tab.children(":first").addClass("player-tab-active");
+            player_found = true;
+        }
 
         /* Add new tab */
         tabs.append(tab);
@@ -244,6 +309,7 @@ function melo_player_render_list(result) {
             melo_player_current_id = result[0].id;
             melo_player_current_playlist_id = result[0].playlist;
             tabs.find(".player-tab-cover:first").addClass("player-tab-active");
+            melo_player_update_control(result[0].playlist, result[0].controls);
         } else
             melo_player_current_id = "";
     }
@@ -262,9 +328,41 @@ function melo_player_update_list() {
 }
 
 /*
+ * Timer for status poll
+ */
+function melo_player_timer_event() {
+    if ($("#player-ptabs").is(":visible")) {
+        /* Update whole player list */
+        melo_player_update_list();
+    } else {
+        /* Update current player */
+        melo_player_update_player();
+    }
+}
+
+function melo_player_timer_start(time_s) {
+    if (melo_player_timer)
+        return;
+    time_s = time_s || 1;
+    melo_player_timer = setInterval(melo_player_timer_event, time_s * 1000);
+}
+
+function melo_player_timer_stop() {
+    if (!melo_player_timer)
+        return;
+    clearInterval(melo_player_timer);
+    melo_player_timer = null;
+}
+
+/*
  * Event handlers
  */
 function melo_player_toggle_cover_tabs(eventData) {
+    /* Update player list before showing */
+    if ($("#player-ptabs").not(":visible"))
+        melo_player_update_list();
+
+    /* Toggle player list */
     $("#player-ptabs").fadeToggle();
 }
 
@@ -280,6 +378,8 @@ function melo_player_tab_click(eventData) {
     melo_player_current_id = $(this).data("id");
     melo_player_current_playlist_id = $(this).data("playlist_id");
     melo_player_current_ts = 0;
+    melo_player_update_control(melo_player_current_playlist_id,
+        $(this).data("controls"));
     melo_player_update_player();
     return false;
 }
@@ -352,15 +452,19 @@ function melo_player_hide_handle(eventData) {
 
 function melo_player_play_click(eventData) {
     melo_player_set_state(melo_player_current_id,
-                          !melo_player_current_is_playing);
+        melo_player_current_is_playing ? "paused" : "playing");
+}
+
+function melo_player_stop_click(eventData) {
+    melo_player_set_state(melo_player_current_id, "stopped");
 }
 
 function melo_player_prev_click(eventData) {
-
+    melo_player_prev(melo_player_current_id);
 }
 
 function melo_player_next_click(eventData) {
-
+    melo_player_next(melo_player_current_id);
 }
 
 function melo_player_volume_click(eventData) {
@@ -435,6 +539,7 @@ function melo_player_init() {
 
     /* Add event handler for player control */
     $("#player-play").click(melo_player_play_click);
+    $("#player-stop").click(melo_player_stop_click);
     $("#player-prev").click(melo_player_prev_click);
     $("#player-next").click(melo_player_next_click);
     $("#player-playlist").click(melo_player_playlist_click);

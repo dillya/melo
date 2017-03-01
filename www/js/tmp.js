@@ -382,6 +382,7 @@ function melo_browser_previous() {
 }
 
 function melo_get_playlist_list(id, play) {
+  playlist_poll_id = id;
   jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '",["full"],' +
                                              '["artist","title","cover_url"]]'),
                null, function(response, data) {
@@ -461,7 +462,7 @@ function melo_playlist_play(id, name, play) {
       return;
 
     /* Update playlist and player */
-    melo_update_player (play);
+    //melo_update_player (play);
     melo_get_playlist_list (id, play);
   });
 }
@@ -473,7 +474,7 @@ function melo_playlist_remove(id, name, play) {
       return;
 
     /* Update playlist and player */
-    melo_update_player (play);
+    //melo_update_player (play);
     melo_get_playlist_list (id, play);
   });
 }
