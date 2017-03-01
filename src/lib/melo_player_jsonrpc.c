@@ -83,6 +83,8 @@ melo_player_jsonrpc_get_info_fields (JsonObject *obj, const gchar *name)
       break;
     } else if (!g_strcmp0 (field, "playlist"))
       fields |= MELO_PLAYER_JSONRPC_INFO_FIELDS_PLAYLIST;
+    else if (!g_strcmp0 (field, "controls"))
+      fields |= MELO_PLAYER_JSONRPC_INFO_FIELDS_CONTROLS;
   }
 
   return fields;
@@ -99,6 +101,20 @@ melo_player_jsonrpc_info_to_object (const gchar *id,
   if (info) {
     if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_PLAYLIST)
       json_object_set_string_member (obj, "playlist", info->playlist_id);
+    if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_CONTROLS) {
+      JsonObject *o;
+
+      /* Create a new controls object */
+      o = json_object_new ();
+      if (o) {
+        json_object_set_boolean_member (o, "state", info->control.state);
+        json_object_set_boolean_member (o, "prev", info->control.prev);
+        json_object_set_boolean_member (o, "next", info->control.next);
+        json_object_set_boolean_member (o, "volume", info->control.volume);
+        json_object_set_boolean_member (o, "mute", info->control.mute);
+        json_object_set_object_member (obj, "controls", o);
+      }
+    }
   }
   return obj;
 }

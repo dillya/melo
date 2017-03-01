@@ -95,6 +95,13 @@ struct _MeloPlayerClass {
 
 struct _MeloPlayerInfo {
   const gchar *playlist_id;
+  struct {
+    gboolean state;
+    gboolean prev;
+    gboolean next;
+    gboolean volume;
+    gboolean mute;
+  } control;
 };
 
 struct _MeloPlayerStatus {

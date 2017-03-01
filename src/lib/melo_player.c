@@ -157,6 +157,18 @@ melo_player_get_info (MeloPlayer *player)
   if (!priv->info.playlist_id && player->playlist)
     priv->info.playlist_id = melo_playlist_get_id (player->playlist);
 
+  /* Update available controls */
+  if (pclass->set_state)
+    priv->info.control.state = TRUE;
+  if (pclass->prev)
+    priv->info.control.prev = TRUE;
+  if (pclass->next)
+    priv->info.control.next = TRUE;
+  if (pclass->set_volume)
+    priv->info.control.volume = TRUE;
+  if (pclass->set_mute)
+    priv->info.control.mute = TRUE;
+
   return &priv->info;
 }
 
