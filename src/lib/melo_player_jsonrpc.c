@@ -219,7 +219,8 @@ static JsonArray *
 melo_player_jsonrpc_list_to_array (GList *list,
                                    MeloPlayerJSONRPCInfoFields fields,
                                    MeloPlayerJSONRPCStatusFields sfields,
-                                   MeloTagsFields tags_fields)
+                                   MeloTagsFields tags_fields,
+                                   gint64 tags_timestamp)
 {
   JsonArray *array;
   GList *l;
@@ -253,7 +254,7 @@ melo_player_jsonrpc_list_to_array (GList *list,
       if (status) {
         /* Generate status */
         o = melo_player_jsonrpc_status_to_object (status, sfields, tags_fields,
-                                                  0);
+                                                  tags_timestamp);
         melo_player_status_unref (status);
 
         /* Add status */
@@ -281,6 +282,7 @@ melo_player_jsonrpc_get_list (const gchar *method,
                                          MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE;
   MeloTagsFields tfields = MELO_TAGS_FIELDS_NONE;
   const MeloPlayerInfo *info = NULL;
+  gint64 tags_ts = 0;
   JsonArray *array;
   JsonObject *obj;
   GList *list;
@@ -297,8 +299,13 @@ melo_player_jsonrpc_get_list (const gchar *method,
       json_object_has_member (obj, "tags_fields")) {
     /* Get tags fields array */
     array = json_object_get_array_member (obj, "tags_fields");
-    if (array)
+    if (array) {
       tfields = melo_tags_get_fields_from_json_array (array);
+
+      /* Get tags timestamp */
+      if (json_object_has_member (obj, "tags_ts"))
+        tags_ts = json_object_get_int_member (obj, "tags_ts");
+    }
   }
   json_object_unref (obj);
 
@@ -306,7 +313,8 @@ melo_player_jsonrpc_get_list (const gchar *method,
   list = melo_player_get_list ();
 
   /* Generate list */
-  array = melo_player_jsonrpc_list_to_array (list, fields, sfields, tfields);
+  array = melo_player_jsonrpc_list_to_array (list, fields, sfields, tfields,
+                                             tags_ts);
 
   /* Free player list */
   g_list_free_full (list, g_object_unref);
@@ -623,6 +631,10 @@ static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
               "  },"
               "  {"
               "    \"name\": \"tags_fields\", \"type\": \"array\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"tags_ts\", \"type\": \"int\","
               "    \"required\": false"
               "  }"
               "]",
