@@ -3,7 +3,7 @@
  *  - melo_jsonrpc_request()
  */
 
-function melo_jsonrpc_request(method, params, callback) {
+function melo_jsonrpc_request(method, params, callback, error_callback) {
     /*  Prepare JSON-RPC request */
     var request = '{"jsonrpc":"2.0","method":"' + method + '",' +
         '"params":' + params + ',"id":1}';
@@ -16,9 +16,11 @@ function melo_jsonrpc_request(method, params, callback) {
         dataType: "json",
         success: function(data) {
             if (data.error) {
-              console.log("[JSON-RPC] ERROR: method '" + method +
-                  "' failed with error: \"" + data.error.message + "\"");
-              return;
+                console.log("[JSON-RPC] ERROR: method '" + method +
+                    "' failed with error: \"" + data.error.message + "\"");
+                if (error_callback)
+                    error_callback();
+                return;
             }
             callback(data.result);
         }

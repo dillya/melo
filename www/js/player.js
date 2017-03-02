@@ -30,8 +30,8 @@ var melo_player_current_duration = 0;
  */
 function melo_player_print_time(time_s) {
     time_s = Math.floor(time_s);
-    var h = Math.floor(time_s / 3600)
-    var m = Math.floor((time_s - (h * 60)) / 60);
+    var h = Math.floor(time_s / 3600);
+    var m = Math.floor(time_s / 60) - (h * 60);
     var s = time_s - (h * 3600) - (m * 60);
     if (!h)
         return ('0' + m).slice(-2) + ":" + ('0' + s).slice(-2);
@@ -259,53 +259,89 @@ function melo_player_update_player() {
         '"tags_ts": ' + melo_player_current_ts + '}',
         function(result) {
             melo_player_render_player(result);
-    });
+        },
+        melo_player_update_list);
 }
 
 function melo_player_render_list(result) {
     var player_found = false;
 
-    /* Update tabs list */
-    var tabs = $("#player-tabs").html("");
+    /* Get current tabs */
+    var tabs = $("#player-tabs");
+
+    /* Update all player tabs */
     for (var i = 0; i < result.length; i++) {
+        var id = result[i].id;
         var img = "";
-        if (result[i].status.tags && result[i].status.tags.cover_url)
-            img = result[i].status.tags.cover_url +'?t=' +
-                result[i].status.tags.timestamp;
 
-        /* Create tab */
-        var tab = $(
-            '<div class="player-tab">' +
-            '  <div class="player-tab-cover"><img src="' + img + '"></div>' +
-            '  <span>' + result[i].id + '</span>' +
-            '</div>');
+        /* Find tab */
+        var tab = tabs.find("#player-tab_" + id);
+        if (!tab || !tab.length) {
+            /* Create new tab */
+            tab = $(
+                '<div id="player-tab_' + id + '" class="player-tab">' +
+                '  <div class="player-tab-cover"><img src=""></div>' +
+                '  <span>' + id + '</span>' +
+                '</div>');
 
-        /* Add event handlers on tab element and store ID */
-        tab.children(":first")
-            .click(melo_player_tab_click)
-            .hover(
-                function() {
-                    $(this).next().show();
-                }, function() {
-                    $(this).next().hide();
-                })
-            .data("id", result[i].id)
-            .data("playlist_id", result[i].playlist)
-            .data("controls", result[i].controls);
+            /* Add event handlers on tab element and store ID */
+            tab.children(":first")
+                .click(melo_player_tab_click)
+               .hover(
+                    function() {
+                        $(this).next().show();
+                    }, function() {
+                        $(this).next().hide();
+                    })
+                .data("id", id)
+                .data("playlist_id", result[i].playlist)
+                .data("controls", result[i].controls);
+
+            /* Insert new tab */
+            if (i) {
+                tabs.children("#player-tab_" + result[i-1].id).after(tab);
+            } else
+                tabs.prepend(tab);
+        }
+
+        /* Process tags */
+        if (result[i].status.tags) {
+            /* Get cover URL */
+            if (result[i].status.tags.cover_url)
+                img = result[i].status.tags.cover_url +'?t=' +
+                    result[i].status.tags.timestamp;
+        }
+
+        /* Update player tab */
+        tab.find("img").attr("src", img);
 
         /* Current player */
         if (result[i].id == melo_player_current_id) {
             tab.children(":first").addClass("player-tab-active");
             player_found = true;
         }
+    }
 
-        /* Add new tab */
-        tabs.append(tab);
+    /* Remove old player tabs */
+    tab = tabs.children();
+    for (var i = 0, j = 0; i < tab.length; i++) {
+        if (j < result.length && tab[i].id == "player-tab_" + result[j].id) {
+            j++;
+            continue;
+        }
+
+        /* Current player */
+        if (tab[i].id == "player-tab_" + melo_player_current_id)
+            player_found = false;
+
+        /* Remove tab */
+        tab[i].remove();
     }
 
     /* Update current player */
     if (player_found == false) {
         if (result.length > 0) {
+            melo_player_current_ts = 0;
             melo_player_current_id = result[0].id;
             melo_player_current_playlist_id = result[0].playlist;
             tabs.find(".player-tab-cover:first").addClass("player-tab-active");
@@ -344,6 +380,7 @@ function melo_player_timer_start(time_s) {
     if (melo_player_timer)
         return;
     time_s = time_s || 1;
+    melo_player_timer_event();
     melo_player_timer = setInterval(melo_player_timer_event, time_s * 1000);
 }
 
