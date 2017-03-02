@@ -458,6 +458,9 @@ melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags)
   /* Set new tags */
   priv->tags = tags;
 
+  /* Update timestamp */
+  melo_tags_update (tags);
+
   /* Unlock tags access */
   g_mutex_unlock (&priv->mutex);
 }
