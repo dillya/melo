@@ -272,6 +272,7 @@ function melo_player_render_list(result) {
     /* Update all player tabs */
     for (var i = 0; i < result.length; i++) {
         var id = result[i].id;
+        var name = result[i].name || "No name";
         var img = "";
 
         /* Find tab */
@@ -281,7 +282,7 @@ function melo_player_render_list(result) {
             tab = $(
                 '<div id="player-tab_' + id + '" class="player-tab">' +
                 '  <div class="player-tab-cover"><img src=""></div>' +
-                '  <span>' + id + '</span>' +
+                '  <span>' + name + '</span>' +
                 '</div>');
 
             /* Add event handlers on tab element and store ID */
