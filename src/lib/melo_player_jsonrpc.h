@@ -27,8 +27,9 @@
 
 typedef enum {
   MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE = 0,
-  MELO_PLAYER_JSONRPC_INFO_FIELDS_PLAYLIST = 1,
-  MELO_PLAYER_JSONRPC_INFO_FIELDS_CONTROLS = 2,
+  MELO_PLAYER_JSONRPC_INFO_FIELDS_NAME = 1,
+  MELO_PLAYER_JSONRPC_INFO_FIELDS_PLAYLIST = 2,
+  MELO_PLAYER_JSONRPC_INFO_FIELDS_CONTROLS = 4,
 
   MELO_PLAYER_JSONRPC_INFO_FIELDS_FULL = ~0,
 } MeloPlayerJSONRPCInfoFields;
@@ -37,7 +38,7 @@ MeloPlayerJSONRPCInfoFields melo_player_jsonrpc_get_info_fields (
                                                              JsonObject *obj,
                                                              const gchar *name);
 JsonObject *melo_player_jsonrpc_info_to_object (
-                                            const gchar *id,
+                                            const gchar *id, const gchar *name,
                                             const MeloPlayerInfo *info,
                                             MeloPlayerJSONRPCInfoFields fields);
 

@@ -157,6 +157,7 @@ melo_module_jsonrpc_player_list_to_array (GList *list,
   for (l = list; l != NULL; l = l->next) {
     MeloPlayer *play = (MeloPlayer *) l->data;
     const MeloPlayerInfo *info;
+    const gchar *name = NULL;
     const gchar *id;
     JsonObject *obj;
 
@@ -164,8 +165,12 @@ melo_module_jsonrpc_player_list_to_array (GList *list,
     info = melo_player_get_info (play);
     id = melo_player_get_id (play);
 
+    /* Get player name */
+    if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_NAME)
+      name = melo_player_get_name (play);
+
     /* Generate object with player info */
-    obj = melo_player_jsonrpc_info_to_object (id, info, fields);
+    obj = melo_player_jsonrpc_info_to_object (id, name, info, fields);
 
     /* Add object to array */
     json_array_add_object_element (array, obj);
