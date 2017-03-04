@@ -94,7 +94,8 @@ melo_file_init (MeloFile *self)
 
   self->priv = priv;
   priv->files = melo_browser_new (MELO_TYPE_BROWSER_FILE, "file_files");
-  priv->player = melo_player_new (MELO_TYPE_PLAYER_FILE, "file_player");
+  priv->player = melo_player_new (MELO_TYPE_PLAYER_FILE, "file_player",
+                                  melo_file_info.name);
   priv->playlist = melo_playlist_new (MELO_TYPE_PLAYLIST_SIMPLE,
                                       "file_playlist");
 

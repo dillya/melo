@@ -100,7 +100,8 @@ melo_upnp_init (MeloUpnp *self)
     priv->name = g_strdup ("Melo");
 
   /* Create and register UPnP player */
-  priv->player = melo_player_new (MELO_TYPE_PLAYER_UPNP, "upnp_player");
+  priv->player = melo_player_new (MELO_TYPE_PLAYER_UPNP, "upnp_player",
+                                  melo_upnp_info.name);
   melo_module_register_player (MELO_MODULE (self), priv->player);
 
   /* Start UPnP renderer */

@@ -36,12 +36,14 @@ struct _MeloPlayerStatusPrivate {
 
 struct _MeloPlayerPrivate {
   gchar *id;
+  gchar *name;
   MeloPlayerInfo info;
 };
 
 enum {
   PROP_0,
   PROP_ID,
+  PROP_NAME,
   PROP_LAST
 };
 
@@ -94,6 +96,12 @@ melo_player_class_init (MeloPlayerClass *klass)
       g_param_spec_string ("id", "ID", "Player ID", NULL,
                            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                            G_PARAM_STATIC_STRINGS));
+
+  /* Install name property */
+  g_object_class_install_property (object_class, PROP_NAME,
+      g_param_spec_string ("name", "Name", "Player name", NULL,
+                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                           G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -103,6 +111,7 @@ melo_player_init (MeloPlayer *self)
 
   self->priv = priv;
   priv->id = NULL;
+  priv->name = NULL;
   priv->info.playlist_id = NULL;
 }
 
@@ -110,6 +119,12 @@ const gchar *
 melo_player_get_id (MeloPlayer *player)
 {
   return player->priv->id;
+}
+
+const gchar *
+melo_player_get_name (MeloPlayer *player)
+{
+  return player->priv->name;
 }
 
 static void
@@ -122,6 +137,10 @@ melo_player_set_property (GObject *object, guint property_id,
     case PROP_ID:
       g_free (player->priv->id);
       player->priv->id = g_value_dup_string (value);
+      break;
+    case PROP_NAME:
+      g_free (player->priv->name);
+      player->priv->name = g_value_dup_string (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -137,6 +156,9 @@ melo_player_get_property (GObject *object, guint property_id, GValue *value,
   switch (property_id) {
     case PROP_ID:
       g_value_set_string (value, melo_player_get_id (player));
+      break;
+    case PROP_NAME:
+      g_value_set_string (value, melo_player_get_name (player));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -212,7 +234,7 @@ melo_player_get_list ()
 }
 
 MeloPlayer *
-melo_player_new (GType type, const gchar *id)
+melo_player_new (GType type, const gchar *id, const gchar *name)
 {
   MeloPlayer *play;
 
@@ -232,7 +254,7 @@ melo_player_new (GType type, const gchar *id)
     goto failed;
 
   /* Create a new instance of player */
-  play = g_object_new (type, "id", id, NULL);
+  play = g_object_new (type, "id", id, "name", name, NULL);
   if (!play)
     goto failed;
 
@@ -360,7 +382,7 @@ melo_player_get_state (MeloPlayer *player)
 }
 
 gchar *
-melo_player_get_name (MeloPlayer *player)
+melo_player_get_media_name (MeloPlayer *player)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 

@@ -122,8 +122,9 @@ struct _MeloPlayerStatus {
 
 GType melo_player_get_type (void);
 
-MeloPlayer *melo_player_new (GType type, const gchar *id);
+MeloPlayer *melo_player_new (GType type, const gchar *id, const gchar *name);
 const gchar *melo_player_get_id (MeloPlayer *player);
+const gchar *melo_player_get_name (MeloPlayer *player);
 const MeloPlayerInfo *melo_player_get_info (MeloPlayer *player);
 MeloPlayer *melo_player_get_player_by_id (const gchar *id);
 GList *melo_player_get_list (void);
@@ -147,7 +148,7 @@ gboolean melo_player_set_mute (MeloPlayer *player, gboolean mute);
 
 /* Player status */
 MeloPlayerState melo_player_get_state (MeloPlayer *player);
-gchar *melo_player_get_name (MeloPlayer *player);
+gchar *melo_player_get_media_name (MeloPlayer *player);
 gint melo_player_get_pos (MeloPlayer *player, gint *duration);
 gdouble melo_player_get_volume (MeloPlayer *player);
 MeloPlayerStatus *melo_player_get_status (MeloPlayer *player);

@@ -86,7 +86,8 @@ melo_radio_init (MeloRadio *self)
 
   self->priv = priv;
   priv->radios = melo_browser_new (MELO_TYPE_BROWSER_RADIO, "radio_radios");
-  priv->player = melo_player_new (MELO_TYPE_PLAYER_RADIO, "radio_player");
+  priv->player = melo_player_new (MELO_TYPE_PLAYER_RADIO, "radio_player",
+                                  melo_radio_info.name);
   priv->playlist = melo_playlist_new (MELO_TYPE_PLAYLIST_SIMPLE,
                                       "radio_playlist");
 
