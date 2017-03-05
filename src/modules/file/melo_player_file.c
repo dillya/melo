@@ -121,7 +121,7 @@ static void
 melo_player_file_init (MeloPlayerFile *self)
 {
   MeloPlayerFilePrivate *priv = melo_player_file_get_instance_private (self);
-  GstElement *sink;
+  GstElement *convert, *sink;
   GstBus *bus;
 
   self->priv = priv;
@@ -138,15 +138,18 @@ melo_player_file_init (MeloPlayerFile *self)
   priv->pipeline = gst_pipeline_new ("file_player_pipeline");
   priv->src = gst_element_factory_make ("uridecodebin",
                                         "file_player_uridecodebin");
+  convert = gst_element_factory_make ("audioconvert",
+                                      "file_player_audioconvert");
   priv->vol = gst_element_factory_make ("volume", "file_player_volume");
   sink = gst_element_factory_make ("autoaudiosink",
                                    "file_player_autoaudiosink");
-  gst_bin_add_many (GST_BIN (priv->pipeline), priv->src, priv->vol, sink, NULL);
-  gst_element_link (priv->vol, sink);
+  gst_bin_add_many (GST_BIN (priv->pipeline), priv->src, convert, priv->vol,
+                    sink, NULL);
+  gst_element_link_many (convert, priv->vol, sink, NULL);
 
   /* Add signal handler on new pad */
   g_signal_connect(priv->src, "pad-added",
-                   G_CALLBACK (pad_added_handler), priv->vol);
+                   G_CALLBACK (pad_added_handler), convert);
 
   /* Add a message handler */
   bus = gst_pipeline_get_bus (GST_PIPELINE (priv->pipeline));
