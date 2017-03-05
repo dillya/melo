@@ -28,6 +28,9 @@ static void pad_added_handler (GstElement *src, GstPad *pad, GstElement *sink);
 
 static gboolean melo_player_file_add (MeloPlayer *player, const gchar *path,
                                       const gchar *name, MeloTags *tags);
+static gboolean melo_player_file_load (MeloPlayer *player, const gchar *path,
+                                       const gchar *name, MeloTags *tags,
+                                       gboolean insert, gboolean stopped);
 static gboolean melo_player_file_play (MeloPlayer *player, const gchar *path,
                                        const gchar *name, MeloTags *tags,
                                        gboolean insert);
@@ -53,6 +56,7 @@ struct _MeloPlayerFilePrivate {
   /* Status */
   MeloPlayerStatus *status;
   gchar *uri;
+  gboolean load;
 
   /* Gstreamer pipeline */
   GstElement *pipeline;
@@ -97,6 +101,7 @@ melo_player_file_class_init (MeloPlayerFileClass *klass)
 
   /* Control */
   pclass->add = melo_player_file_add;
+  pclass->load = melo_player_file_load;
   pclass->play = melo_player_file_play;
   pclass->set_state = melo_player_file_set_state;
   pclass->prev = melo_player_file_prev;
@@ -215,7 +220,8 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
     case GST_MESSAGE_STREAM_START:
       /* Playback is started */
       g_mutex_lock (&priv->mutex);
-      priv->status->state = MELO_PLAYER_STATE_PLAYING;
+      priv->status->state = priv->load ? MELO_PLAYER_STATE_PAUSED :
+                                         MELO_PLAYER_STATE_PLAYING;
       g_mutex_unlock (&priv->mutex);
       break;
     case GST_MESSAGE_BUFFERING: {
@@ -227,12 +233,13 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       /* Update status */
       g_mutex_lock (&priv->mutex);
       if (percent < 100)
-        priv->status->state = MELO_PLAYER_STATE_BUFFERING;
+        priv->status->state = priv->load ? MELO_PLAYER_STATE_PAUSED_BUFFERING  :
+                                           MELO_PLAYER_STATE_BUFFERING;
       else
-        priv->status->state = MELO_PLAYER_STATE_PLAYING;
+        priv->status->state = priv->load ? MELO_PLAYER_STATE_PAUSED :
+                                           MELO_PLAYER_STATE_PLAYING;
       priv->status->buffer_percent = percent;
       g_mutex_unlock (&priv->mutex);
-
       break;
     }
     case GST_MESSAGE_EOS:
@@ -324,14 +331,12 @@ melo_player_file_add (MeloPlayer *player, const gchar *path, const gchar *name,
 }
 
 static gboolean
-melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
-                       MeloTags *tags, gboolean insert)
+melo_player_file_setup (MeloPlayer *player, const gchar *path,
+                        const gchar *name, MeloTags *tags, gboolean insert,
+                        MeloPlayerState state)
 {
   MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
   gchar *_name = NULL;
-
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
 
   /* Stop pipeline */
   gst_element_set_state (priv->pipeline, GST_STATE_READY);
@@ -348,24 +353,68 @@ melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
     g_free (escaped);
     name = _name;
   }
-  priv->status = melo_player_status_new (MELO_PLAYER_STATE_LOADING, name);
+  priv->status = melo_player_status_new (state, name);
   g_object_get (priv->vol, "volume", &priv->status->volume, NULL);
   if (tags)
     melo_player_status_set_tags (priv->status, tags);
 
   /* Set new location to src element */
   g_object_set (priv->src, "uri", path, NULL);
-  gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
+  if (state == MELO_PLAYER_STATE_LOADING) {
+    priv->load = FALSE;
+    gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
+  } else if (state == MELO_PLAYER_STATE_PAUSED_LOADING) {
+    priv->load = TRUE;
+    gst_element_set_state (priv->pipeline, GST_STATE_PAUSED);
+  }
 
   /* Add new file to playlist */
   if (insert && player->playlist)
     melo_playlist_add (player->playlist, path, name, tags, TRUE);
   g_free (_name);
 
+  return TRUE;
+}
+
+static gboolean
+melo_player_file_load (MeloPlayer *player, const gchar *path, const gchar *name,
+                       MeloTags *tags, gboolean insert, gboolean stopped)
+{
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gboolean ret;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Load media file in paused or stopped state */
+  ret = melo_player_file_setup (player, path, name, tags, insert,
+                                stopped ? MELO_PLAYER_STATE_STOPPED :
+                                          MELO_PLAYER_STATE_PAUSED_LOADING);
+
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
 
-  return TRUE;
+  return ret;
+}
+
+static gboolean
+melo_player_file_play (MeloPlayer *player, const gchar *path, const gchar *name,
+                       MeloTags *tags, gboolean insert)
+{
+  MeloPlayerFilePrivate *priv = (MELO_PLAYER_FILE (player))->priv;
+  gboolean ret;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Play media file */
+  ret = melo_player_file_setup (player, path, name, tags, insert,
+                                MELO_PLAYER_STATE_LOADING);
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return ret;
 }
 
 static gboolean
@@ -437,6 +486,7 @@ melo_player_file_set_state (MeloPlayer *player, MeloPlayerState state)
   else
     state = priv->status->state;
   priv->status->state = state;
+  priv->load = FALSE;
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
