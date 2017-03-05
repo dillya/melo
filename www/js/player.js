@@ -16,14 +16,17 @@ var melo_player_volume_handle_half_width = 5;
 var melo_player_timer = null;
 
 /* Current player */
-var melo_player_current_id = "";
-var melo_player_current_playlist_id = "";
-var melo_player_current_state = "none";
-var melo_player_current_is_playing = false;
-var melo_player_current_name = "";
-var melo_player_current_ts = 0;
-var melo_player_current_pos = 0;
-var melo_player_current_duration = 0;
+var melo_player_current = {
+    id: "",
+    playlist_id: "",
+    controls: null,
+    state: "none",
+    is_playing: false,
+    name: "",
+    ts: 0,
+    pos: 0,
+    duration: 0
+};
 
 /*
  * Helpers
@@ -98,6 +101,8 @@ function melo_player_set_mute(id, mute) {
  * Player Rendering
  */
 function melo_player_update_control(playlist, controls) {
+    melo_player_current.controls = controls;
+
     if (playlist && playlist != "")
         $("#player-playlist").removeClass("player-button-disabled");
     else
@@ -128,7 +133,7 @@ function melo_player_update_control(playlist, controls) {
 }
 
 function melo_player_update_state(state, result) {
-    melo_player_current_state = state;
+    melo_player_current.state = state;
 
     /* Display message */
     if (state == "loading")
@@ -145,11 +150,11 @@ function melo_player_update_state(state, result) {
     if (state == "loading" || state == "buffering" || state == "playing") {
         $("#player-play").children()
             .attr("d", "M4 0 h10 v32 h-10 Z M18 0 h10 v32 h-10 Z");
-        melo_player_current_is_playing = true;
+        melo_player_current.is_playing = true;
         $("#player-stop").removeClass("player-button-disabled");
     } else {
         $("#player-play").children().attr("d", "M4.3 0 V32 L32 16 Z");
-        melo_player_current_is_playing = false;
+        melo_player_current.is_playing = false;
 
         /* Player is stopped */
         if (state != "paused")
@@ -172,13 +177,15 @@ function melo_player_update_state(state, result) {
 }
 
 function melo_player_update_mute(mute) {
-    melo_player_current_mute =  mute;
+    melo_player_current.mute =  mute;
+
     if (mute) {
         $("#player-mute").children("line").show();
         $("#player-volume-overlay").show();
     } else {
         $("#player-mute").children("line").hide();
-        $("#player-volume-overlay").hide();
+        if (melo_player_current.controls.volume)
+            $("#player-volume-overlay").hide();
     }
 }
 
@@ -187,7 +194,7 @@ function melo_player_update_mute(mute) {
  */
 function melo_player_render_player(result) {
     /* Update media details */
-    if (result.name != melo_player_current_name || result.tags) {
+    if (result.name != melo_player_current.name || result.tags) {
         var title = name;
         var artist = "";
         var cover = "";
@@ -200,7 +207,7 @@ function melo_player_render_player(result) {
             artist = result.tags.artist || "";
 
             /* Update current timestamp */
-            melo_player_current_ts = result.tags.timestamp;
+            melo_player_current.ts = result.tags.timestamp;
         }
 
         /* Update cover and track */
@@ -209,14 +216,14 @@ function melo_player_render_player(result) {
             '<h2>' + title + '</h2><h3>' + artist + '</h3>');
 
         /* Update current media name */
-        melo_player_current_name = result.name;
+        melo_player_current.name = result.name;
     }
 
     /* Update state */
     melo_player_update_state(result.state, result);
 
     /* Update position */
-    melo_player_current_duration = result.duration;
+    melo_player_current.duration = result.duration;
     var width = 0;
     var time = melo_player_print_time(result.pos / 1000);
     if (result.duration) {
@@ -238,25 +245,25 @@ function melo_player_render_player(result) {
 
 function melo_player_update_player() {
     /* Empty player status */
-    if (melo_player_current_id == "") {
+    if (melo_player_current.id == "") {
         $("#player-track").html("");
         $("#player-cover-img").attr("src", "");
         $("#player-position-bar").width(0);
         $("#player-status").text("").hide();
         $("#player-time").text("00:00 / 00:00");
-        melo_player_current_playlist_id = "";
-        melo_player_current_duration = 0;
-        melo_player_current_name = "";
-        melo_player_current_ts = 0;
+        melo_player_current.playlist_id = "";
+        melo_player_current.duration = 0;
+        melo_player_current.name = "";
+        melo_player_current.ts = 0;
         return;
     }
 
     /* Get player status */
     melo_jsonrpc_request("player.get_status",
-        '{"id": "' + melo_player_current_id + '",' +
+        '{"id": "' + melo_player_current.id + '",' +
         '"fields": ["full"],' +
         '"tags": ["title","artist","album","cover_url"],' +
-        '"tags_ts": ' + melo_player_current_ts + '}',
+        '"tags_ts": ' + melo_player_current.ts + '}',
         function(result) {
             melo_player_render_player(result);
         },
@@ -317,7 +324,7 @@ function melo_player_render_list(result) {
         tab.find("img").attr("src", img);
 
         /* Current player */
-        if (result[i].id == melo_player_current_id) {
+        if (result[i].id == melo_player_current.id) {
             tab.children(":first").addClass("player-tab-active");
             player_found = true;
         }
@@ -332,7 +339,7 @@ function melo_player_render_list(result) {
         }
 
         /* Current player */
-        if (tab[i].id == "player-tab_" + melo_player_current_id)
+        if (tab[i].id == "player-tab_" + melo_player_current.id)
             player_found = false;
 
         /* Remove tab */
@@ -342,13 +349,13 @@ function melo_player_render_list(result) {
     /* Update current player */
     if (player_found == false) {
         if (result.length > 0) {
-            melo_player_current_ts = 0;
-            melo_player_current_id = result[0].id;
-            melo_player_current_playlist_id = result[0].playlist;
+            melo_player_current.ts = 0;
+            melo_player_current.id = result[0].id;
+            melo_player_current.playlist_id = result[0].playlist;
             tabs.find(".player-tab-cover:first").addClass("player-tab-active");
             melo_player_update_control(result[0].playlist, result[0].controls);
         } else
-            melo_player_current_id = "";
+            melo_player_current.id = "";
     }
     melo_player_update_player();
 }
@@ -413,10 +420,10 @@ function melo_player_tab_click(eventData) {
     $("#player-cover-img").attr("src", $(this).children(":first").attr("src"));
 
     /* Update player */
-    melo_player_current_id = $(this).data("id");
-    melo_player_current_playlist_id = $(this).data("playlist_id");
-    melo_player_current_ts = 0;
-    melo_player_update_control(melo_player_current_playlist_id,
+    melo_player_current.id = $(this).data("id");
+    melo_player_current.playlist_id = $(this).data("playlist_id");
+    melo_player_current.ts = 0;
+    melo_player_update_control(melo_player_current.playlist_id,
         $(this).data("controls"));
     melo_player_update_player();
     return false;
@@ -424,7 +431,7 @@ function melo_player_tab_click(eventData) {
 
 function melo_player_position_click(eventData) {
     /* No seek available */
-    if (!melo_player_current_duration)
+    if (!melo_player_current.duration)
         return false;
 
     /* Get cursor position */
@@ -435,9 +442,9 @@ function melo_player_position_click(eventData) {
         x = 0;
 
     /* Seek */
-    var pos = (x - $(this).offset().left) * melo_player_current_duration /
+    var pos = (x - $(this).offset().left) * melo_player_current.duration /
         $(this).width();
-    melo_player_seek(melo_player_current_id, Math.floor(pos));
+    melo_player_seek(melo_player_current.id, Math.floor(pos));
 
     /* Update player position */
     var width = (x - $(this).offset().left) * 100 / $(this).width();
@@ -447,7 +454,7 @@ function melo_player_position_click(eventData) {
 
 function melo_player_position_move(eventData) {
     /* No seek available */
-    if (!melo_player_current_duration)
+    if (!melo_player_current.duration)
         return;
 
     /* Get cursor position */
@@ -456,7 +463,7 @@ function melo_player_position_move(eventData) {
         x = melo_player_position_length;
     if (x < 0)
         x = 0;
-    var p = Math.floor(x * melo_player_current_duration /
+    var p = Math.floor(x * melo_player_current.duration /
                 melo_player_position_length / 1000);
 
     /* Update handle position */
@@ -477,7 +484,7 @@ function melo_player_position_move(eventData) {
 }
 
 function melo_player_show_handle(eventData) {
-    if (!melo_player_current_duration)
+    if (!melo_player_current.duration)
         return;
     $("#player-position-handle").show();
     $("#player-time-handle").show();
@@ -489,20 +496,20 @@ function melo_player_hide_handle(eventData) {
 }
 
 function melo_player_play_click(eventData) {
-    melo_player_set_state(melo_player_current_id,
-        melo_player_current_is_playing ? "paused" : "playing");
+    melo_player_set_state(melo_player_current.id,
+        melo_player_current.is_playing ? "paused" : "playing");
 }
 
 function melo_player_stop_click(eventData) {
-    melo_player_set_state(melo_player_current_id, "stopped");
+    melo_player_set_state(melo_player_current.id, "stopped");
 }
 
 function melo_player_prev_click(eventData) {
-    melo_player_prev(melo_player_current_id);
+    melo_player_prev(melo_player_current.id);
 }
 
 function melo_player_next_click(eventData) {
-    melo_player_next(melo_player_current_id);
+    melo_player_next(melo_player_current.id);
 }
 
 function melo_player_volume_click(eventData) {
@@ -516,7 +523,7 @@ function melo_player_volume_click(eventData) {
     var pos = x - melo_player_volume_handle_half_width + $(this).offset().left;
 
     /* Set volume */
-    melo_player_set_volume(melo_player_current_id, width / 100);
+    melo_player_set_volume(melo_player_current.id, width / 100);
 
     /* Update volume */
     $("#player-volume-value").width(width + "%");
@@ -532,12 +539,12 @@ function melo_player_volume_mouseup(eventData) {
 }
 
 function melo_player_mute_click(eventData) {
-    melo_player_set_mute(melo_player_current_id, !melo_player_current_mute);
+    melo_player_set_mute(melo_player_current.id, !melo_player_current.mute);
 }
 
 function melo_player_playlist_click(eventData) {
     /* TODO */
-    melo_get_playlist_list(melo_player_current_playlist_id, null);
+    melo_get_playlist_list(melo_player_current.playlist_id, null);
 }
 
 /*
