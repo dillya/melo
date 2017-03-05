@@ -49,6 +49,8 @@ typedef enum {
   MELO_PLAYER_STATE_LOADING,
   MELO_PLAYER_STATE_BUFFERING,
   MELO_PLAYER_STATE_PLAYING,
+  MELO_PLAYER_STATE_PAUSED_LOADING,
+  MELO_PLAYER_STATE_PAUSED_BUFFERING,
   MELO_PLAYER_STATE_PAUSED,
   MELO_PLAYER_STATE_STOPPED,
   MELO_PLAYER_STATE_ERROR,
@@ -75,6 +77,8 @@ struct _MeloPlayerClass {
   /* Control callbacks */
   gboolean (*add) (MeloPlayer *player, const gchar *path, const gchar *name,
                    MeloTags *tags);
+  gboolean (*load) (MeloPlayer *player, const gchar *path, const gchar *name,
+                    MeloTags *tags, gboolean insert, gboolean stopped);
   gboolean (*play) (MeloPlayer *player, const gchar *path, const gchar *name,
                     MeloTags *tags, gboolean insert);
   MeloPlayerState (*set_state) (MeloPlayer *player, MeloPlayerState state);
@@ -136,6 +140,9 @@ MeloPlaylist *melo_player_get_playlist (MeloPlayer *player);
 /* Player control */
 gboolean melo_player_add (MeloPlayer *player, const gchar *path,
                           const gchar *name, MeloTags *tags);
+gboolean melo_player_load (MeloPlayer *player, const gchar *path,
+                           const gchar *name, MeloTags *tags, gboolean insert,
+                           gboolean stopped);
 gboolean melo_player_play (MeloPlayer *player, const gchar *path,
                            const gchar *name, MeloTags *tags, gboolean insert);
 MeloPlayerState melo_player_set_state (MeloPlayer *player,

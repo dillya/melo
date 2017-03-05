@@ -301,6 +301,18 @@ melo_player_add (MeloPlayer *player, const gchar *path, const gchar *name,
 }
 
 gboolean
+melo_player_load (MeloPlayer *player, const gchar *path,
+                  const gchar *name, MeloTags *tags, gboolean insert,
+                  gboolean stopped)
+{
+  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+
+  g_return_val_if_fail (pclass->load, FALSE);
+
+  return pclass->load (player, path, name, tags, insert, stopped);
+}
+
+gboolean
 melo_player_play (MeloPlayer *player, const gchar *path, const gchar *name,
                   MeloTags *tags, gboolean insert)
 {
@@ -543,6 +555,8 @@ static const gchar *melo_player_state_str[] = {
   [MELO_PLAYER_STATE_LOADING] = "loading",
   [MELO_PLAYER_STATE_BUFFERING] = "buffering",
   [MELO_PLAYER_STATE_PLAYING] = "playing",
+  [MELO_PLAYER_STATE_PAUSED_LOADING] = "paused_loading",
+  [MELO_PLAYER_STATE_PAUSED_BUFFERING] = "paused_buffering",
   [MELO_PLAYER_STATE_PAUSED] = "paused",
   [MELO_PLAYER_STATE_STOPPED] = "stopped",
   [MELO_PLAYER_STATE_ERROR] = "error",
