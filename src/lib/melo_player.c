@@ -19,6 +19,7 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include "melo_event.h"
 #include "melo_player.h"
 
 /* Internal player list */
@@ -29,6 +30,11 @@ static GList *melo_player_list = NULL;
 struct _MeloPlayerStatusPrivate {
   GMutex mutex;
   gint ref_count;
+
+  /* Strings */
+  gchar *id;
+  gchar *name;
+  gchar *error;
 
   /* Tags */
   MeloTags *tags;
@@ -59,6 +65,9 @@ melo_player_finalize (GObject *gobject)
 {
   MeloPlayer *player = MELO_PLAYER (gobject);
   MeloPlayerPrivate *priv = melo_player_get_instance_private (player);
+
+  /* Send a delete player event */
+  melo_event_player_delete (priv->id);
 
   /* Lock player list */
   G_LOCK (melo_player_mutex);
@@ -269,6 +278,9 @@ melo_player_new (GType type, const gchar *id, const gchar *name)
   /* Unlock player list */
   G_UNLOCK (melo_player_mutex);
 
+  /* Send a new player event */
+  melo_event_player_new (id, melo_player_get_info(play));
+
   return play;
 
 failed:
@@ -452,7 +464,8 @@ melo_player_get_cover (MeloPlayer *player, GBytes **cover, gchar **type)
 }
 
 MeloPlayerStatus *
-melo_player_status_new (MeloPlayerState state, const gchar *name)
+melo_player_status_new (MeloPlayer *player, MeloPlayerState state,
+                        const gchar *name)
 {
   MeloPlayerStatus *status;
 
@@ -474,15 +487,174 @@ melo_player_status_new (MeloPlayerState state, const gchar *name)
   /* Init reference counter */
   status->priv->ref_count = 1;
 
+  /* Save player ID */
+  if (player)
+    status->priv->id = g_strdup (melo_player_get_id (player));
+
   /* Set state and name */
   status->state = state;
-  status->name = g_strdup (name);
+  status->priv->name = g_strdup (name);
 
   return status;
 }
 
 void
-melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags)
+melo_player_status_set_state (MeloPlayerStatus *status, MeloPlayerState state)
+{
+  /* Update state */
+  status->state = state;
+
+  /* Send 'player state' event */
+  melo_event_player_state (status->priv->id, state);
+}
+
+void
+melo_player_status_set_buffering (MeloPlayerStatus *status,
+                                  MeloPlayerState state, guint percent)
+{
+  /* Update state and buffer percent */
+  status->state = state;
+  status->buffer_percent = percent;
+
+  /* Send 'player buffering' event */
+  melo_event_player_buffering (status->priv->id, state, percent);
+}
+
+void
+melo_player_status_set_pos (MeloPlayerStatus *status, gint pos)
+{
+  /* Update position */
+  status->pos = pos;
+
+  /* Send 'player seek' event */
+  melo_event_player_seek (status->priv->id, pos);
+}
+
+void
+melo_player_status_set_duration (MeloPlayerStatus *status, gint duration)
+{
+  /* Update duration */
+  status->duration = duration;
+
+  /* Send 'player duration' event */
+  melo_event_player_duration (status->priv->id, duration);
+}
+
+void
+melo_player_status_set_playlist (MeloPlayerStatus *status, gboolean has_prev,
+                                 gboolean has_next)
+{
+  /* Update playlist */
+  status->has_prev = has_prev;
+  status->has_next = has_next;
+
+  /* Send 'player playlist' event */
+  melo_event_player_playlist (status->priv->id, has_prev, has_next);
+}
+
+void
+melo_player_status_set_volume (MeloPlayerStatus *status, gdouble volume)
+{
+  /* Update volume */
+  status->volume = volume;
+
+  /* Send 'player volume' event */
+  melo_event_player_volume (status->priv->id, volume);
+}
+
+void
+melo_player_status_set_mute (MeloPlayerStatus *status, gboolean mute)
+{
+  /* Update mute */
+  status->mute = mute;
+
+  /* Send 'player mute' event */
+  melo_event_player_mute (status->priv->id, mute);
+}
+
+void
+melo_player_status_set_name (MeloPlayerStatus *status, const gchar *name,
+                             gboolean send_event)
+{
+  MeloPlayerStatusPrivate *priv = status->priv;
+
+  /* Lock name access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Update name */
+  g_free (priv->name);
+  priv->name = g_strdup (name);
+
+  /* Unlock name access */
+  g_mutex_unlock (&priv->mutex);
+
+  /* Send 'player name' event */
+  if (send_event)
+    melo_event_player_name (priv->id, name);
+}
+
+gchar *
+melo_player_status_get_name (const MeloPlayerStatus *status)
+{
+  MeloPlayerStatusPrivate *priv = status->priv;
+  gchar *name;
+
+  /* Lock name access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Copy name */
+  name = g_strdup (priv->name);
+
+  /* Unlock name access */
+  g_mutex_unlock (&priv->mutex);
+
+  return name;
+}
+
+void
+melo_player_status_set_error (MeloPlayerStatus *status, const gchar *error,
+                              gboolean send_event)
+{
+  MeloPlayerStatusPrivate *priv = status->priv;
+
+  /* Lock error access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Update error */
+  g_free (priv->error);
+  priv->error = g_strdup (error);
+  if (error)
+    status->state = MELO_PLAYER_STATE_ERROR;
+
+  /* Unlock error access */
+  g_mutex_unlock (&priv->mutex);
+
+  /* Send 'player error' event */
+  if (send_event)
+    melo_event_player_error (priv->id, error);
+}
+
+gchar *
+melo_player_status_get_error (const MeloPlayerStatus *status)
+{
+  MeloPlayerStatusPrivate *priv = status->priv;
+  gchar *error;
+
+  /* Lock error access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Copy error */
+  error = g_strdup (priv->error);
+
+  /* Unlock error access */
+  g_mutex_unlock (&priv->mutex);
+
+  return error;
+}
+
+void
+melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags,
+                              gboolean send_event)
 {
   MeloPlayerStatusPrivate *priv = status->priv;
 
@@ -501,14 +673,19 @@ melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags)
 
   /* Unlock tags access */
   g_mutex_unlock (&priv->mutex);
+
+  /* Send 'player tags' event */
+  if (send_event)
+    melo_event_player_tags (priv->id, tags);
 }
 
 void
-melo_player_status_set_tags (MeloPlayerStatus *status, MeloTags *tags)
+melo_player_status_set_tags (MeloPlayerStatus *status, MeloTags *tags,
+                             gboolean send_event)
 {
   if (tags)
     melo_tags_ref (tags);
-  melo_player_status_take_tags (status, tags);
+  melo_player_status_take_tags (status, tags, send_event);
 }
 
 MeloTags *
@@ -530,6 +707,31 @@ melo_player_status_get_tags (const MeloPlayerStatus *status)
   return tags;
 }
 
+void
+melo_player_status_lock (const MeloPlayerStatus *status)
+{
+  /* Lock status access */
+  g_mutex_lock (&status->priv->mutex);
+}
+
+void
+melo_player_status_unlock (const MeloPlayerStatus *status)
+{
+  /* Unlock status access */
+  g_mutex_unlock (&status->priv->mutex);
+}
+
+const gchar *
+melo_player_status_lock_get_name (const MeloPlayerStatus *status)
+{
+  return status->priv->name;
+}
+const gchar *
+melo_player_status_lock_get_error (const MeloPlayerStatus *status)
+{
+  return status->priv->error;
+}
+
 MeloPlayerStatus *
 melo_player_status_ref (MeloPlayerStatus *status)
 {
@@ -545,8 +747,9 @@ melo_player_status_unref (MeloPlayerStatus *status)
     return;
 
   /* Free status */
-  g_free (status->error);
-  g_free (status->name);
+  g_free (status->priv->id);
+  g_free (status->priv->name);
+  g_free (status->priv->error);
   if (status->priv->tags)
     melo_tags_unref (status->priv->tags);
   g_mutex_clear (&status->priv->mutex);

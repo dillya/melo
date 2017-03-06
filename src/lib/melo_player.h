@@ -112,8 +112,6 @@ struct _MeloPlayerInfo {
 struct _MeloPlayerStatus {
   MeloPlayerState state;
   gint buffer_percent;
-  gchar *error;
-  gchar *name;
   gint pos;
   gint duration;
   gboolean has_prev;
@@ -163,14 +161,45 @@ MeloPlayerStatus *melo_player_get_status (MeloPlayer *player);
 gboolean melo_player_get_cover (MeloPlayer *player, GBytes **cover,
                                 gchar **type);
 
-/* MeloPlayerStatus helpers */
-MeloPlayerStatus *melo_player_status_new (MeloPlayerState state,
+/* MeloPlayerStatus */
+MeloPlayerStatus *melo_player_status_new (MeloPlayer *player,
+                                          MeloPlayerState state,
                                           const gchar *name);
 MeloPlayerStatus *melo_player_status_ref (MeloPlayerStatus *status);
 void melo_player_status_unref (MeloPlayerStatus *status);
-void melo_player_status_set_tags (MeloPlayerStatus *status, MeloTags *tags);
-void melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags);
+
+/* Set values to MeloPlayerStatus */
+void melo_player_status_set_state (MeloPlayerStatus *status,
+                                   MeloPlayerState state);
+void melo_player_status_set_buffering (MeloPlayerStatus *status,
+                                       MeloPlayerState state, guint percent);
+void melo_player_status_set_pos (MeloPlayerStatus *status, gint pos);
+void melo_player_status_set_duration (MeloPlayerStatus *status, gint duration);
+void melo_player_status_set_playlist (MeloPlayerStatus *status,
+                                      gboolean has_prev, gboolean has_next);
+void melo_player_status_set_volume (MeloPlayerStatus *status, gdouble volume);
+void melo_player_status_set_mute (MeloPlayerStatus *status, gboolean mute);
+
+/* Set/get protected values to/from MeloPlayerStatus */
+void melo_player_status_set_name (MeloPlayerStatus *status, const gchar *name,
+                                  gboolean send_event);
+gchar *melo_player_status_get_name (const MeloPlayerStatus *status);
+
+void melo_player_status_set_error (MeloPlayerStatus *status, const gchar *error,
+                                   gboolean send_event);
+gchar *melo_player_status_get_error (const MeloPlayerStatus *status);
+
+void melo_player_status_set_tags (MeloPlayerStatus *status, MeloTags *tags,
+                                  gboolean send_event);
+void melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags,
+                                   gboolean send_event);
 MeloTags *melo_player_status_get_tags (const MeloPlayerStatus *status);
+
+/* Advanced getter for MeloPlayerStatus (use with lock/unlock) */
+void melo_player_status_lock (const MeloPlayerStatus *status);
+void melo_player_status_unlock (const MeloPlayerStatus *status);
+const gchar *melo_player_status_lock_get_name (const MeloPlayerStatus *status);
+const gchar *melo_player_status_lock_get_error (const MeloPlayerStatus *status);
 
 /* MeloPlayerState helpers */
 const gchar *melo_player_state_to_string (MeloPlayerState state);

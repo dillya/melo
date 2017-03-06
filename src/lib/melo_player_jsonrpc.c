@@ -184,12 +184,20 @@ melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_STATE) {
     json_object_set_string_member (obj, "state",
                                    melo_player_state_to_string (status->state));
-    if (status->state == MELO_PLAYER_STATE_ERROR)
-      json_object_set_string_member (obj, "error", status->error);
+    if (status->state == MELO_PLAYER_STATE_ERROR) {
+      melo_player_status_lock (status);
+      json_object_set_string_member (obj, "error",
+                                    melo_player_status_lock_get_error (status));
+      melo_player_status_unlock (status);
+    }
     json_object_set_int_member (obj, "buffer", status->buffer_percent);
   }
-  if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_NAME)
-    json_object_set_string_member (obj, "name", status->name);
+  if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_NAME) {
+    melo_player_status_lock (status);
+    json_object_set_string_member (obj, "name",
+                                   melo_player_status_lock_get_name (status));
+    melo_player_status_unlock (status);
+  }
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_POS)
     json_object_set_int_member (obj, "pos", status->pos);
   if (fields & MELO_PLAYER_JSONRPC_STATUS_FIELDS_DURATION)

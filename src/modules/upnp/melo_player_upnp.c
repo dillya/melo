@@ -21,6 +21,7 @@
 
 #include <rygel-renderer-gst.h>
 
+#include "melo_event.h"
 #include "melo_player_upnp.h"
 
 static MeloPlayerState melo_player_upnp_set_state (MeloPlayer *player,
@@ -124,7 +125,7 @@ melo_player_upnp_init (MeloPlayerUpnp *self)
   g_mutex_init (&priv->player_mutex);
 
   /* Create new status handler */
-  priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL);
+  priv->status = melo_player_status_new (NULL, MELO_PLAYER_STATE_NONE, NULL);
 
   /* Create a new UPnP context manager */
   priv->manager = gupnp_context_manager_create (0);
@@ -132,7 +133,6 @@ melo_player_upnp_init (MeloPlayerUpnp *self)
                     (GCallback) on_context_available, priv);
   g_signal_connect (priv->manager, "context-unavailable",
                     (GCallback) on_context_unavailable, priv);
-
   /* Create a new Soup session */
   priv->session = soup_session_new_with_options (
                                 SOUP_SESSION_USER_AGENT, "Melo",
@@ -167,7 +167,7 @@ melo_player_upnp_set_state (MeloPlayer *player, MeloPlayerState state)
 
     /* Set playback state */
     rygel_media_player_set_playback_state (priv->player, pstate);
-    priv->status->state = state;
+    melo_player_status_set_state (priv->status, state);
   }
 
   /* Unlock player mutex */
@@ -202,7 +202,7 @@ melo_player_upnp_set_volume (MeloPlayer *player, gdouble volume)
   /* Lock player mutex */
   g_mutex_lock (&priv->player_mutex);
 
-  /* Get volume */
+  /* Set volume */
   if (priv->player)
     rygel_media_player_set_volume (priv->player, volume);
 
@@ -240,7 +240,7 @@ melo_player_upnp_get_name (MeloPlayer *player)
   g_mutex_lock (&priv->status_mutex);
 
   /* Copy name */
-  name = g_strdup (priv->status->name);
+  name = melo_player_status_get_name (priv->status);
 
   /* Unlock status mutex */
   g_mutex_unlock (&priv->status_mutex);
@@ -422,7 +422,7 @@ on_request_done (SoupSession *session, SoupMessage *msg, gpointer user_data)
   if (tags) {
     melo_tags_take_cover (tags, img, type);
     melo_tags_set_cover_url (tags, G_OBJECT (up), NULL, NULL);
-    melo_tags_unref (tags);
+    melo_player_status_take_tags (priv->status, tags, TRUE);
   }
 
   /* Unlock status */
@@ -451,7 +451,7 @@ on_object_available (GUPnPDIDLLiteParser *parser, GUPnPDIDLLiteObject *object,
   tags->genre = g_strdup (gupnp_didl_lite_object_get_genre (object));
 
   /* Update tags in status */
-  melo_player_status_take_tags (priv->status, tags);
+  melo_player_status_take_tags (priv->status, tags, TRUE);
 
   /* Get image */
   img = gupnp_didl_lite_object_get_album_art (object);
@@ -473,6 +473,7 @@ on_notify (GObject *object, GParamSpec *pspec, gpointer user_data)
 
   /* Parse property changes */
   if (!g_strcmp0 (pspec->name, "playback-state")) {
+    MeloPlayerState state;
     const gchar *pstate;
 
     /* Get new state */
@@ -480,16 +481,18 @@ on_notify (GObject *object, GParamSpec *pspec, gpointer user_data)
 
     /* Set new state */
     if (!g_strcmp0 (pstate, "PLAYING"))
-      priv->status->state = MELO_PLAYER_STATE_PLAYING;
+      state = MELO_PLAYER_STATE_PLAYING;
     else if (!g_strcmp0 (pstate, "PAUSED_PLAYBACK"))
-      priv->status->state = MELO_PLAYER_STATE_PAUSED;
+      state = MELO_PLAYER_STATE_PAUSED;
     else if (!g_strcmp0 (pstate, "STOPPED"))
-      priv->status->state = MELO_PLAYER_STATE_STOPPED;
+      state = MELO_PLAYER_STATE_STOPPED;
     else
-      priv->status->state = MELO_PLAYER_STATE_NONE;
+      state = MELO_PLAYER_STATE_NONE;
+    melo_player_status_set_state (priv->status, state);
   } else if (!g_strcmp0 (pspec->name, "duration")) {
     /* Get duration */
-    priv->status->duration = rygel_media_player_get_duration (player) / 1000;
+    melo_player_status_set_duration (priv->status,
+                               rygel_media_player_get_duration (player) / 1000);
   } else if (!g_strcmp0 (pspec->name, "metadata")) {
     GUPnPDIDLLiteParser *parser;
     gchar *meta;
