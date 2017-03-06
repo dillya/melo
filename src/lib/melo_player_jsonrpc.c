@@ -94,16 +94,16 @@ melo_player_jsonrpc_get_info_fields (JsonObject *obj, const gchar *name)
 }
 
 JsonObject *
-melo_player_jsonrpc_info_to_object (const gchar *id, const gchar *name,
+melo_player_jsonrpc_info_to_object (const gchar *id,
                                     const MeloPlayerInfo *info,
                                     MeloPlayerJSONRPCInfoFields fields)
 {
   JsonObject *obj = json_object_new ();
   if (id)
     json_object_set_string_member (obj, "id", id);
-  if (name)
-    json_object_set_string_member (obj, "name", name);
   if (info) {
+    if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_NAME)
+      json_object_set_string_member (obj, "name", info->name);
     if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_PLAYLIST)
       json_object_set_string_member (obj, "playlist", info->playlist_id);
     if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_CONTROLS) {
@@ -238,7 +238,6 @@ melo_player_jsonrpc_list_to_array (GList *list,
   for (l = list; l != NULL; l = l->next) {
     MeloPlayer *play = (MeloPlayer *) l->data;
     const MeloPlayerInfo *info;
-    const gchar *name = NULL;
     const gchar *id;
     JsonObject *obj;
 
@@ -246,12 +245,8 @@ melo_player_jsonrpc_list_to_array (GList *list,
     info = melo_player_get_info (play);
     id = melo_player_get_id (play);
 
-    /* Get player name */
-    if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_NAME)
-      name = melo_player_get_name (play);
-
     /* Generate object with player info */
-    obj = melo_player_jsonrpc_info_to_object (id, name, info, fields);
+    obj = melo_player_jsonrpc_info_to_object (id, info, fields);
 
     /* Add status to object */
     if (sfields != MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE) {
@@ -341,7 +336,6 @@ melo_player_jsonrpc_get_info (const gchar *method,
 {
   MeloPlayerJSONRPCInfoFields fields = MELO_PLAYER_JSONRPC_INFO_FIELDS_NONE;
   const MeloPlayerInfo *info = NULL;
-  const gchar *name = NULL;
   MeloPlayer *play;
   JsonObject *obj;
 
@@ -361,13 +355,9 @@ melo_player_jsonrpc_get_info (const gchar *method,
   fields = melo_player_jsonrpc_get_info_fields (obj, "fields");
   json_object_unref (obj);
 
-  /* Get player name */
-  if (fields & MELO_PLAYER_JSONRPC_INFO_FIELDS_NAME)
-    name = melo_player_get_name (play);
-
   /* Generate object */
   info = melo_player_get_info (play);
-  obj = melo_player_jsonrpc_info_to_object (NULL, name, info, fields);
+  obj = melo_player_jsonrpc_info_to_object (NULL, info, fields);
   g_object_unref (play);
 
   /* Return result */

@@ -98,6 +98,7 @@ struct _MeloPlayerClass {
 };
 
 struct _MeloPlayerInfo {
+  const gchar *name;
   const gchar *playlist_id;
   struct {
     gboolean state;

@@ -175,6 +175,10 @@ melo_player_get_info (MeloPlayer *player)
   if (pclass->get_info)
     priv->info = *pclass->get_info (player);
 
+  /* Update player name */
+  if (!priv->info.name)
+    priv->info.name = priv->name;
+
   /* Update playlist ID */
   if (!priv->info.playlist_id && player->playlist)
     priv->info.playlist_id = melo_playlist_get_id (player->playlist);
