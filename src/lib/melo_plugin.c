@@ -258,18 +258,20 @@ void
 melo_plugin_unload_all (void)
 {
   MeloPluginContext *ctx;
-  GList *l;
+  GList *list;
 
   G_LOCK (melo_plugin_mutex);
 
   /* Find plugin context */
-  for (l = melo_plugin_list; l != NULL; l = l->next) {
+  for (list = melo_plugin_list; list != NULL;) {
+    GList *l = list;
+    list = list->next;
     ctx = l->data;
 
     /* Unload plugin */
     if (melo_plugin_context_unload (ctx)) {
       /* Remove plugin from list */
-      melo_plugin_list = g_list_remove (melo_plugin_list, ctx);
+      melo_plugin_list = g_list_delete_link (melo_plugin_list, l);
       g_free (ctx->name);
       g_slice_free (MeloPluginContext, ctx);
     }
