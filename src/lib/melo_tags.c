@@ -294,7 +294,9 @@ melo_tags_set_cover_url (MeloTags *tags, GObject *obj, const gchar *path,
   G_LOCK (melo_tags_mutex);
 
   /* Generate cover URL from ID and path */
-  if (melo_tags_cover_url_base)
+  if (!path)
+    url = NULL;
+  else if (melo_tags_cover_url_base)
     url = g_strdup_printf ("%s/%s/%s%c%s", melo_tags_cover_url_base, otype, id,
                            del, path);
   else
