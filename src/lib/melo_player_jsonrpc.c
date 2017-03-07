@@ -21,20 +21,6 @@
 
 #include "melo_player_jsonrpc.h"
 
-typedef enum {
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE = 0,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_STATE = 1,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_NAME = 2,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_POS = 4,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_DURATION = 8,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_PLAYLIST = 16,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_VOLUME = 32,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_MUTE = 64,
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_TAGS = 128,
-
-  MELO_PLAYER_JSONRPC_STATUS_FIELDS_FULL = ~0,
-} MeloPlayerJSONRPCStatusFields;
-
 static MeloPlayer *
 melo_player_jsonrpc_get_player (JsonObject *obj, JsonNode **error)
 {
@@ -174,7 +160,7 @@ melo_player_jsonrpc_get_status_fields (JsonObject *obj, const char *name)
   return fields;
 }
 
-static JsonObject *
+JsonObject *
 melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
                                       MeloPlayerJSONRPCStatusFields fields,
                                       MeloTagsFields tags_fields,
