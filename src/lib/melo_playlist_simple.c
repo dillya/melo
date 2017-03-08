@@ -266,6 +266,18 @@ melo_playlist_simple_get_tags (MeloPlaylist *playlist, const gchar *name,
   return tags;
 }
 
+static inline void
+melo_playlist_simple_update_player_status (MeloPlaylistSimple *plsimple)
+{
+  MeloPlaylist *playlist = MELO_PLAYLIST (plsimple);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+
+  if (playlist->player)
+    melo_player_set_status_playlist (playlist->player,
+                                     priv->current && priv->current->next,
+                                     priv->current && priv->current->prev);
+}
+
 static gboolean
 melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *path,
                           const gchar *name, MeloTags *tags,
@@ -311,6 +323,9 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *path,
   if (is_current)
     priv->current = priv->playlist;
 
+  /* Update player status */
+  melo_playlist_simple_update_player_status (plsimple);
+
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
 
@@ -337,8 +352,10 @@ melo_playlist_simple_get_prev (MeloPlaylist *playlist, gchar **name,
       *name = g_strdup (item->name);
     if (tags && item->tags)
       *tags = melo_tags_ref (item->tags);
-    if (set)
+    if (set) {
       priv->current = priv->current->next;
+      melo_playlist_simple_update_player_status (plsimple);
+    }
   }
 
   /* Unlock playlist */
@@ -367,7 +384,10 @@ melo_playlist_simple_get_next (MeloPlaylist *playlist, gchar **name,
       *name = g_strdup (item->name);
     if (tags && item->tags)
       *tags = melo_tags_ref (item->tags);
-    priv->current = priv->current->prev;
+    if (set) {
+      priv->current = priv->current->prev;
+      melo_playlist_simple_update_player_status (plsimple);
+    }
   }
 
   /* Unlock playlist */
@@ -437,6 +457,9 @@ melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
     priv->current = element;
   }
 
+  /* Update player status */
+  melo_playlist_simple_update_player_status (plsimple);
+
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
 
@@ -487,6 +510,9 @@ melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
   g_hash_table_remove (priv->names, name);
   melo_playlist_item_unref (item);
 
+  /* Update player status */
+  melo_playlist_simple_update_player_status (plsimple);
+
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
 
@@ -506,6 +532,9 @@ melo_playlist_simple_empty (MeloPlaylist *playlist)
   g_list_free_full (priv->playlist, (GDestroyNotify) melo_playlist_item_unref);
   g_hash_table_remove_all (priv->names);
   priv->playlist = NULL;
+
+  /* Update player status */
+  melo_playlist_simple_update_player_status (plsimple);
 
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
