@@ -166,7 +166,8 @@ melo_tags_merge (MeloTags *tags, MeloTags *old_tags)
 MeloTags *
 melo_tags_ref (MeloTags *tags)
 {
-  tags->priv->ref_count++;
+  if (tags)
+    tags->priv->ref_count++;
   return tags;
 }
 
