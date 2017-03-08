@@ -32,7 +32,6 @@ struct _MeloPlayerStatusPrivate {
   gint ref_count;
 
   /* Strings */
-  gchar *id;
   gchar *name;
   gchar *error;
 
@@ -41,9 +40,11 @@ struct _MeloPlayerStatusPrivate {
 };
 
 struct _MeloPlayerPrivate {
+  GMutex mutex;
   gchar *id;
   gchar *name;
   MeloPlayerInfo info;
+  MeloPlayerStatus *status;
 };
 
 enum {
@@ -58,6 +59,10 @@ static void melo_player_set_property (GObject *object, guint property_id,
 static void melo_player_get_property (GObject *object, guint property_id,
                                       GValue *value, GParamSpec *pspec);
 
+static MeloPlayerStatus *melo_player_status_new (MeloPlayerState state,
+                                                 const gchar *name,
+                                                 MeloTags *tags);
+
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloPlayer, melo_player, G_TYPE_OBJECT)
 
 static void
@@ -65,6 +70,9 @@ melo_player_finalize (GObject *gobject)
 {
   MeloPlayer *player = MELO_PLAYER (gobject);
   MeloPlayerPrivate *priv = melo_player_get_instance_private (player);
+
+  /* Free player status */
+  melo_player_status_unref (priv->status);
 
   /* Send a delete player event */
   melo_event_player_delete (priv->id);
@@ -85,6 +93,9 @@ melo_player_finalize (GObject *gobject)
   /* Unref attached playlist */
   if (player->playlist)
     g_object_unref (player->playlist);
+
+  /* Free player mutex */
+  g_mutex_clear (&priv->mutex);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_player_parent_class)->finalize (gobject);
@@ -122,6 +133,10 @@ melo_player_init (MeloPlayer *self)
   priv->id = NULL;
   priv->name = NULL;
   priv->info.playlist_id = NULL;
+  priv->status = melo_player_status_new (MELO_PLAYER_STATE_NONE, NULL, NULL);
+
+  /* Init player mutex */
+  g_mutex_init (&priv->mutex);
 }
 
 const gchar *
@@ -344,9 +359,17 @@ melo_player_set_state (MeloPlayer *player, MeloPlayerState state)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 
-  g_return_val_if_fail (pclass->set_state, MELO_PLAYER_STATE_NONE);
+  /* State control is not available */
+  if (!pclass->set_state)
+    return melo_player_get_state (player);
 
-  return pclass->set_state (player, state);
+  /* Set new state */
+  state = pclass->set_state (player, state);
+
+  /* Update state */
+  melo_player_set_status_state (player, state);
+
+  return state;
 }
 
 gboolean
@@ -384,9 +407,17 @@ melo_player_set_volume (MeloPlayer *player, gdouble volume)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 
-  g_return_val_if_fail (pclass->set_volume, 0);
+  /* Volume control is not available */
+  if (!pclass->set_volume)
+    return melo_player_get_volume (player);
 
-  return pclass->set_volume (player, volume);
+  /* Set volume */
+  volume = pclass->set_volume (player, volume);
+
+  /* Update volume */
+  melo_player_set_status_volume (player, volume);
+
+  return volume;
 }
 
 gboolean
@@ -394,78 +425,139 @@ melo_player_set_mute (MeloPlayer *player, gboolean mute)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 
-  g_return_val_if_fail (pclass->set_mute, FALSE);
+  /* Mute control is note available */
+  if (!pclass->set_mute)
+    return melo_player_get_mute (player);
 
-  return pclass->set_mute (player, mute);
+  /* Set mute */
+  mute = pclass->set_mute (player, mute);
+
+  /* Update mute */
+  melo_player_set_status_mute (player, mute);
+
+  return mute;
 }
 
 MeloPlayerState
 melo_player_get_state (MeloPlayer *player)
 {
-  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+  MeloPlayerPrivate *priv = player->priv;
+  MeloPlayerState state;
 
-  g_return_val_if_fail (pclass->get_state, MELO_PLAYER_STATE_NONE);
+  /* Get player state */
+  g_mutex_lock (&priv->mutex);
+  state = priv->status->state;
+  g_mutex_unlock (&priv->mutex);
 
-  return pclass->get_state (player);
+  return state;
 }
 
 gchar *
 melo_player_get_media_name (MeloPlayer *player)
 {
-  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+  MeloPlayerPrivate *priv = player->priv;
+  gchar *name;
 
-  g_return_val_if_fail (pclass->get_name, NULL);
+  /* Copy media name */
+  g_mutex_lock (&priv->mutex);
+  name = melo_player_status_get_name (priv->status);
+  g_mutex_unlock (&priv->mutex);
 
-  return pclass->get_name (player);
+  return name;
 }
 
 gint
-melo_player_get_pos (MeloPlayer *player, gint *duration)
+melo_player_get_pos (MeloPlayer *player)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
 
-  if (!pclass->get_pos) {
-    if (duration)
-      *duration = 0;
-    return 0;
-  }
+  g_return_val_if_fail (pclass->get_pos, 0);
 
-  return pclass->get_pos (player, duration);
+  return pclass->get_pos (player);
 }
 
 gdouble
 melo_player_get_volume (MeloPlayer *player)
 {
-  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+  MeloPlayerPrivate *priv = player->priv;
+  gdouble volume;
 
-  g_return_val_if_fail (pclass->get_volume, 0);
+  /* Get current volume */
+  g_mutex_lock (&priv->mutex);
+  volume = priv->status->volume;
+  g_mutex_unlock (&priv->mutex);
 
-  return pclass->get_volume (player);
+  return volume;
+}
+
+gboolean
+melo_player_get_mute (MeloPlayer *player)
+{
+  MeloPlayerPrivate *priv = player->priv;
+  gboolean mute;
+
+  /* Get current mute */
+  g_mutex_lock (&priv->mutex);
+  mute = priv->status->mute;
+  g_mutex_unlock (&priv->mutex);
+
+  return mute;
 }
 
 MeloPlayerStatus *
 melo_player_get_status (MeloPlayer *player)
 {
-  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+  MeloPlayerPrivate *priv = player->priv;
+  MeloPlayerStatus *status;
 
-  g_return_val_if_fail (pclass->get_status, NULL);
+  /* Copy status */
+  g_mutex_lock (&priv->mutex);
+  status = melo_player_status_ref (priv->status);
+  g_mutex_unlock (&priv->mutex);
 
-  return pclass->get_status (player);
+  /* Update position */
+  status->pos = melo_player_get_pos (player);
+
+  return status;
+}
+
+MeloTags *
+melo_player_get_tags (MeloPlayer *player)
+{
+  MeloPlayerPrivate *priv = player->priv;
+  MeloTags *tags;
+
+  /* Get tags */
+  g_mutex_lock (&priv->mutex);
+  tags = melo_player_status_get_tags (priv->status);
+  g_mutex_unlock (&priv->mutex);
+
+  return tags;
 }
 
 gboolean
 melo_player_get_cover (MeloPlayer *player, GBytes **cover, gchar **type)
 {
   MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
+  MeloTags *tags;
 
-  g_return_val_if_fail (pclass->get_cover, FALSE);
+  /* Use specific cover getter implementation */
+  if (pclass->get_cover)
+    return pclass->get_cover (player, cover, type);
 
-  return pclass->get_cover (player, cover, type);
+  /* Fall back to standard cover getter */
+  tags = melo_player_get_tags (player);
+  if (tags) {
+    *cover = melo_tags_get_cover (tags, type);
+    melo_tags_unref (tags);
+  }
+
+  return TRUE;
 }
 
-MeloPlayerStatus *
-melo_player_status_new (MeloPlayer *player, MeloPlayerState state,
-                        const gchar *name)
+static MeloPlayerStatus *
+melo_player_status_new (MeloPlayerState state, const gchar *name,
+                        MeloTags *tags)
 {
   MeloPlayerStatus *status;
 
@@ -487,94 +579,150 @@ melo_player_status_new (MeloPlayer *player, MeloPlayerState state,
   /* Init reference counter */
   status->priv->ref_count = 1;
 
-  /* Save player ID */
-  if (player)
-    status->priv->id = g_strdup (melo_player_get_id (player));
-
-  /* Set state and name */
+  /* Initialize status */
   status->state = state;
+  status->volume = 1.0;
   status->priv->name = g_strdup (name);
+  status->priv->tags = tags;
 
   return status;
 }
 
-void
-melo_player_status_set_state (MeloPlayerStatus *status, MeloPlayerState state)
+gboolean
+melo_player_reset_status (MeloPlayer *player, MeloPlayerState state,
+                          const gchar *name, MeloTags *tags)
 {
+  MeloPlayerPrivate *priv = player->priv;
+  MeloPlayerStatus *status, *old;
+
+  /* Create a new status */
+  status = melo_player_status_new (state, name, tags);
+  if (!status)
+    return FALSE;
+
+  /* Lock player status access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Copy values from previous status */
+  status->volume = priv->status->volume;
+  status->mute = priv->status->mute;
+  status->has_prev = priv->status->has_prev;
+  status->has_next = priv->status->has_next;
+
+  /* Set new player status */
+  melo_player_status_unref (priv->status);
+  priv->status = status;
+
+  /* Unlock player status access */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+}
+
+void
+melo_player_set_status_state (MeloPlayer *player, MeloPlayerState state)
+{
+  MeloPlayerPrivate *priv = player->priv;
+
   /* Update state */
-  status->state = state;
+  g_mutex_lock (&priv->mutex);
+  priv-> status->state = state;
+  g_mutex_unlock (&priv->mutex);
 
   /* Send 'player state' event */
-  melo_event_player_state (status->priv->id, state);
+  melo_event_player_state (priv->id, state);
 }
 
 void
-melo_player_status_set_buffering (MeloPlayerStatus *status,
-                                  MeloPlayerState state, guint percent)
+melo_player_set_status_buffering (MeloPlayer *player, MeloPlayerState state,
+                                  guint percent)
 {
+  MeloPlayerPrivate *priv = player->priv;
+
   /* Update state and buffer percent */
-  status->state = state;
-  status->buffer_percent = percent;
+  g_mutex_lock (&priv->mutex);
+  priv->status->state = state;
+  priv->status->buffer_percent = percent;
+  g_mutex_unlock (&priv->mutex);
 
   /* Send 'player buffering' event */
-  melo_event_player_buffering (status->priv->id, state, percent);
+  melo_event_player_buffering (priv->id, state, percent);
 }
 
 void
-melo_player_status_set_pos (MeloPlayerStatus *status, gint pos)
+melo_player_set_status_pos (MeloPlayer *player, gint pos)
 {
+  MeloPlayerPrivate *priv = player->priv;
+
   /* Update position */
-  status->pos = pos;
+  g_mutex_lock (&priv->mutex);
+  priv->status->pos = pos;
+  g_mutex_unlock (&priv->mutex);
 
   /* Send 'player seek' event */
-  melo_event_player_seek (status->priv->id, pos);
+  melo_event_player_seek (priv->id, pos);
 }
 
 void
-melo_player_status_set_duration (MeloPlayerStatus *status, gint duration)
+melo_player_set_status_duration (MeloPlayer *player, gint duration)
 {
+  MeloPlayerPrivate *priv = player->priv;
+
   /* Update duration */
-  status->duration = duration;
+  g_mutex_lock (&priv->mutex);
+  priv->status->duration = duration;
+  g_mutex_unlock (&priv->mutex);
 
   /* Send 'player duration' event */
-  melo_event_player_duration (status->priv->id, duration);
+  melo_event_player_duration (priv->id, duration);
 }
 
 void
-melo_player_status_set_playlist (MeloPlayerStatus *status, gboolean has_prev,
+melo_player_set_status_playlist (MeloPlayer *player, gboolean has_prev,
                                  gboolean has_next)
 {
+  MeloPlayerPrivate *priv = player->priv;
+
   /* Update playlist */
-  status->has_prev = has_prev;
-  status->has_next = has_next;
+  g_mutex_lock (&priv->mutex);
+  priv->status->has_prev = has_prev;
+  priv->status->has_next = has_next;
+  g_mutex_unlock (&priv->mutex);
 
   /* Send 'player playlist' event */
-  melo_event_player_playlist (status->priv->id, has_prev, has_next);
+  melo_event_player_playlist (priv->id, has_prev, has_next);
 }
 
 void
-melo_player_status_set_volume (MeloPlayerStatus *status, gdouble volume)
+melo_player_set_status_volume (MeloPlayer *player, gdouble volume)
 {
+  MeloPlayerPrivate *priv = player->priv;
+
   /* Update volume */
-  status->volume = volume;
+  g_mutex_lock (&priv->mutex);
+  priv->status->volume = volume;
+  g_mutex_unlock (&priv->mutex);
 
   /* Send 'player volume' event */
-  melo_event_player_volume (status->priv->id, volume);
+  melo_event_player_volume (priv->id, volume);
 }
 
 void
-melo_player_status_set_mute (MeloPlayerStatus *status, gboolean mute)
+melo_player_set_status_mute (MeloPlayer *player, gboolean mute)
 {
+  MeloPlayerPrivate *priv = player->priv;
+
   /* Update mute */
-  status->mute = mute;
+  g_mutex_lock (&priv->mutex);
+  priv->status->mute = mute;
+  g_mutex_unlock (&priv->mutex);
 
   /* Send 'player mute' event */
-  melo_event_player_mute (status->priv->id, mute);
+  melo_event_player_mute (priv->id, mute);
 }
 
-void
-melo_player_status_set_name (MeloPlayerStatus *status, const gchar *name,
-                             gboolean send_event)
+static void
+melo_player_status_set_name (MeloPlayerStatus *status, const gchar *name)
 {
   MeloPlayerStatusPrivate *priv = status->priv;
 
@@ -587,33 +735,24 @@ melo_player_status_set_name (MeloPlayerStatus *status, const gchar *name,
 
   /* Unlock name access */
   g_mutex_unlock (&priv->mutex);
-
-  /* Send 'player name' event */
-  if (send_event)
-    melo_event_player_name (priv->id, name);
-}
-
-gchar *
-melo_player_status_get_name (const MeloPlayerStatus *status)
-{
-  MeloPlayerStatusPrivate *priv = status->priv;
-  gchar *name;
-
-  /* Lock name access */
-  g_mutex_lock (&priv->mutex);
-
-  /* Copy name */
-  name = g_strdup (priv->name);
-
-  /* Unlock name access */
-  g_mutex_unlock (&priv->mutex);
-
-  return name;
 }
 
 void
-melo_player_status_set_error (MeloPlayerStatus *status, const gchar *error,
-                              gboolean send_event)
+melo_player_set_status_name (MeloPlayer *player, const gchar *name)
+{
+  MeloPlayerPrivate *priv = player->priv;
+
+  /* Update name */
+  g_mutex_lock (&priv->mutex);
+  melo_player_status_set_name (priv->status, name);
+  g_mutex_unlock (&priv->mutex);
+
+  /* Send 'player name' event */
+  melo_event_player_name (priv->id, name);
+}
+
+static void
+melo_player_status_set_error (MeloPlayerStatus *status, const gchar *error)
 {
   MeloPlayerStatusPrivate *priv = status->priv;
 
@@ -628,10 +767,89 @@ melo_player_status_set_error (MeloPlayerStatus *status, const gchar *error,
 
   /* Unlock error access */
   g_mutex_unlock (&priv->mutex);
+}
+
+void
+melo_player_set_status_error (MeloPlayer *player, const gchar *error)
+{
+  MeloPlayerPrivate *priv = player->priv;
+
+  /* Update error */
+  g_mutex_lock (&priv->mutex);
+  melo_player_status_set_error (priv->status, error);
+  g_mutex_unlock (&priv->mutex);
 
   /* Send 'player error' event */
-  if (send_event)
-    melo_event_player_error (priv->id, error);
+  melo_event_player_error (priv->id, error);
+}
+
+static void
+melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags)
+{
+  MeloPlayerStatusPrivate *priv = status->priv;
+
+  /* Lock tags access */
+  g_mutex_lock (&priv->mutex);
+
+  /* Free previous tags */
+  if (priv->tags)
+    melo_tags_unref (priv->tags);
+
+  /* Set new tags */
+  priv->tags = tags;
+
+  /* Update timestamp */
+  melo_tags_update (tags);
+
+  /* Unlock tags access */
+  g_mutex_unlock (&priv->mutex);
+}
+
+void
+melo_player_take_status_tags (MeloPlayer *player, MeloTags *tags)
+{
+  MeloPlayerPrivate *priv = player->priv;
+
+  /* Set new tags */
+  g_mutex_lock (&priv->mutex);
+  melo_player_status_take_tags (priv->status, tags);
+  g_mutex_unlock (&priv->mutex);
+
+  /* Send 'player tags' event */
+  melo_event_player_tags (priv->id, tags);
+}
+
+void
+melo_player_set_status_tags (MeloPlayer *player, MeloTags *tags)
+{
+  if (tags)
+    melo_tags_ref (tags);
+  melo_player_take_status_tags (player, tags);
+}
+
+/* Player status functions */
+MeloPlayerStatus *
+melo_player_status_ref (MeloPlayerStatus *status)
+{
+  status->priv->ref_count++;
+  return status;
+}
+
+void
+melo_player_status_unref (MeloPlayerStatus *status)
+{
+  status->priv->ref_count--;
+  if (status->priv->ref_count)
+    return;
+
+  /* Free status */
+  g_free (status->priv->name);
+  g_free (status->priv->error);
+  if (status->priv->tags)
+    melo_tags_unref (status->priv->tags);
+  g_mutex_clear (&status->priv->mutex);
+  g_slice_free (MeloPlayerStatusPrivate, status->priv);
+  g_slice_free (MeloPlayerStatus, status);
 }
 
 gchar *
@@ -652,40 +870,22 @@ melo_player_status_get_error (const MeloPlayerStatus *status)
   return error;
 }
 
-void
-melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags,
-                              gboolean send_event)
+gchar *
+melo_player_status_get_name (const MeloPlayerStatus *status)
 {
   MeloPlayerStatusPrivate *priv = status->priv;
+  gchar *name;
 
-  /* Lock tags access */
+  /* Lock name access */
   g_mutex_lock (&priv->mutex);
 
-  /* Free previous tags */
-  if (priv->tags)
-    melo_tags_unref (priv->tags);
+  /* Copy name */
+  name = g_strdup (priv->name);
 
-  /* Set new tags */
-  priv->tags = tags;
-
-  /* Update timestamp */
-  melo_tags_update (tags);
-
-  /* Unlock tags access */
+  /* Unlock name access */
   g_mutex_unlock (&priv->mutex);
 
-  /* Send 'player tags' event */
-  if (send_event)
-    melo_event_player_tags (priv->id, tags);
-}
-
-void
-melo_player_status_set_tags (MeloPlayerStatus *status, MeloTags *tags,
-                             gboolean send_event)
-{
-  if (tags)
-    melo_tags_ref (tags);
-  melo_player_status_take_tags (status, tags, send_event);
+  return name;
 }
 
 MeloTags *
@@ -730,31 +930,6 @@ const gchar *
 melo_player_status_lock_get_error (const MeloPlayerStatus *status)
 {
   return status->priv->error;
-}
-
-MeloPlayerStatus *
-melo_player_status_ref (MeloPlayerStatus *status)
-{
-  status->priv->ref_count++;
-  return status;
-}
-
-void
-melo_player_status_unref (MeloPlayerStatus *status)
-{
-  status->priv->ref_count--;
-  if (status->priv->ref_count)
-    return;
-
-  /* Free status */
-  g_free (status->priv->id);
-  g_free (status->priv->name);
-  g_free (status->priv->error);
-  if (status->priv->tags)
-    melo_tags_unref (status->priv->tags);
-  g_mutex_clear (&status->priv->mutex);
-  g_slice_free (MeloPlayerStatusPrivate, status->priv);
-  g_slice_free (MeloPlayerStatus, status);
 }
 
 static const gchar *melo_player_state_str[] = {
