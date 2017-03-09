@@ -45,6 +45,7 @@ struct _MeloPlayerPrivate {
   gchar *name;
   MeloPlayerInfo info;
   MeloPlayerStatus *status;
+  gint64 last_update;
 };
 
 enum {
@@ -438,6 +439,30 @@ melo_player_set_mute (MeloPlayer *player, gboolean mute)
   return mute;
 }
 
+MeloPlayerStatus *
+melo_player_get_status (MeloPlayer *player, gint64 *timestamp)
+{
+  MeloPlayerPrivate *priv = player->priv;
+  MeloPlayerStatus *status;
+
+  /* */
+  if (timestamp) {
+    if (*timestamp && *timestamp >= priv->last_update)
+      return NULL;
+    *timestamp = priv->last_update;
+  }
+
+  /* Copy status */
+  g_mutex_lock (&priv->mutex);
+  status = melo_player_status_ref (priv->status);
+  g_mutex_unlock (&priv->mutex);
+
+  /* Update position */
+  status->pos = melo_player_get_pos (player);
+
+  return status;
+}
+
 MeloPlayerState
 melo_player_get_state (MeloPlayer *player)
 {
@@ -502,23 +527,6 @@ melo_player_get_mute (MeloPlayer *player)
   g_mutex_unlock (&priv->mutex);
 
   return mute;
-}
-
-MeloPlayerStatus *
-melo_player_get_status (MeloPlayer *player)
-{
-  MeloPlayerPrivate *priv = player->priv;
-  MeloPlayerStatus *status;
-
-  /* Copy status */
-  g_mutex_lock (&priv->mutex);
-  status = melo_player_status_ref (priv->status);
-  g_mutex_unlock (&priv->mutex);
-
-  /* Update position */
-  status->pos = melo_player_get_pos (player);
-
-  return status;
 }
 
 MeloTags *
@@ -588,6 +596,12 @@ melo_player_status_new (MeloPlayerState state, const gchar *name,
   return status;
 }
 
+static void
+melo_player_updated (MeloPlayerPrivate *priv)
+{
+  priv->last_update = g_get_monotonic_time ();
+}
+
 gboolean
 melo_player_reset_status (MeloPlayer *player, MeloPlayerState state,
                           const gchar *name, MeloTags *tags)
@@ -631,6 +645,7 @@ melo_player_set_status_state (MeloPlayer *player, MeloPlayerState state)
 
   /* Send 'player state' event */
   melo_event_player_state (priv->id, state);
+  melo_player_updated (priv);
 }
 
 void
@@ -647,6 +662,7 @@ melo_player_set_status_buffering (MeloPlayer *player, MeloPlayerState state,
 
   /* Send 'player buffering' event */
   melo_event_player_buffering (priv->id, state, percent);
+  melo_player_updated (priv);
 }
 
 void
@@ -661,6 +677,7 @@ melo_player_set_status_pos (MeloPlayer *player, gint pos)
 
   /* Send 'player seek' event */
   melo_event_player_seek (priv->id, pos);
+  melo_player_updated (priv);
 }
 
 void
@@ -675,6 +692,7 @@ melo_player_set_status_duration (MeloPlayer *player, gint duration)
 
   /* Send 'player duration' event */
   melo_event_player_duration (priv->id, duration);
+  melo_player_updated (priv);
 }
 
 void
@@ -691,6 +709,7 @@ melo_player_set_status_playlist (MeloPlayer *player, gboolean has_prev,
 
   /* Send 'player playlist' event */
   melo_event_player_playlist (priv->id, has_prev, has_next);
+  melo_player_updated (priv);
 }
 
 void
@@ -705,6 +724,7 @@ melo_player_set_status_volume (MeloPlayer *player, gdouble volume)
 
   /* Send 'player volume' event */
   melo_event_player_volume (priv->id, volume);
+  melo_player_updated (priv);
 }
 
 void
@@ -719,6 +739,7 @@ melo_player_set_status_mute (MeloPlayer *player, gboolean mute)
 
   /* Send 'player mute' event */
   melo_event_player_mute (priv->id, mute);
+  melo_player_updated (priv);
 }
 
 static void
@@ -749,6 +770,7 @@ melo_player_set_status_name (MeloPlayer *player, const gchar *name)
 
   /* Send 'player name' event */
   melo_event_player_name (priv->id, name);
+  melo_player_updated (priv);
 }
 
 static void
@@ -781,6 +803,7 @@ melo_player_set_status_error (MeloPlayer *player, const gchar *error)
 
   /* Send 'player error' event */
   melo_event_player_error (priv->id, error);
+  melo_player_updated (priv);
 }
 
 static void
@@ -817,6 +840,7 @@ melo_player_take_status_tags (MeloPlayer *player, MeloTags *tags)
 
   /* Send 'player tags' event */
   melo_event_player_tags (priv->id, tags);
+  melo_player_updated (priv);
 }
 
 void

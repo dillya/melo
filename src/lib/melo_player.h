@@ -149,12 +149,13 @@ gdouble melo_player_set_volume (MeloPlayer *player, gdouble volume);
 gboolean melo_player_set_mute (MeloPlayer *player, gboolean mute);
 
 /* Player status */
+MeloPlayerStatus *melo_player_get_status (MeloPlayer *player,
+                                          gint64 *timestamp);
 MeloPlayerState melo_player_get_state (MeloPlayer *player);
 gchar *melo_player_get_media_name (MeloPlayer *player);
 gint melo_player_get_pos (MeloPlayer *player);
 gdouble melo_player_get_volume (MeloPlayer *player);
 gboolean melo_player_get_mute (MeloPlayer *player);
-MeloPlayerStatus *melo_player_get_status (MeloPlayer *player);
 MeloTags *melo_player_get_tags (MeloPlayer *player);
 gboolean melo_player_get_cover (MeloPlayer *player, GBytes **cover,
                                 gchar **type);

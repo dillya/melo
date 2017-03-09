@@ -248,7 +248,7 @@ melo_player_jsonrpc_list_to_array (GList *list,
       JsonObject *o;
 
       /* Get status */
-      status = melo_player_get_status (play);
+      status = melo_player_get_status (play, NULL);
       if (status) {
         /* Generate status */
         o = melo_player_jsonrpc_status_to_object (status, sfields, tags_fields,
@@ -562,7 +562,7 @@ melo_player_jsonrpc_get_status (const gchar *method,
   json_object_unref (obj);
 
   /* Get status */
-  status = melo_player_get_status (play);
+  status = melo_player_get_status (play, NULL);
   g_object_unref (play);
   if (!status)
     return;
