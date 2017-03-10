@@ -598,6 +598,9 @@ melo_tags_get_fields_from_json_array (JsonArray *array)
     } else if (!g_strcmp0 (field, "full")) {
       fields = MELO_TAGS_FIELDS_FULL;
       break;
+    } else if (!g_strcmp0 (field, "full_cover")) {
+      fields = MELO_TAGS_FIELDS_FULL_COVER;
+      break;
     } else if (!g_strcmp0 (field, "title"))
       fields |= MELO_TAGS_FIELDS_TITLE;
     else if (!g_strcmp0 (field, "artist"))
@@ -655,7 +658,10 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
     /* Lock cover */
     g_mutex_lock (&priv->mutex);
 
-    if (priv->cover) {
+    /* Get cover only if available and when exclusive cover is not set */
+    if (priv->cover &&
+        (!(fields & MELO_TAGS_FIELDS_COVER_EX) ||
+         !(fields & MELO_TAGS_FIELDS_COVER_URL) || !priv->cover_url)) {
       const guchar *data;
       gsize size;
       gchar *cover;

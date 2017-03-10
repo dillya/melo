@@ -45,17 +45,31 @@ struct _MeloTags {
 
 enum _MeloTagsFields {
   MELO_TAGS_FIELDS_NONE = 0,
-  MELO_TAGS_FIELDS_TITLE = 1,
-  MELO_TAGS_FIELDS_ARTIST = 2,
-  MELO_TAGS_FIELDS_ALBUM = 4,
-  MELO_TAGS_FIELDS_GENRE = 8,
-  MELO_TAGS_FIELDS_DATE = 16,
-  MELO_TAGS_FIELDS_TRACK = 32,
-  MELO_TAGS_FIELDS_TRACKS = 64,
-  MELO_TAGS_FIELDS_COVER = 128,
-  MELO_TAGS_FIELDS_COVER_URL = 256,
+  MELO_TAGS_FIELDS_TITLE = (1 << 0),
+  MELO_TAGS_FIELDS_ARTIST = (1 << 1),
+  MELO_TAGS_FIELDS_ALBUM = (1 << 2),
+  MELO_TAGS_FIELDS_GENRE = (1 << 3),
+  MELO_TAGS_FIELDS_DATE = (1 << 4),
+  MELO_TAGS_FIELDS_TRACK = (1 << 5),
+  MELO_TAGS_FIELDS_TRACKS = (1 << 6),
+  MELO_TAGS_FIELDS_COVER = (1 << 7),
+  MELO_TAGS_FIELDS_COVER_URL = (1 << 8),
 
+  /* Cover exclusive bit field: when set, select only one tag between cover and
+   * cover_url. If cover_url is not available, cover will be selected,
+   * otherwise, cover_url is selected.
+   */
+  MELO_TAGS_FIELDS_COVER_EX = (1 << 9),
+
+  /* Full tags definition with:
+   *  - MELO_TAGS_FIELDS_FULL: cover_url or cover (if cover_url isn't found),
+   *  - MELO_TAGS_FIELDS_FULL_COVER: cover and cover_url,
+   *  - MELO_TAGS_FIELDS_FULL_NO_COVER: none of cover and cover_url.
+   */
   MELO_TAGS_FIELDS_FULL = ~0,
+  MELO_TAGS_FIELDS_FULL_COVER = ~MELO_TAGS_FIELDS_COVER_EX,
+  MELO_TAGS_FIELDS_FULL_NO_COVER = ~(MELO_TAGS_FIELDS_COVER |
+                                     MELO_TAGS_FIELDS_COVER_URL),
 };
 
 MeloTags *melo_tags_new (void);
