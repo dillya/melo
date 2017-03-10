@@ -29,9 +29,11 @@
 #endif
 
 #include "melo.h"
+#include "melo_event.h"
 #include "melo_plugin.h"
 #include "melo_config_main.h"
 
+#include "melo_event_jsonrpc.h"
 #include "melo_config_jsonrpc.h"
 #include "melo_module_jsonrpc.h"
 #include "melo_browser_jsonrpc.h"
@@ -69,13 +71,46 @@ melo_sigint_handler (gpointer user_data)
 }
 #endif
 
+static gboolean
+melo_event_callback (MeloEventClient *client, MeloEventType type, guint event,
+                     const gchar *id, gpointer data, gpointer user_data)
+{
+  JsonGenerator *gen;
+  JsonNode *node;
+  JsonObject *obj;
+  gchar *str;
+
+  /* Convert event to Json object */
+  obj = melo_event_jsonrpc_evnet_to_object (type, event, id, data);
+  if (obj) {
+    /* Create node */
+    node = json_node_new (JSON_NODE_OBJECT);
+    json_node_take_object (node, obj);
+
+   /* Generate Json string */
+    gen = json_generator_new ();
+    if (gen) {
+      json_generator_set_root (gen, node);
+      json_generator_set_pretty (gen, TRUE);
+      str = json_generator_to_data (gen, NULL);
+      g_object_unref (gen);
+
+      g_message ("Event: %s\n", str);
+      g_free (str);
+    }
+  }
+}
+
 int
 main (int argc, char *argv[])
 {
   /* Command line opetions */
   gboolean verbose = FALSE;
   gboolean daemonize = FALSE;
+  gboolean event_debug = FALSE;
   GOptionEntry options[] = {
+    {"event-debug", 'e', 0, G_OPTION_ARG_NONE, &event_debug,
+                                                    "Enable event debug", NULL},
     {"daemon", 'd', 0, G_OPTION_ARG_NONE, &daemonize, "Run as daemon", NULL},
     {"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Be verbose", NULL},
     {NULL}
@@ -91,6 +126,8 @@ main (int argc, char *argv[])
   /* Melo context */
   MeloContext context;
   gboolean reg;
+  /* Melo event client */
+  MeloEventClient *event_client = NULL;
   /* Main loop */
   GMainLoop *loop;
 
@@ -139,6 +176,10 @@ main (int argc, char *argv[])
   context.disco = melo_discover_new ();
   if (melo_config_get_boolean (config, "general", "register",&reg) && reg)
     melo_discover_register_device (context.disco, context.name, context.port);
+
+  /* Register event client for debug purpose */
+  if (event_debug)
+    event_client = melo_event_register (melo_event_callback, NULL);
 
   /* Register standard JSON-RPC methods */
   melo_config_jsonrpc_register_methods ();
@@ -232,6 +273,10 @@ end:
   melo_browser_jsonrpc_unregister_methods ();
   melo_module_jsonrpc_unregister_methods ();
   melo_config_jsonrpc_unregister_methods ();
+
+  /* Unregister event client */
+  if (event_client)
+    melo_event_unregister (event_client);
 
   /* Free discoverer */
   g_object_unref (context.disco);
