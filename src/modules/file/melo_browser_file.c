@@ -319,7 +319,7 @@ melo_browser_file_discover_tags (MeloBrowserFile *bfile,
   MeloBrowserFilePrivate *priv = bfile->priv;
   const GstTagList *gtags;
   MeloTags *tags = NULL;
-  gchar *cover_file;
+  gchar *cover_file = NULL;
 
   /* Get GstTagLsit */
   gtags = gst_discoverer_info_get_tags (info);
