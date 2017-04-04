@@ -309,6 +309,7 @@ melo_config_load_from_file (MeloConfig *config, const gchar *filename)
     MeloConfigValue *values = groups_values[i].values;
     MeloConfigItem *items = groups[i].items;
     const gchar *gid = groups[i].id;
+    GError *err = NULL;
 
     /* Set default values */
     for (j = 0; j < groups[i].items_count; j++) {
@@ -316,21 +317,30 @@ melo_config_load_from_file (MeloConfig *config, const gchar *filename)
 
       switch (items[j].type) {
         case MELO_CONFIG_TYPE_BOOLEAN:
-          values[j]._boolean = g_key_file_get_boolean (kfile, gid, id, NULL);
+          values[j]._boolean = g_key_file_get_boolean (kfile, gid, id, &err);
+          if (err)
+            values[j]._boolean = items[j].def._boolean;
           break;
         case MELO_CONFIG_TYPE_INTEGER:
-          values[j]._integer = g_key_file_get_int64 (kfile, gid, id, NULL);
+          values[j]._integer = g_key_file_get_int64 (kfile, gid, id, &err);
+          if (err)
+            values[j]._integer = items[j].def._integer;
           break;
         case MELO_CONFIG_TYPE_DOUBLE:
-          values[j]._double = g_key_file_get_double (kfile, gid, id, NULL);
+          values[j]._double = g_key_file_get_double (kfile, gid, id, &err);
+          if (err)
+            values[j]._double = items[j].def._double;
           break;
         case MELO_CONFIG_TYPE_STRING:
           g_free (values[j]._string);
-          values[j]._string = g_key_file_get_string (kfile, gid, id, NULL);
+          values[j]._string = g_key_file_get_string (kfile, gid, id, &err);
+          if (err)
+            values[j]._string = g_strdup (items[j].def._string);
           break;
         default:
           values[j]._integer = 0;
       }
+      g_clear_error (&err);
     }
   }
 
