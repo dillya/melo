@@ -8,6 +8,7 @@ libmelo_file_la_DEPENDENCIES = \
 
 libmelo_file_la_SOURCES = \
 	melo_browser_file.c \
+	melo_library_file.c \
 	melo_player_file.c \
 	melo_config_file.c \
 	melo_file_db.c \
@@ -24,5 +25,6 @@ noinst_HEADERS = \
 	melo_file.h \
 	melo_file_db.h \
 	melo_browser_file.h \
+	melo_library_file.h \
 	melo_player_file.h \
 	melo_config_file.h

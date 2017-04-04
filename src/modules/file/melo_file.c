@@ -22,6 +22,7 @@
 #include "melo_file.h"
 #include "melo_file_db.h"
 #include "melo_browser_file.h"
+#include "melo_library_file.h"
 #include "melo_player_file.h"
 #include "melo_playlist_simple.h"
 #include "melo_config_file.h"
@@ -39,6 +40,7 @@ static const MeloModuleInfo *melo_file_get_info (MeloModule *module);
 struct _MeloFilePrivate {
   MeloFileDB *fdb;
   MeloBrowser *files;
+  MeloBrowser *library;
   MeloPlayer *player;
   MeloPlaylist *playlist;
   MeloConfig *config;
@@ -57,6 +59,11 @@ melo_file_finalize (GObject *gobject)
   if (priv->player) {
     melo_module_unregister_player (MELO_MODULE (gobject), "file_player");
     g_object_unref (priv->player);
+  }
+
+  if (priv->library) {
+    melo_module_unregister_browser (MELO_MODULE (gobject), "file_library");
+    g_object_unref (priv->library);
   }
 
   if (priv->files) {
@@ -94,12 +101,13 @@ melo_file_init (MeloFile *self)
 
   self->priv = priv;
   priv->files = melo_browser_new (MELO_TYPE_BROWSER_FILE, "file_files");
+  priv->library = melo_browser_new (MELO_TYPE_LIBRARY_FILE, "file_library");
   priv->player = melo_player_new (MELO_TYPE_PLAYER_FILE, "file_player",
                                   melo_file_info.name);
   priv->playlist = melo_playlist_new (MELO_TYPE_PLAYLIST_SIMPLE,
                                       "file_playlist");
 
-  if (!priv->files || !priv->player || !priv->player)
+  if (!priv->files || !priv->library || !priv->player || !priv->playlist)
     return;
 
   /* Setup playlist */
@@ -108,12 +116,14 @@ melo_file_init (MeloFile *self)
 
   /* Register browser and player */
   melo_module_register_browser (MELO_MODULE (self), priv->files);
+  melo_module_register_browser (MELO_MODULE (self), priv->library);
   melo_module_register_player (MELO_MODULE (self), priv->player);
 
   /* Create links between browser, player and playlist */
   melo_player_set_playlist (priv->player, priv->playlist);
   melo_playlist_set_player (priv->playlist, priv->player);
   melo_browser_set_player (priv->files, priv->player);
+  melo_browser_set_player (priv->library, priv->player);
 
   /* Initialize and load configuration */
   priv->config = melo_config_file_new ();
@@ -145,6 +155,7 @@ melo_file_constructed (GObject *gobject)
   /* Set database file for browser */
   if (priv->fdb) {
     melo_browser_file_set_db (MELO_BROWSER_FILE (priv->files), priv->fdb);
+    melo_library_file_set_db (MELO_LIBRARY_FILE (priv->library), priv->fdb);
   }
 
   /* Chain up to the parent class */
