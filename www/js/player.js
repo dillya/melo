@@ -195,7 +195,7 @@ function melo_player_update_mute(mute) {
 function melo_player_render_player(result) {
     /* Update media details */
     if (result.name != melo_player_current.name || result.tags) {
-        var title = name;
+        var title = result.name;
         var artist = "";
         var cover = "";
 
@@ -203,8 +203,10 @@ function melo_player_render_player(result) {
         if (result.tags) {
             /* Set details according to tags */
             cover = result.tags.cover_url +'?t=' + result.tags.timestamp;
-            title = result.tags.title;
-            artist = result.tags.artist || "";
+            if (result.tags.title) {
+              title = result.tags.title;
+              artist = result.tags.artist || "";
+            }
 
             /* Update current timestamp */
             melo_player_current.ts = result.tags.timestamp;
