@@ -129,10 +129,15 @@ melo_library_file_gen_title (const gchar *path, const gchar *file, gint id,
 {
   GList **list = (GList **) user_data;
   MeloBrowserItem *item;
+  const gchar *fname;
 
+  /* Select full name */
+  fname = tags && tags->title ? tags->title : file;
+
+  /* Create MeloBrowserItem */
   item = melo_browser_item_new (NULL, "media");
   item->name = melo_library_gen_id (id);
-  item->full_name = g_strdup (tags->title);
+  item->full_name = g_strdup (fname);
   item->add = g_strdup ("Add to playlist");
   item->tags = tags;
   *list = g_list_prepend (*list, item);
@@ -147,6 +152,7 @@ melo_library_file_gen_artist (const gchar *path, const gchar *file, gint id,
   GList **list = (GList **) user_data;
   MeloBrowserItem *item;
 
+  /* Create MeloBrowserItem */
   item = melo_browser_item_new (NULL, "category");
   item->name = melo_library_gen_id (id);
   item->full_name = g_strdup (tags->artist);
@@ -163,6 +169,7 @@ melo_library_file_gen_album (const gchar *path, const gchar *file, gint id,
   GList **list = (GList **) user_data;
   MeloBrowserItem *item;
 
+  /* Create MeloBrowserItem */
   item = melo_browser_item_new (NULL, "category");
   item->name = melo_library_gen_id (id);
   item->full_name = g_strdup (tags->album);
@@ -179,6 +186,7 @@ melo_library_file_gen_genre (const gchar *path, const gchar *file, gint id,
   GList **list = (GList **) user_data;
   MeloBrowserItem *item;
 
+  /* Create MeloBrowserItem */
   item = melo_browser_item_new (NULL, "category");
   item->name = melo_library_gen_id (id);
   item->full_name = g_strdup (tags->genre);

@@ -23,8 +23,8 @@
 
 #include "melo_file_db.h"
 
-#define MELO_FILE_DB_VERSION 3
-#define MELO_FILE_DB_VERSION_STR "3"
+#define MELO_FILE_DB_VERSION 4
+#define MELO_FILE_DB_VERSION_STR "4"
 
 /* Table creation */
 #define MELO_FILE_DB_CREATE \
@@ -42,13 +42,16 @@
   "        'timestamp'     INTEGER" \
   ");" \
   "CREATE TABLE artist (" \
-  "        'artist'        TEXT NOT NULL UNIQUE" \
+  "        'artist'        TEXT NOT NULL UNIQUE," \
+  "        'cover'         TEXT" \
   ");" \
   "CREATE TABLE album (" \
-  "        'album'         TEXT NOT NULL UNIQUE" \
+  "        'album'         TEXT NOT NULL UNIQUE," \
+  "        'cover'         TEXT" \
   ");" \
   "CREATE TABLE genre (" \
-  "        'genre'         TEXT NOT NULL UNIQUE" \
+  "        'genre'         TEXT NOT NULL UNIQUE," \
+  "        'cover'         TEXT" \
   ");" \
   "CREATE TABLE path (" \
   "        'path'          TEXT NOT NULL UNIQUE" \
@@ -327,10 +330,10 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
   }
 
   /* Get strings from tags */
-  title = tags && tags->title ? tags->title : "None";
-  artist = tags && tags->artist ? tags->artist : "None";
-  album = tags && tags->album ? tags->album : "None";
-  genre = tags && tags->genre ? tags->genre : "None";
+  title = tags && tags->title ? tags->title : NULL;
+  artist = tags && tags->artist ? tags->artist : "Unknown";
+  album = tags && tags->album ? tags->album : "Unknown";
+  genre = tags && tags->genre ? tags->genre : "Unknown";
 
   /* Get values from tags */
   if (tags) {
@@ -486,9 +489,11 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   len = g_snprintf (columns, MELO_FILE_DB_COLUMN_SIZE,
                     type <= MELO_FILE_DB_TYPE_SONG ? "song.rowid," : "rowid,");
   if (type == MELO_FILE_DB_TYPE_FILE) {
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "path,file,");
+    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "path,");
     join_path = TRUE;
   }
+  if (type <= MELO_FILE_DB_TYPE_SONG)
+    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "file,");
   if (tags_fields & MELO_TAGS_FIELDS_TITLE)
     len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "title,");
   if (tags_fields & MELO_TAGS_FIELDS_ARTIST) {
@@ -510,9 +515,11 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
     len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "tracks,");
   if (tags_fields & MELO_TAGS_FIELDS_COVER_URL)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "cover,");
+    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len,
+                     type <= MELO_FILE_DB_TYPE_SONG ? "song.cover," : "cover,");
   if (tags_fields & MELO_TAGS_FIELDS_COVER)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "cover,");
+    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len,
+                     type <= MELO_FILE_DB_TYPE_SONG ? "song.cover," : "cover,");
   if (len)
     columns[len-1] = '\0';
 
@@ -660,10 +667,10 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
 
     /* Fill MeloTags */
     id = sqlite3_column_int (req, i++);
-    if (type == MELO_FILE_DB_TYPE_FILE) {
+    if (type == MELO_FILE_DB_TYPE_FILE)
       path = sqlite3_column_text (req, i++);
+    if (type <= MELO_FILE_DB_TYPE_SONG)
       file = sqlite3_column_text (req, i++);
-    }
     if (tags_fields & MELO_TAGS_FIELDS_TITLE)
       tags->title = g_strdup (sqlite3_column_text (req, i++));
     if (tags_fields & MELO_TAGS_FIELDS_ARTIST)
@@ -774,8 +781,14 @@ error:
     return ret; \
   }
 
+#define MELO_FILE_DB_TAGS_FIELDS_COVER \
+  MELO_TAGS_FIELDS_COVER | MELO_TAGS_FIELDS_COVER_URL | \
+  MELO_TAGS_FIELDS_COVER_EX
 DEFINE_MELO_FILE_DB_GET (file, FILE, MELO_TAGS_FIELDS_FULL)
 DEFINE_MELO_FILE_DB_GET (song, SONG, MELO_TAGS_FIELDS_FULL)
-DEFINE_MELO_FILE_DB_GET (artist, ARTIST, MELO_TAGS_FIELDS_ARTIST)
-DEFINE_MELO_FILE_DB_GET (album, ALBUM, MELO_TAGS_FIELDS_ALBUM)
-DEFINE_MELO_FILE_DB_GET (genre, GENRE, MELO_TAGS_FIELDS_GENRE)
+DEFINE_MELO_FILE_DB_GET (artist, ARTIST, MELO_TAGS_FIELDS_ARTIST |
+                                         MELO_FILE_DB_TAGS_FIELDS_COVER)
+DEFINE_MELO_FILE_DB_GET (album, ALBUM, MELO_TAGS_FIELDS_ALBUM |
+                                       MELO_FILE_DB_TAGS_FIELDS_COVER)
+DEFINE_MELO_FILE_DB_GET (genre, GENRE, MELO_TAGS_FIELDS_GENRE |
+                                       MELO_FILE_DB_TAGS_FIELDS_COVER)
