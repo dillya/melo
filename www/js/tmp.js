@@ -381,6 +381,16 @@ function melo_browser_previous() {
   melo_browser_get_list(melo_browser_current_id, path, 0, 0, null);
 }
 
+function melo_browser_add_all() {
+  melo_browser_action("add", melo_browser_current_id,
+                      melo_browser_current_path, false);
+}
+
+function melo_browser_play_all() {
+  melo_browser_action("play", melo_browser_current_id,
+                      melo_browser_current_path, false);
+}
+
 function melo_get_playlist_list(id, play) {
   playlist_poll_id = id;
   jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '",["full"],' +
@@ -729,6 +739,8 @@ $(document).ready(function() {
 //  $("#main_network").click(function() {melo_network(); return false;});
   $("#nav-config").click(function() {melo_get_config("main"); return false;});
   $("#browser_prev").click(function() {melo_browser_previous(); return false;});
+  $("#browser_add_all").click(function() {melo_browser_add_all(); return false;});
+  $("#browser_play_all").click(function() {melo_browser_play_all(); return false;});
   $("#playlist_poll").change(function() {melo_playlist_poll(this.checked); return false;});
   $("#playlist_refresh").click(function() {melo_get_playlist_list(playlist_poll_id, playlist_poll_player);return false;});
 });
