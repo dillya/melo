@@ -55,6 +55,14 @@ static gboolean melo_library_file_get_cover (MeloBrowser *browser,
                                              const gchar *path, GBytes **data,
                                              gchar **type);
 
+typedef enum {
+  MELO_LIBRARY_FILE_TYPE_NONE = 0,
+  MELO_LIBRARY_FILE_TYPE_TITLE,
+  MELO_LIBRARY_FILE_TYPE_ARTIST,
+  MELO_LIBRARY_FILE_TYPE_ALBUM,
+  MELO_LIBRARY_FILE_TYPE_GENRE,
+} MeloLibraryFileType;
+
 struct _MeloLibraryFilePrivate {
   GMutex mutex;
   MeloFileDB *fdb;
@@ -121,6 +129,57 @@ static inline gchar *
 melo_library_gen_id (gint64 id)
 {
   return g_strdup_printf ("%u", id);
+}
+
+static gboolean
+melo_library_file_parse (const gchar *path, MeloLibraryFileType *type,
+                         MeloFileDBFields *filter, gint *id, gint *id2)
+{
+  MeloLibraryFileType t;
+  const gchar *stype;
+  MeloFileDBFields f;
+  gint ids[2];
+  gint i = 0;
+
+  /* Parse path */
+  stype = *path == '/' ? ++path : path;
+  while (path && (path = strchr (path, '/')) != NULL && *(++path) != '\0') {
+    ids[i] = strtoul (path, &path, 10);
+    if (errno)
+      break;
+    i++;
+  }
+  while (i < 2)
+    ids[i++] = -1;
+
+  /* Get type */
+  if (g_str_has_prefix (stype, "title")) {
+    t = MELO_LIBRARY_FILE_TYPE_TITLE;
+    f = MELO_FILE_DB_FIELDS_END;
+    ids[1] = ids[0];
+  } else if (g_str_has_prefix (stype, "artist")) {
+    t = MELO_LIBRARY_FILE_TYPE_ARTIST;
+    f = MELO_FILE_DB_FIELDS_ARTIST_ID;
+  } else if (g_str_has_prefix (stype, "album")) {
+    t = MELO_LIBRARY_FILE_TYPE_ALBUM;
+    f = MELO_FILE_DB_FIELDS_ALBUM_ID;
+  } else if (g_str_has_prefix (stype, "genre")) {
+    t = MELO_LIBRARY_FILE_TYPE_GENRE;
+    f = MELO_FILE_DB_FIELDS_GENRE_ID;
+  } else
+    return FALSE;
+
+  /* Set values */
+  if (type)
+    *type = t;
+  if (filter)
+    *filter = f;
+  if (id)
+    *id = ids[0];
+  if (id2)
+    *id2 = ids[1];
+
+  return TRUE;
 }
 
 static gboolean
@@ -196,34 +255,93 @@ melo_library_file_gen_genre (const gchar *path, const gchar *file, gint id,
   return TRUE;
 }
 
-static gint
-melo_library_file_get_id (const gchar *path)
+static gboolean
+melo_library_file_get_title_list (MeloLibraryFile *lfile, GList **list,
+                                  gint offset, gint count,
+                                  MeloTagsFields tags_fields)
 {
-  gint id = -1;
+  MeloLibraryFilePrivate *priv = lfile->priv;
+  GObject *obj = G_OBJECT (lfile);
 
-  /* Get ID from path */
-  if (path[0] == '/' && path[1] != '\0') {
-    id = strtoul (path + 1, NULL, 10);
-    if (id == ULONG_MAX && errno == ERANGE)
-      id = -1;
-  }
-
-  return id;
+  return melo_file_db_get_song_list (priv->fdb, obj,
+                                     melo_library_file_gen_title, list, offset,
+                                     count, MELO_FILE_DB_SORT_TITLE,
+                                     tags_fields, MELO_FILE_DB_FIELDS_END);
 }
 
-static gint
-melo_library_file_get_last_id (const gchar *path, gint *level)
+static gboolean
+melo_library_file_get_artist_list (MeloLibraryFile *lfile, GList **list,
+                                   gint id, gint offset, gint count,
+                                   MeloTagsFields tags_fields)
 {
-  gint id = -1;
+  MeloLibraryFilePrivate *priv = lfile->priv;
+  GObject *obj = G_OBJECT (lfile);
 
-  /* Get ID from path */
-  while (*path++ != '\0') {
-    id = strtoul (path, &path, 10);
-    if (id == ULONG_MAX && errno == ERANGE)
-      id = -1;
-  }
+  /* Get song list with artist ID */
+  if (id >= 0)
+    return melo_file_db_get_song_list (priv->fdb, obj,
+                                       melo_library_file_gen_title, list,
+                                       offset, count, MELO_FILE_DB_SORT_TITLE,
+                                       tags_fields,
+                                       MELO_FILE_DB_FIELDS_ARTIST_ID, id,
+                                       MELO_FILE_DB_FIELDS_END);
 
-  return id;
+  /* Get artist list */
+  return melo_file_db_get_artist_list (priv->fdb, obj,
+                                       melo_library_file_gen_artist, list,
+                                       offset, count, MELO_FILE_DB_SORT_ARTIST,
+                                       tags_fields | MELO_TAGS_FIELDS_ARTIST,
+                                       MELO_FILE_DB_FIELDS_END);
+}
+
+static gboolean
+melo_library_file_get_album_list (MeloLibraryFile *lfile, GList **list,
+                                  gint id, gint offset, gint count,
+                                  MeloTagsFields tags_fields)
+{
+  MeloLibraryFilePrivate *priv = lfile->priv;
+  GObject *obj = G_OBJECT (lfile);
+
+  /* Get song list with album ID */
+  if (id >= 0)
+    return melo_file_db_get_song_list (priv->fdb, obj,
+                                       melo_library_file_gen_title, list,
+                                       offset, count, MELO_FILE_DB_SORT_TITLE,
+                                       tags_fields,
+                                       MELO_FILE_DB_FIELDS_ALBUM_ID, id,
+                                       MELO_FILE_DB_FIELDS_END);
+
+  /* Get album list */
+  return melo_file_db_get_album_list (priv->fdb, obj,
+                                      melo_library_file_gen_album, list,
+                                      offset, count, MELO_FILE_DB_SORT_ALBUM,
+                                      tags_fields | MELO_TAGS_FIELDS_ALBUM,
+                                      MELO_FILE_DB_FIELDS_END);
+}
+
+static gboolean
+melo_library_file_get_genre_list (MeloLibraryFile *lfile, GList **list,
+                                  gint id, gint offset, gint count,
+                                  MeloTagsFields tags_fields)
+{
+  MeloLibraryFilePrivate *priv = lfile->priv;
+  GObject *obj = G_OBJECT (lfile);
+
+  /* Get song list with genre ID */
+  if (id >= 0)
+    return melo_file_db_get_song_list (priv->fdb, obj,
+                                       melo_library_file_gen_title, list,
+                                       offset, count, MELO_FILE_DB_SORT_TITLE,
+                                       tags_fields,
+                                       MELO_FILE_DB_FIELDS_GENRE_ID, id,
+                                       MELO_FILE_DB_FIELDS_END);
+
+  /* Get genre list */
+  return melo_file_db_get_genre_list (priv->fdb, obj,
+                                      melo_library_file_gen_genre, list,
+                                      offset, count, MELO_FILE_DB_SORT_GENRE,
+                                      tags_fields | MELO_TAGS_FIELDS_GENRE,
+                                      MELO_FILE_DB_FIELDS_END);
 }
 
 static MeloBrowserList *
@@ -233,12 +351,9 @@ melo_library_file_get_list (MeloBrowser *browser, const gchar *path,
                             MeloTagsFields tags_fields)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
-  MeloLibraryFilePrivate *priv = lfile->priv;
-  MeloFileDBFields field = MELO_FILE_DB_FIELDS_END;
-  GObject *obj = G_OBJECT (browser);
+  MeloLibraryFileType type;
   MeloBrowserList *list;
-  gint id = -1;
-  GList *l;
+  gint id;
 
   /* Create browser list */
   list = melo_browser_list_new (path);
@@ -255,14 +370,9 @@ melo_library_file_get_list (MeloBrowser *browser, const gchar *path,
     /* Root path: "/" */
     MeloBrowserItem *item;
 
-    /* Add genre entry to browser by genre */
-    item = melo_browser_item_new ("genre", "category");
-    item->full_name = g_strdup ("Genre");
-    list->items = g_list_append(list->items, item);
-
-    /* Add album entry to browser by album */
-    item = melo_browser_item_new ("album", "category");
-    item->full_name = g_strdup ("Album");
+    /* Add title entry to browser by title */
+    item = melo_browser_item_new ("title", "category");
+    item->full_name = g_strdup ("Title");
     list->items = g_list_append(list->items, item);
 
     /* Add artist entry to browser by artist */
@@ -270,53 +380,42 @@ melo_library_file_get_list (MeloBrowser *browser, const gchar *path,
     item->full_name = g_strdup ("Artist");
     list->items = g_list_append(list->items, item);
 
-    /* Add title entry to browser by title */
-    item = melo_browser_item_new ("title", "category");
-    item->full_name = g_strdup ("Title");
+    /* Add album entry to browser by album */
+    item = melo_browser_item_new ("album", "category");
+    item->full_name = g_strdup ("Album");
     list->items = g_list_append(list->items, item);
-  } else if (g_str_has_prefix (path, "title")) {
-    melo_file_db_get_song_list (priv->fdb, obj, melo_library_file_gen_title,
-                                &list->items, offset, count,
-                                MELO_FILE_DB_SORT_TITLE, MELO_TAGS_FIELDS_FULL,
-                                MELO_FILE_DB_FIELDS_END);
-  } else if (g_str_has_prefix (path, "artist")) {
-    id = melo_library_file_get_id (path+6);
-    if (id < 0)
-      melo_file_db_get_artist_list (priv->fdb, obj,
-                                    melo_library_file_gen_artist, &list->items,
-                                    offset, count, MELO_FILE_DB_SORT_ARTIST,
-                                    MELO_TAGS_FIELDS_FULL,
-                                    MELO_FILE_DB_FIELDS_END);
-    else
-      field = MELO_FILE_DB_FIELDS_ARTIST_ID;
-  } else if (g_str_has_prefix (path, "album")) {
-    id = melo_library_file_get_id (path+5);
-    if (id < 0)
-      melo_file_db_get_album_list (priv->fdb, obj, melo_library_file_gen_album,
-                                   &list->items, offset, count,
-                                   MELO_FILE_DB_SORT_ALBUM,
-                                   MELO_TAGS_FIELDS_FULL,
-                                   MELO_FILE_DB_FIELDS_END);
-    else
-      field = MELO_FILE_DB_FIELDS_ALBUM_ID;
-  } else if (g_str_has_prefix (path, "genre")) {
-    id = melo_library_file_get_id (path+5);
-    if (id < 0)
-      melo_file_db_get_genre_list (priv->fdb, obj, melo_library_file_gen_genre,
-                                   &list->items, offset, count,
-                                   MELO_FILE_DB_SORT_GENRE,
-                                   MELO_TAGS_FIELDS_FULL,
-                                   MELO_FILE_DB_FIELDS_END);
-    else
-      field = MELO_FILE_DB_FIELDS_GENRE_ID;
+
+    /* Add genre entry to browser by genre */
+    item = melo_browser_item_new ("genre", "category");
+    item->full_name = g_strdup ("Genre");
+    list->items = g_list_append(list->items, item);
+
+    return list;
   }
 
-  /* Get song list */
-  if (id != -1)
-    melo_file_db_get_song_list (priv->fdb, obj, melo_library_file_gen_title,
-                                &list->items, offset, count,
-                                MELO_FILE_DB_SORT_TITLE, MELO_TAGS_FIELDS_FULL,
-                                field, id, MELO_FILE_DB_FIELDS_END);
+  /* Parse path */
+  if (!melo_library_file_parse (path, &type, NULL, &id, NULL))
+    return list;
+
+  /* Get list */
+  switch (type) {
+    case MELO_LIBRARY_FILE_TYPE_TITLE:
+      melo_library_file_get_title_list (lfile, &list->items, offset, count,
+                                        tags_fields);
+      break;
+    case MELO_LIBRARY_FILE_TYPE_ARTIST:
+      melo_library_file_get_artist_list (lfile, &list->items, id, offset, count,
+                                         tags_fields);
+      break;
+    case MELO_LIBRARY_FILE_TYPE_ALBUM:
+      melo_library_file_get_album_list (lfile, &list->items, id, offset, count,
+                                        tags_fields);
+      break;
+    case MELO_LIBRARY_FILE_TYPE_GENRE:
+      melo_library_file_get_genre_list (lfile, &list->items, id, offset, count,
+                                        tags_fields);
+      break;
+  }
 
   /* Reverse final list */
   list->items = g_list_reverse (list->items);
@@ -331,45 +430,39 @@ melo_library_file_get_tags (MeloBrowser *browser, const gchar *path,
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
   MeloLibraryFilePrivate *priv = lfile->priv;
   GObject *obj = G_OBJECT (browser);
-  gint id, level;
+  MeloLibraryFileType type;
+  gint id, id2;
 
   /* Check path */
   if (!path || *path != '/')
     return NULL;
   path++;
 
+  /* Parse path */
+  if (!melo_library_file_parse (path, &type, NULL, &id, &id2) || id == -1)
+    return NULL;
+
   /* Get tags */
-  if (g_str_has_prefix (path, "title")) {
-    id = melo_library_file_get_last_id (path+5, NULL);
-  } else if (g_str_has_prefix (path, "artist")) {
-    id = melo_library_file_get_last_id (path+6, &level);
-    if (id < 0)
-      return NULL;
-    if (level == 1)
-      return melo_file_db_get_artist (priv->fdb, obj, MELO_TAGS_FIELDS_FULL,
-                                      MELO_FILE_DB_FIELDS_ARTIST_ID, id,
-                                      MELO_FILE_DB_FIELDS_END);
-  } else if (g_str_has_prefix (path, "album")) {
-    id = melo_library_file_get_last_id (path+5, &level);
-    if (id < 0)
-      return NULL;
-    if (level == 1)
-      return melo_file_db_get_album (priv->fdb, obj, MELO_TAGS_FIELDS_FULL,
-                                     MELO_FILE_DB_FIELDS_ALBUM_ID, id,
-                                     MELO_FILE_DB_FIELDS_END);
-  } else if (g_str_has_prefix (path, "genre")) {
-    id = melo_library_file_get_last_id (path+5, &level);
-    if (id < 0)
-      return NULL;
-    if (level == 1)
-      return melo_file_db_get_genre (priv->fdb, obj, MELO_TAGS_FIELDS_FULL,
-                                     MELO_FILE_DB_FIELDS_GENRE_ID, id,
-                                     MELO_FILE_DB_FIELDS_END);
+  if (id2 == -1) {
+    switch (type) {
+      case MELO_LIBRARY_FILE_TYPE_ARTIST:
+        return melo_file_db_get_artist (priv->fdb, obj, MELO_TAGS_FIELDS_FULL,
+                                        MELO_FILE_DB_FIELDS_ARTIST_ID, id,
+                                        MELO_FILE_DB_FIELDS_END);
+      case MELO_LIBRARY_FILE_TYPE_ALBUM:
+        return melo_file_db_get_album (priv->fdb, obj, MELO_TAGS_FIELDS_FULL,
+                                       MELO_FILE_DB_FIELDS_ALBUM_ID, id,
+                                       MELO_FILE_DB_FIELDS_END);
+      case MELO_LIBRARY_FILE_TYPE_GENRE:
+        return melo_file_db_get_genre (priv->fdb, obj, MELO_TAGS_FIELDS_FULL,
+                                       MELO_FILE_DB_FIELDS_GENRE_ID, id,
+                                       MELO_FILE_DB_FIELDS_END);
+    }
   }
 
   /* Get song tags */
   return melo_file_db_get_song (priv->fdb, obj, MELO_TAGS_FIELDS_FULL,
-                                MELO_FILE_DB_FIELDS_FILE_ID, id,
+                                MELO_FILE_DB_FIELDS_FILE_ID, id2,
                                 MELO_FILE_DB_FIELDS_END);
 }
 
@@ -398,17 +491,30 @@ static gboolean
 melo_library_file_add (MeloBrowser *browser, const gchar *path)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
-  gint id;
+  MeloLibraryFileType type;
+  MeloFileDBFields filter;
+  gint id, id2;
 
-  /* Extract file ID from path */
-  id = melo_library_file_get_last_id (path, NULL);
+  /* Parse path */
+  if (!melo_library_file_parse (path, &type, &filter, &id, &id2) ||
+      (type != MELO_LIBRARY_FILE_TYPE_TITLE && id == -1))
+    return FALSE;
 
-  /* Read from media ID */
+  /* Add all medias to playlist */
+  if (id2 == -1)
+    return melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
+                                       melo_library_file_add_cb,
+                                       browser->player, 0, -1,
+                                       MELO_FILE_DB_SORT_TITLE,
+                                       MELO_TAGS_FIELDS_FULL, filter, id,
+                                       MELO_FILE_DB_FIELDS_END);
+
+  /* Add media to playlist */
   return melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
                                      melo_library_file_add_cb, browser->player,
                                      0, 1, MELO_FILE_DB_SORT_NONE,
                                      MELO_TAGS_FIELDS_FULL,
-                                     MELO_FILE_DB_FIELDS_FILE_ID, id,
+                                     MELO_FILE_DB_FIELDS_FILE_ID, id2,
                                      MELO_FILE_DB_FIELDS_END);
 }
 
@@ -437,17 +543,40 @@ static gboolean
 melo_library_file_play (MeloBrowser *browser, const gchar *path)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
-  gint id;
+  MeloLibraryFileType type;
+  MeloFileDBFields filter;
+  gint id, id2;
 
-  /* Extract file ID from path */
-  id = melo_library_file_get_last_id (path, NULL);
+  /* Parse path */
+  if (!melo_library_file_parse (path, &type, &filter, &id, &id2) ||
+      (type != MELO_LIBRARY_FILE_TYPE_TITLE && id == -1))
+    return FALSE;
 
-  /* Read from media ID */
+  /* Play first media and add other to playlist */
+  if (id2 == -1) {
+    /* Play first media */
+    melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
+                                melo_library_file_play_cb, browser->player,
+                                0, 1, MELO_FILE_DB_SORT_TITLE,
+                                MELO_TAGS_FIELDS_FULL, filter, id,
+                                MELO_FILE_DB_FIELDS_END);
+
+    /* Add other to playlist */
+    return melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
+                                       melo_library_file_add_cb,
+                                       browser->player, 1, -1,
+                                       MELO_FILE_DB_SORT_TITLE,
+                                       MELO_TAGS_FIELDS_FULL, filter, id,
+                                       MELO_FILE_DB_FIELDS_END);
+  }
+
+
+  /* Play media */
   return melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
                                      melo_library_file_play_cb, browser->player,
                                      0, 1, MELO_FILE_DB_SORT_NONE,
                                      MELO_TAGS_FIELDS_FULL,
-                                     MELO_FILE_DB_FIELDS_FILE_ID, id,
+                                     MELO_FILE_DB_FIELDS_FILE_ID, id2,
                                      MELO_FILE_DB_FIELDS_END);
 }
 
