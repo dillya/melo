@@ -29,6 +29,7 @@
 #endif
 
 #include "melo.h"
+#include "melo_sink.h"
 #include "melo_event.h"
 #include "melo_plugin.h"
 #include "melo_config_main.h"
@@ -39,6 +40,7 @@
 #include "melo_browser_jsonrpc.h"
 #include "melo_player_jsonrpc.h"
 #include "melo_playlist_jsonrpc.h"
+#include "melo_sink_jsonrpc.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -168,9 +170,20 @@ main (int argc, char *argv[])
       !context.name)
     context.name = g_strdup ("Melo");
 
+  /* Get audio parameters */
+  if (!melo_config_get_integer (config, "audio", "samplerate",
+                                &context.audio.rate))
+    context.audio.rate = 44100;
+  if (!melo_config_get_integer (config, "audio", "channels",
+                                &context.audio.channels))
+    context.audio.channels = 2;
+
   /* Get HTTP server port */
   if (!melo_config_get_integer (config, "http", "port", &context.port))
     context.port = 8080;
+
+  /* Initialize main audio sink */
+  melo_sink_main_init (context.audio.rate, context.audio.channels);
 
   /* Add discoverer */
   context.disco = melo_discover_new ();
@@ -183,6 +196,7 @@ main (int argc, char *argv[])
 
   /* Register standard JSON-RPC methods */
   melo_config_jsonrpc_register_methods ();
+  melo_sink_jsonrpc_register_methods ();
   melo_module_jsonrpc_register_methods ();
   melo_browser_jsonrpc_register_methods ();
   melo_player_jsonrpc_register_methods ();
@@ -221,6 +235,12 @@ main (int argc, char *argv[])
                                   melo_config_main_check_general, &context);
   melo_config_set_update_callback (config, "general",
                                   melo_config_main_update_general, &context);
+
+  /* Add config handler for audio */
+  melo_config_set_check_callback (config, "audio", melo_config_main_check_audio,
+                                  NULL);
+  melo_config_set_update_callback (config, "audio",
+                                   melo_config_main_update_audio, NULL);
 
   /* Add config handler for HTTP server */
   melo_config_set_check_callback (config, "http", melo_config_main_check_http,
@@ -272,6 +292,7 @@ end:
   melo_player_jsonrpc_unregister_methods ();
   melo_browser_jsonrpc_unregister_methods ();
   melo_module_jsonrpc_unregister_methods ();
+  melo_sink_jsonrpc_unregister_methods ();
   melo_config_jsonrpc_unregister_methods ();
 
   /* Unregister event client */
@@ -280,6 +301,9 @@ end:
 
   /* Free discoverer */
   g_object_unref (context.disco);
+
+  /* Free main audio sink */
+  melo_sink_main_release ();
 
   /* Save configuration */
   melo_config_save_to_def_file (config);

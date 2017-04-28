@@ -29,6 +29,12 @@ typedef struct _MeloContext MeloContext;
 
 struct _MeloContext {
   MeloDiscover *disco;
+  /* Audio settings */
+  struct {
+    gint64 rate;
+    gint64 channels;
+  } audio;
+  /* HTTP server settings */
   MeloHTTPD *server;
   gchar *name;
   gint64 port;

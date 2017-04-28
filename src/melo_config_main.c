@@ -39,6 +39,23 @@ static MeloConfigItem melo_config_general[] = {
   },
 };
 
+static MeloConfigItem melo_config_audio[] = {
+  {
+    .id = "channels",
+    .name = "Channels",
+    .type = MELO_CONFIG_TYPE_INTEGER,
+    .element = MELO_CONFIG_ELEMENT_NUMBER,
+    .def._integer = 2,
+  },
+  {
+    .id = "samplerate",
+    .name = "Sample rate",
+    .type = MELO_CONFIG_TYPE_INTEGER,
+    .element = MELO_CONFIG_ELEMENT_NUMBER,
+    .def._integer = 44100,
+  },
+};
+
 static MeloConfigItem melo_config_http[] = {
   {
     .id = NULL,
@@ -98,6 +115,12 @@ static MeloConfigGroup melo_config_main[] = {
     .items_count = G_N_ELEMENTS (melo_config_general),
   },
   {
+    .id = "audio",
+    .name = "Audio",
+    .items = melo_config_audio,
+    .items_count = G_N_ELEMENTS (melo_config_audio),
+  },
+  {
     .id = "http",
     .name = "HTTP Server",
     .items = melo_config_http,
@@ -142,6 +165,41 @@ melo_config_main_update_general (MeloConfigContext *context, gpointer user_data)
     else if (bold)
       melo_discover_unregister_device (ctx->disco);
   }
+}
+
+/* Audio section */
+gboolean
+melo_config_main_check_audio (MeloConfigContext *context, gpointer user_data,
+                              gchar **error)
+{
+  gint64 value;
+
+  /* Check channels */
+  if (melo_config_get_updated_integer (context, "channels", &value, NULL) &&
+      (value < 1 || value > 8)) {
+    *error = g_strdup ("Only 1 to 8 channels are supported!");
+    return FALSE;
+  }
+
+  /* Check sample rate */
+  if (melo_config_get_updated_integer (context, "samplerate", &value, NULL) &&
+      (value < 8000 || value > 192000)) {
+    *error = g_strdup ("Only framerate from 8kHz to 192kHz are supported!");
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+void
+melo_config_main_update_audio (MeloConfigContext *context, gpointer user_data)
+{
+  gint64 rate, channels;
+
+  /* Get values */
+  if (melo_config_get_updated_integer (context, "samplerate", &rate, NULL) &&
+      melo_config_get_updated_integer (context, "channels", &channels, NULL))
+    melo_sink_set_main_config (rate, channels);
 }
 
 /* HTTP server section */
