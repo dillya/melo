@@ -341,6 +341,41 @@ melo_playlist_jsonrpc_move (const gchar *method,
   json_node_take_object (*result, obj);
 }
 
+static void
+melo_playlist_jsonrpc_empty (const gchar *method,
+                             JsonArray *s_params, JsonNode *params,
+                             JsonNode **result, JsonNode **error,
+                             gpointer user_data)
+{
+  const gchar *name;
+  MeloPlaylist *plist;
+  JsonObject *obj;
+  gboolean ret = FALSE;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get playlist from ID */
+  plist = melo_playlist_jsonrpc_get_playlist (obj, error);
+  json_object_unref (obj);
+  if (!plist)
+    return;
+
+  /* Empty playlist */
+  melo_playlist_empty (plist);
+  g_object_unref (plist);
+
+  /* Create result object */
+  obj = json_object_new ();
+  json_object_set_boolean_member (obj, "done", TRUE);
+
+  /* Return array */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
 /* List of methods */
 static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
   {
@@ -422,6 +457,15 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_playlist_jsonrpc_item_action,
+    .user_data = NULL,
+  },
+  {
+    .method = "empty",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"}"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_playlist_jsonrpc_empty,
     .user_data = NULL,
   },
 };
