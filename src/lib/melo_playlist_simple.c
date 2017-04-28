@@ -637,7 +637,8 @@ melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
 
   /* Stop play */
   if (element == priv->current) {
-    melo_player_set_state (playlist->player, MELO_PLAYER_STATE_NONE);
+    if (playlist->player)
+      melo_player_set_state (playlist->player, MELO_PLAYER_STATE_NONE);
     priv->current = NULL;
   }
 
@@ -663,6 +664,13 @@ melo_playlist_simple_empty (MeloPlaylist *playlist)
 
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
+
+  /* Stop current play */
+  if (priv->current) {
+    if (playlist->player)
+      melo_player_set_state (playlist->player, MELO_PLAYER_STATE_NONE);
+    priv->current = NULL;
+  }
 
   /* Remove and free all items */
   g_list_free_full (priv->playlist, (GDestroyNotify) melo_playlist_item_unref);
