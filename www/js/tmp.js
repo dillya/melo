@@ -428,7 +428,10 @@ function melo_get_playlist_list(id, play) {
 
       /* Generate list item */
       var item = $('<li><a class="play '+ item_class +'" href="#" title="' +
-                   title + '">' + name + '</a></li>');
+                   title + '">' + name + '</a>' +
+                   ' [<a href="#" class="up">up</a>]' +
+                   ' [<a href="#" class="down">down</a>]' +
+                   '</li>');
 
       /* Set as current */
       if (l.name == current)
@@ -437,6 +440,16 @@ function melo_get_playlist_list(id, play) {
       /* Add link to play */
       item.children("a.play").click([id, l.name, play], function(e) {
         melo_playlist_play(e.data[0], e.data[1], e.data[2]);
+        return false;
+      });
+
+      /* Add link to move arround */
+      item.children("a.up").click([id, l.name, play], function(e) {
+        melo_playlist_move(e.data[0], e.data[1], e.data[2], 1);
+        return false;
+      });
+      item.children("a.down").click([id, l.name, play], function(e) {
+        melo_playlist_move(e.data[0], e.data[1], e.data[2], -1);
         return false;
       });
 
@@ -473,6 +486,18 @@ function melo_playlist_play(id, name, play) {
 
     /* Update playlist and player */
     //melo_update_player (play);
+    melo_get_playlist_list (id, play);
+  });
+}
+
+function melo_playlist_move(id, name, play, up) {
+  jsonrpc_call("playlist.move",
+               JSON.parse('["' + id + '","' + name + '",' + up + ',1]'),
+               null, function(response, data) {
+    if (response.error || !response.result)
+      return;
+
+    /* Update playlist */
     melo_get_playlist_list (id, play);
   });
 }
