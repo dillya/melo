@@ -10,6 +10,7 @@ libmelo_la_SOURCES = \
 	melo_browser.c \
 	melo_player.c \
 	melo_playlist.c \
+	melo_sink.c \
 	melo_tags.c \
 	melo_event_jsonrpc.c \
 	melo_config_jsonrpc.c \
@@ -17,6 +18,7 @@ libmelo_la_SOURCES = \
 	melo_browser_jsonrpc.c \
 	melo_player_jsonrpc.c \
 	melo_playlist_jsonrpc.c \
+	melo_sink_jsonrpc.c \
 	melo_playlist_simple.c \
 	melo_avahi.c \
 	melo_rtsp.c \
@@ -37,6 +39,7 @@ meloinclude_HEADERS = \
 	melo_browser.h \
 	melo_player.h \
 	melo_playlist.h \
+	melo_sink.h \
 	melo_tags.h \
 	melo_event_jsonrpc.h \
 	melo_config_jsonrpc.h \
@@ -44,6 +47,7 @@ meloinclude_HEADERS = \
 	melo_browser_jsonrpc.h \
 	melo_player_jsonrpc.h \
 	melo_playlist_jsonrpc.h \
+	melo_sink_jsonrpc.h \
 	melo_playlist_simple.h \
 	melo_avahi.h \
 	melo_rtsp.h \
