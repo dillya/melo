@@ -195,7 +195,7 @@ function melo_player_update_mute(mute) {
 function melo_player_render_player(result) {
     /* Update media details */
     if (result.name != melo_player_current.name || result.tags) {
-        var title = result.name;
+        var title = result.name || "";
         var artist = "";
         var cover = "";
 
