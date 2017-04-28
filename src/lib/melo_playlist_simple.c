@@ -44,6 +44,12 @@ static gboolean melo_playlist_simple_has_prev (MeloPlaylist *playlist);
 static gboolean melo_playlist_simple_has_next (MeloPlaylist *playlist);
 static gboolean melo_playlist_simple_play (MeloPlaylist *playlist,
                                            const gchar *name);
+static gboolean melo_playlist_simple_move (MeloPlaylist *playlist,
+                                           const gchar *name, gint up,
+                                           gint count);
+static gboolean melo_playlist_simple_move_to (MeloPlaylist *playlist,
+                                              const gchar *name,
+                                              const gchar *before, gint count);
 static gboolean melo_playlist_simple_remove (MeloPlaylist *playlist,
                                              const gchar *name);
 static void melo_playlist_simple_empty (MeloPlaylist *playlist);
@@ -115,6 +121,8 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   plclass->has_prev = melo_playlist_simple_has_prev;
   plclass->has_next = melo_playlist_simple_has_next;
   plclass->play = melo_playlist_simple_play;
+  plclass->move = melo_playlist_simple_move;
+  plclass->move_to = melo_playlist_simple_move_to;
   plclass->remove = melo_playlist_simple_remove;
   plclass->empty = melo_playlist_simple_empty;
 
@@ -474,6 +482,134 @@ melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
   melo_playlist_item_unref (item);
 
   return TRUE;
+}
+
+static GList *
+melo_playlist_simple_move_list (GList *list, GList *start, GList *end,
+                                GList *after)
+{
+  /* Do not move */
+  if (!start || !end || (!after && start == list))
+    return list;
+
+  /* Remove link first */
+  if (start->prev)
+    start->prev->next = end->next;
+  if (end->next)
+    end->next->prev = start->prev;
+
+  /* Move list into list */
+  if (after == NULL) {
+    start->prev = NULL;
+    end->next = list;
+    list->prev = end;
+    list = start;
+  } else {
+    if (list == start)
+      list = end->next;
+    end->next = after->next;
+    if (after->next)
+      after->next->prev = end;
+    after->next = start;
+    start->prev = after;
+  }
+
+  return list;
+}
+
+static gboolean
+melo_playlist_simple_move (MeloPlaylist *playlist, const gchar *name, gint up,
+                           gint count)
+{
+  MeloPlaylistSimplePrivate *priv = (MELO_PLAYLIST_SIMPLE (playlist))->priv;
+  GList *start, *end, *after;
+
+  /* Cannot be moved */
+  if (!priv->removable)
+    return FALSE;
+
+  /* Do not move */
+  if (!up || !count)
+    return TRUE;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Find media in hash table */
+  start = g_hash_table_lookup (priv->names, name);
+  if (!start)
+    goto failed;
+  end = g_list_nth (start, --count);
+  if (!end)
+    goto failed;
+
+  /* Get media before which we add our medias */
+  if (up < 0) {
+    after = g_list_nth (end, -up);
+    if (!after)
+      goto failed;
+  } else
+    after = g_list_nth_prev (start, ++up);
+
+  /* move list */
+  priv->playlist = melo_playlist_simple_move_list (priv->playlist, start, end,
+                                                   after);
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+
+failed:
+  g_mutex_unlock (&priv->mutex);
+  return FALSE;
+}
+
+static gboolean
+melo_playlist_simple_move_to (MeloPlaylist *playlist, const gchar *name,
+                              const gchar *before, gint count)
+{
+  MeloPlaylistSimplePrivate *priv = (MELO_PLAYLIST_SIMPLE (playlist))->priv;
+  GList *start, *end, *after;
+
+  /* Cannot be moved */
+  if (!priv->removable)
+    return FALSE;
+
+  /* Do not move */
+  if (!count || !g_strcmp0 (name, before))
+    return TRUE;
+
+  /* Lock playlist */
+  g_mutex_lock (&priv->mutex);
+
+  /* Find media in hash table */
+  start = g_hash_table_lookup (priv->names, name);
+  if (!start)
+    goto failed;
+  end = g_list_nth (start, --count);
+  if (!end)
+    goto failed;
+
+  /* Get media before which we add our medias */
+  if (before) {
+    after = g_hash_table_lookup (priv->names, before);
+    if (!after)
+      goto failed;
+  }
+
+  /* move list */
+  priv->playlist = melo_playlist_simple_move_list (priv->playlist, start, end,
+                                                   after);
+
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+
+failed:
+  g_mutex_unlock (&priv->mutex);
+  return FALSE;
 }
 
 static gboolean
