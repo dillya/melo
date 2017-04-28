@@ -23,6 +23,7 @@
 
 #include <gst/gst.h>
 
+#include "melo_sink.h"
 #include "melo_player_radio.h"
 
 static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data);
@@ -49,7 +50,7 @@ struct _MeloPlayerRadioPrivate {
   /* Gstreamer pipeline */
   GstElement *pipeline;
   GstElement *src;
-  GstElement *vol;
+  MeloSink *sink;
   guint bus_watch_id;
   gchar *title;
 
@@ -58,6 +59,8 @@ struct _MeloPlayerRadioPrivate {
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloPlayerRadio, melo_player_radio, MELO_TYPE_PLAYER)
+
+static void melo_player_radio_constructed (GObject *object);
 
 static void
 melo_player_radio_finalize (GObject *gobject)
@@ -74,6 +77,9 @@ melo_player_radio_finalize (GObject *gobject)
 
   /* Free gstreamer pipeline */
   g_object_unref (priv->pipeline);
+
+  /* Free audio sink */
+  g_object_unref (priv->sink);
 
   /* Unref browser tags */
   if (priv->btags)
@@ -105,7 +111,8 @@ melo_player_radio_class_init (MeloPlayerRadioClass *klass)
   /* Status */
   pclass->get_pos = melo_player_radio_get_pos;
 
-  /* Add custom finalize() function */
+  /* Add custom constructed() and finalize() function */
+  object_class->constructed = melo_player_radio_constructed;
   object_class->finalize = melo_player_radio_finalize;
 }
 
@@ -113,34 +120,50 @@ static void
 melo_player_radio_init (MeloPlayerRadio *self)
 {
   MeloPlayerRadioPrivate *priv = melo_player_radio_get_instance_private (self);
-  GstElement *convert, *sink;
-  GstBus *bus;
 
   self->priv = priv;
 
   /* Init player mutex */
   g_mutex_init (&priv->mutex);
+}
+
+static void
+melo_player_radio_constructed (GObject *object)
+{
+  MeloPlayerRadio *pradio = MELO_PLAYER_RADIO (object);
+  MeloPlayerRadioPrivate *priv = pradio->priv;
+  MeloPlayer *player = MELO_PLAYER (object);
+  gchar *pipe_name, *uri_name, *sink_name;
+  const gchar *id, *name;
+  GstElement *sink;
+  GstBus *bus;
+
+  /* Generate element names */
+  id = melo_player_get_id (player);
+  name = melo_player_get_name (player);
+  pipe_name = g_strjoin ("_", id, "pipeline", NULL);
+  uri_name = g_strjoin ("_", id, "uridecodebin", NULL);
+  sink_name = g_strjoin ("_", id, "sink", NULL);
 
   /* Create pipeline */
-  priv->pipeline = gst_pipeline_new ("radio_player_pipeline");
-  priv->src = gst_element_factory_make ("uridecodebin",
-                                        "radio_player_uridecodebin");
-  convert = gst_element_factory_make ("audioconvert",
-                                      "file_player_audioconvert");
-  priv->vol = gst_element_factory_make ("volume", "radio_player_volume");
-  sink = gst_element_factory_make ("autoaudiosink",
-                                   "radio_player_autoaudiosink");
-  gst_bin_add_many (GST_BIN (priv->pipeline), priv->src, convert, priv->vol,
-                    sink, NULL);
-  gst_element_link_many (convert, priv->vol, sink, NULL);
+  priv->pipeline = gst_pipeline_new (pipe_name);
+  priv->src = gst_element_factory_make ("uridecodebin", uri_name);
+  priv->sink = melo_sink_new (player, sink_name, name);
+  sink = melo_sink_get_gst_sink (priv->sink);
+  gst_bin_add_many (GST_BIN (priv->pipeline), priv->src, sink, NULL);
+
+  /* Free element names */
+  g_free (pipe_name);
+  g_free (uri_name);
+  g_free (sink_name);
 
   /* Add signal handler on new pad */
   g_signal_connect(priv->src, "pad-added",
-                   G_CALLBACK (pad_added_handler), convert);
+                   G_CALLBACK (pad_added_handler), sink);
 
   /* Add a message handler */
   bus = gst_pipeline_get_bus (GST_PIPELINE (priv->pipeline));
-  priv->bus_watch_id = gst_bus_add_watch (bus, bus_call, self);
+  priv->bus_watch_id = gst_bus_add_watch (bus, bus_call, pradio);
   gst_object_unref (bus);
 }
 
@@ -377,7 +400,7 @@ melo_player_radio_set_volume (MeloPlayer *player, gdouble volume)
   MeloPlayerRadioPrivate *priv = (MELO_PLAYER_RADIO (player))->priv;
 
   /* Set pipeline volume */
-  g_object_set (priv->vol, "volume", volume, NULL);
+  melo_sink_set_volume (priv->sink, volume);
 
   return volume;
 }
@@ -388,7 +411,7 @@ melo_player_radio_set_mute (MeloPlayer *player, gboolean mute)
   MeloPlayerRadioPrivate *priv = (MELO_PLAYER_RADIO (player))->priv;
 
   /* Mute pipeline */
-  g_object_set (priv->vol, "mute", mute, NULL);
+  melo_sink_set_mute (priv->sink, mute);
 
   return mute;
 }
