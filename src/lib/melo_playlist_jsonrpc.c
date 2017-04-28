@@ -284,6 +284,63 @@ melo_playlist_jsonrpc_item_action (const gchar *method,
   json_node_take_object (*result, obj);
 }
 
+static void
+melo_playlist_jsonrpc_move (const gchar *method,
+                            JsonArray *s_params, JsonNode *params,
+                            JsonNode **result, JsonNode **error,
+                            gpointer user_data)
+{
+  const gchar *name;
+  MeloPlaylist *plist;
+  JsonObject *obj;
+  gboolean ret = FALSE;
+  gint count = 1;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get playlist from ID */
+  plist = melo_playlist_jsonrpc_get_playlist (obj, error);
+  if (!plist) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get name */
+  name = json_object_get_string_member (obj, "name");
+  if (json_object_has_member (obj, "count"))
+    count = json_object_get_int_member (obj, "count");
+  else
+    count = 1;
+
+  /* Get move settings */
+  if (!g_strcmp0 (method, "playlist.move")) {
+    gint up;
+
+    /* Move item up / down */
+    up = json_object_get_int_member (obj, "up");
+    ret = melo_playlist_move (plist, name, up, count);
+  } else if (!g_strcmp0 (method, "playlist.move_to")) {
+    const gchar *before;
+
+    /* Move item before another item */
+    before = json_object_get_string_member (obj, "before");
+    ret = melo_playlist_move_to (plist, name, before, count);
+  }
+  json_object_unref (obj);
+  g_object_unref (plist);
+
+  /* Create result object */
+  obj = json_object_new ();
+  json_object_set_boolean_member (obj, "done", ret);
+
+  /* Return array */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
 /* List of methods */
 static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
   {
@@ -325,6 +382,36 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_playlist_jsonrpc_item_action,
+    .user_data = NULL,
+  },
+  {
+    .method = "move",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"name\", \"type\": \"string\"},"
+              "  {\"name\": \"up\", \"type\": \"integer\"},"
+              "  {"
+              "    \"name\": \"count\", \"type\": \"integer\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_playlist_jsonrpc_move,
+    .user_data = NULL,
+  },
+  {
+    .method = "move_to",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"name\", \"type\": \"string\"},"
+              "  {\"name\": \"before\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"count\", \"type\": \"integer\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_playlist_jsonrpc_move,
     .user_data = NULL,
   },
   {

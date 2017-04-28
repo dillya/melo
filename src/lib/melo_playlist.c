@@ -289,6 +289,28 @@ melo_playlist_play (MeloPlaylist *playlist, const gchar *path)
 }
 
 gboolean
+melo_playlist_move (MeloPlaylist *playlist, const gchar *name, gint up,
+                    gint count)
+{
+  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
+
+  g_return_val_if_fail (pclass->move, FALSE);
+
+  return pclass->move (playlist, name, up, count);
+}
+
+gboolean
+melo_playlist_move_to (MeloPlaylist *playlist, const gchar *name,
+                       const gchar *before, gint count)
+{
+  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
+
+  g_return_val_if_fail (pclass->move_to, FALSE);
+
+  return pclass->move_to (playlist, name, before, count);
+}
+
+gboolean
 melo_playlist_remove (MeloPlaylist *playlist, const gchar *path)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
