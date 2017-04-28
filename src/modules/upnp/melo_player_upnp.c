@@ -21,6 +21,7 @@
 
 #include <rygel-renderer-gst.h>
 
+#include "melo_sink.h"
 #include "melo_player_upnp.h"
 
 static MeloPlayerState melo_player_upnp_set_state (MeloPlayer *player,
@@ -43,6 +44,7 @@ struct _MeloPlayerUpnpPrivate {
   GUPnPContextManager *manager;
   RygelPlaybinRenderer *renderer;
   RygelMediaPlayer *player;
+  MeloSink *sink;
   GList *ifaces;
 };
 
@@ -387,9 +389,11 @@ gboolean
 melo_player_upnp_start (MeloPlayerUpnp *up, const gchar *name)
 {
   MeloPlayerUpnpPrivate *priv = up->priv;
+  MeloPlayer *player = MELO_PLAYER (up);
   GstElement *playbin, *sink;
   RygelPlugin *plugin;
   gboolean ret = FALSE;
+  gchar *sink_name;
   GList *l;
 
   /* Lock renderer access */
@@ -415,11 +419,23 @@ melo_player_upnp_start (MeloPlayerUpnp *up, const gchar *name)
   /* Register property notifications on player */
   g_signal_connect (priv->player, "notify", (GCallback) on_notify, up);
 
-  /* Disable video output */
+  /* Get gstreamer playbin */
   playbin = rygel_playbin_renderer_get_playbin (priv->renderer);
+  sink_name = g_strjoin ("_", melo_player_get_id (player), "sink", NULL);
+
+  /* Use Melo audio output */
+  priv->sink = melo_sink_new (MELO_PLAYER (up), sink_name,
+                              melo_player_get_name (player));
+  sink = melo_sink_get_gst_sink (priv->sink);
+  g_object_set (G_OBJECT (playbin), "audio-sink", sink, NULL);
+
+  /* Disable video output */
   sink = gst_element_factory_make ("fakesink", NULL);
   g_object_set (G_OBJECT (playbin), "video-sink", sink, NULL);
+
+  /* Release gstreamer playbin */
   g_object_unref (playbin);
+  g_free (sink_name);
 
   /* Setup interfaces */
   for (l = priv->ifaces; l != NULL; l = l->next) {
@@ -451,6 +467,9 @@ melo_player_upnp_stop (MeloPlayerUpnp *up)
     priv->renderer = NULL;
     priv->player = NULL;
   }
+
+  /* Free Melo audio sink */
+  g_object_unref (priv->sink);
 
   /* Unlock renderer access */
   g_mutex_unlock (&priv->player_mutex);
