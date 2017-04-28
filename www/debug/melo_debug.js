@@ -847,6 +847,18 @@ function melo_playlist_remove(id, name, play) {
   });
 }
 
+function melo_playlist_empty(id, play) {
+  jsonrpc_call("playlist.empty", JSON.parse('["' + id + '"]'),
+               null, function(response, data) {
+    if (response.error || !response.result)
+      return;
+
+    /* Update playlist and player */
+    melo_update_player (play);
+    melo_get_playlist_list (id, play);
+  });
+}
+
 function melo_playlist_get_tags(id, name, item) {
   jsonrpc_call("playlist.get_tags", JSON.parse('["' + id + '","' + name + '",["full"]]'),
                null, function(response, data) {
@@ -1106,4 +1118,5 @@ $(document).ready(function() {
   $("#player_poll").change(function() {melo_player_poll(this.checked); return false;});
   $("#playlist_poll").change(function() {melo_playlist_poll(this.checked); return false;});
   $("#playlist_refresh").click(function() {melo_get_playlist_list(playlist_poll_id, playlist_poll_player);return false;});
+  $("#playlist_empty").click(function() {melo_playlist_empty(playlist_poll_id, playlist_poll_player);return false;});
 });
