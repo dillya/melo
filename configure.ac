@@ -31,7 +31,7 @@ AC_HEADER_STDC
 dnl Library requirements
 GLIB_REQ=2.40.0
 JSON_GLIB_REQ=1.0.2
-GSTREAMER_REQ=1.4.4
+GSTREAMER_REQ=1.10.4
 AVAHI_GOBJECT_REQ=0.6.31
 
 dnl Check library dependencies
