@@ -118,32 +118,32 @@ melo_event_new (MeloEventType type, guint event, const gchar *id, gpointer data,
 #define melo_event_player(event, id, data, free) \
   melo_event_new (MELO_EVENT_TYPE_PLAYER, MELO_EVENT_PLAYER_##event, id, data, \
                   free)
-inline void
+void
 melo_event_player_new (const gchar *id, const MeloPlayerInfo *info)
 {
   melo_event_player (NEW, id, (gpointer) info, NULL);
 }
 
-inline void
+void
 melo_event_player_delete (const gchar *id)
 {
   melo_event_player (DELETE, id, NULL, NULL);
 }
 
-inline void
+void
 melo_event_player_status (const gchar *id, MeloPlayerStatus *status)
 {
   melo_event_player (STATUS, id, status,
                      (GDestroyNotify) melo_player_status_unref);
 }
 
-inline void
+void
 melo_event_player_state (const gchar *id, MeloPlayerState state)
 {
   melo_event_player (STATE, id, &state, NULL);
 }
 
-inline void
+void
 melo_event_player_buffering (const gchar *id, MeloPlayerState state,
                              guint percent)
 {
@@ -151,19 +151,19 @@ melo_event_player_buffering (const gchar *id, MeloPlayerState state,
   melo_event_player (BUFFERING, id, &evt, NULL);
 }
 
-inline void
+void
 melo_event_player_seek (const gchar *id, gint pos)
 {
   melo_event_player (SEEK, id, GINT_TO_POINTER (pos), NULL);
 }
 
-inline void
+void
 melo_event_player_duration (const gchar *id, gint duration)
 {
   melo_event_player (DURATION, id, GINT_TO_POINTER (duration), NULL);
 }
 
-inline void
+void
 melo_event_player_playlist (const gchar *id, gboolean has_prev,
                             gboolean has_next)
 {
@@ -171,55 +171,55 @@ melo_event_player_playlist (const gchar *id, gboolean has_prev,
   melo_event_player (PLAYLIST, id, &evt, NULL);
 }
 
-inline void
+void
 melo_event_player_volume (const gchar *id, gdouble volume)
 {
   melo_event_player (VOLUME, id, &volume, NULL);
 }
 
-inline void
+void
 melo_event_player_mute (const gchar *id, gboolean mute)
 {
   melo_event_player (MUTE, id, &mute, NULL);
 }
 
-inline void
+void
 melo_event_player_name (const gchar *id, const gchar *name)
 {
   melo_event_player (NAME, id, (gpointer) name, NULL);
 }
 
-inline void
+void
 melo_event_player_error (const gchar *id, const gchar *error)
 {
   melo_event_player (ERROR, id, (gpointer) error, NULL);
 }
 
-inline void
+void
 melo_event_player_tags (const gchar *id, MeloTags *tags)
 {
   melo_event_player (TAGS, id, tags, NULL);
 }
 
-inline const MeloPlayerInfo *
+const MeloPlayerInfo *
 melo_event_player_new_parse (gpointer data)
 {
   return (const MeloPlayerInfo *) data;
 }
 
-inline MeloPlayerStatus *
+MeloPlayerStatus *
 melo_event_player_status_parse (gpointer data)
 {
   return (MeloPlayerStatus *) data;
 }
 
-inline MeloPlayerState
+MeloPlayerState
 melo_event_player_state_parse (gpointer data)
 {
   return *((MeloPlayerState *) data);
 }
 
-inline void
+void
 melo_event_player_buffering_parse (gpointer data, MeloPlayerState *state,
                                    guint *percent)
 {
@@ -230,19 +230,19 @@ melo_event_player_buffering_parse (gpointer data, MeloPlayerState *state,
     *percent = evt->percent;
 }
 
-inline gint
+gint
 melo_event_player_seek_parse (gpointer data)
 {
   return GPOINTER_TO_INT (data);
 }
 
-inline gint
+gint
 melo_event_player_duration_parse (gpointer data)
 {
   return GPOINTER_TO_INT (data);
 }
 
-inline void
+void
 melo_event_player_playlist_parse (gpointer data, gboolean *has_prev,
                                   gboolean *has_next)
 {
@@ -253,31 +253,31 @@ melo_event_player_playlist_parse (gpointer data, gboolean *has_prev,
     *has_next = evt->has_next;
 }
 
-inline gdouble
+gdouble
 melo_event_player_volume_parse (gpointer data)
 {
   return *((gdouble *) data);
 }
 
-inline gboolean
+gboolean
 melo_event_player_mute_parse (gpointer data)
 {
   return *((gboolean *) data);
 }
 
-inline const gchar *
+const gchar *
 melo_event_player_name_parse (gpointer data)
 {
   return (const gchar *) data;
 }
 
-inline const gchar *
+const gchar *
 melo_event_player_error_parse (gpointer data)
 {
   return (const gchar *) data;
 }
 
-inline MeloTags *
+MeloTags *
 melo_event_player_tags_parse (gpointer data)
 {
   return (MeloTags *) data;
