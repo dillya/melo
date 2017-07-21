@@ -311,5 +311,8 @@ end:
   /* Free configuration */
   g_object_unref (config);
 
+  /* Free context */
+  g_free (context.name);
+
   return 0;
 }

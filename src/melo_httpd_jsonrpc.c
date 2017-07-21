@@ -47,12 +47,11 @@ melo_httpd_jsonrpc_thread_handler (gpointer data, gpointer user_data)
 
   /* Set response status */
   soup_message_set_status (msg, SOUP_STATUS_OK);
-  if (!res)
-    return;
 
   /* Set response */
-  soup_message_set_response (msg, "application/json", SOUP_MEMORY_TAKE,
-                             res, strlen (res));
+  if (res)
+    soup_message_set_response (msg, "application/json", SOUP_MEMORY_TAKE,
+                               res, strlen (res));
   soup_server_unpause_message (server, msg);
 }
 

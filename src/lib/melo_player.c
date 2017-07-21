@@ -88,8 +88,9 @@ melo_player_finalize (GObject *gobject)
   /* Unlock player list */
   G_UNLOCK (melo_player_mutex);
 
-  /* Free player ID */
+  /* Free player ID and name */
   g_free (priv->id);
+  g_free (priv->name);
 
   /* Unref attached playlist */
   if (player->playlist)
