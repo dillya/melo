@@ -19,6 +19,7 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "melo_library_file.h"
@@ -144,9 +145,11 @@ melo_library_file_parse (const gchar *path, MeloLibraryFileType *type,
   /* Parse path */
   stype = *path == '/' ? ++path : path;
   while (path && (path = strchr (path, '/')) != NULL && *(++path) != '\0') {
-    ids[i] = strtoul (path, &path, 10);
+    gchar *p;
+    ids[i] = strtoul (path, &p, 10);
     if (errno)
       break;
+    path = p;
     i++;
   }
   while (i < 2)

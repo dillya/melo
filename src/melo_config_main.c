@@ -20,6 +20,7 @@
  */
 
 #include "melo.h"
+#include "melo_sink.h"
 #include "melo_config_main.h"
 
 static MeloConfigItem melo_config_general[] = {
