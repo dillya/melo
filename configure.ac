@@ -94,9 +94,9 @@ dnl Check for UPnP module dependencies
 if test "x$enable_module_upnp" = "xyes"; then
   MELO_MODULE_UPNP_GUPNP_REQ=0.20.12
   MELO_MODULE_UPNP_LIBSOUP_REQ=2.40.0
-  AC_ARG_WITH([rygel_2.6],
-    AS_HELP_STRING([--with-rygel-2.6],[Use Rygel 2.6 instead of 2.4]),
-    [MELO_MODULE_UPNP_RYGEL_VERSION=2.6],[MELO_MODULE_UPNP_RYGEL_VERSION=2.4]
+  AC_ARG_WITH([rygel_2.4],
+    AS_HELP_STRING([--with-rygel-2.4],[Use Rygel 2.4 instead of 2.6]),
+    [MELO_MODULE_UPNP_RYGEL_VERSION=2.4],[MELO_MODULE_UPNP_RYGEL_VERSION=2.6]
   )
   PKG_CHECK_MODULES([MELO_MODULE_UPNP_DEPS],
     gupnp-1.0 >= $MELO_MODULE_UPNP_GUPNP_REQ
