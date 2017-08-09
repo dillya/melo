@@ -219,7 +219,8 @@ melo_file_db_open (MeloFileDB *db, const gchar *file)
     }
 
     /* Get database version */
-    melo_file_db_get_int (priv, MELO_FILE_DB_GET_VERSION, &version);
+    if (!melo_file_db_get_int (priv, MELO_FILE_DB_GET_VERSION, &version))
+      version = 0;
 
     /* Not initialized or old version */
     if (version < MELO_FILE_DB_VERSION) {
@@ -475,7 +476,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   gboolean join_genre = FALSE;
   gboolean join_path = FALSE;
   gchar columns[MELO_FILE_DB_COLUMN_SIZE];
-  gchar *conds[MELO_FILE_DB_COND_COUNT];
+  gchar *conds[MELO_FILE_DB_COND_COUNT+1];
   gchar *conditions;
   gchar *sql;
   gint pos = 0, len = 0;
@@ -602,11 +603,12 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   } else
     conditions = g_strdup ("1");
 
-  if (sort != MELO_FILE_DB_SORT_NONE && sort < MELO_FILE_DB_SORT_COUNT * 2) {
+  if (sort != MELO_FILE_DB_SORT_NONE && sort != MELO_FILE_DB_SORT_NONE_DESC &&
+      sort < MELO_FILE_DB_SORT_COUNT) {
     /* Setup order clause */
     order = "ORDER BY ";
-    if (sort > MELO_FILE_DB_SORT_COUNT) {
-      order_col = melo_file_db_order_string[sort-MELO_FILE_DB_SORT_COUNT];
+    if (sort > MELO_FILE_DB_SORT_NONE_DESC) {
+      order_col = melo_file_db_order_string[sort-MELO_FILE_DB_SORT_NONE_DESC];
       order_sort = " COLLATE NOCASE DESC";
     } else {
       order_col = melo_file_db_order_string[sort];
@@ -694,7 +696,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
       filename = sqlite3_column_text (req, i++);
       if (filename) {
         GMappedFile *file;
-        GBytes *cover;
+        GBytes *cover = NULL;
         const gchar *type;
         gchar *path;
 

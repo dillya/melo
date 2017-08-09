@@ -82,11 +82,14 @@ typedef enum {
   MELO_FILE_DB_SORT_TRACK,
   MELO_FILE_DB_SORT_TRACKS,
 
+  /* Desc sort: use MELO_FILE_DB_SORT_AS_DESC() to set desc sort */
+  MELO_FILE_DB_SORT_NONE_DESC,
+
   /* Sort count */
-  MELO_FILE_DB_SORT_COUNT
+  MELO_FILE_DB_SORT_COUNT = MELO_FILE_DB_SORT_NONE_DESC * 2,
 } MeloFileDBSort;
 #define MELO_FILE_DB_SORT_AS_DESC(sort) \
-  (sort + MELO_FILE_DB_SORT_COUNT)
+  (sort + MELO_FILE_DB_SORT_NONE_DESC)
 
 GType melo_file_db_get_type (void);
 

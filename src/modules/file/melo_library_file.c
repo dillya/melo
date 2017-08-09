@@ -129,7 +129,7 @@ melo_library_file_get_info (MeloBrowser *browser)
 static inline gchar *
 melo_library_gen_id (gint64 id)
 {
-  return g_strdup_printf ("%u", id);
+  return g_strdup_printf ("%ld", id);
 }
 
 static gboolean

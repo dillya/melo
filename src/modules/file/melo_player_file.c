@@ -299,7 +299,7 @@ melo_player_file_add (MeloPlayer *player, const gchar *path, const gchar *name,
 
   /* Extract file name from URI */
   if (!name) {
-    gchar *escaped = escaped = g_path_get_basename (path);
+    gchar *escaped = g_path_get_basename (path);
     _name = g_uri_unescape_string (escaped, NULL);
     g_free (escaped);
     name = _name;
@@ -328,7 +328,7 @@ melo_player_file_setup (MeloPlayer *player, const gchar *path,
 
   /* Extract file name from URI */
   if (!name) {
-    gchar *escaped = escaped = g_path_get_basename (path);
+    gchar *escaped = g_path_get_basename (path);
     _name = g_uri_unescape_string (escaped, NULL);
     g_free (escaped);
     name = _name;
