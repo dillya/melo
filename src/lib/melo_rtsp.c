@@ -21,6 +21,10 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#ifdef G_OS_WIN32
+#include <Wincrypt.h>
+#endif
 
 #include <gio/gio.h>
 
@@ -1005,22 +1009,58 @@ melo_rtsp_digest_auth_check (MeloRTSPClient *client, const gchar *username,
   return ret;
 }
 
+static void
+melo_rtsp_generate_nonce (gchar *buffer, gsize len)
+{
+  gint i = 0;
+#ifdef G_OS_WIN32
+  HCRYPTPROV crypt;
+
+  /* Acquire random context */
+  if (CryptAcquireContext (&crypt, "melo", NULL, PROV_RSA_FULL, 0)) {
+    /* Generate random bytes sequence */
+    if (CryptGenRandom (crypt, len, buffer)) {
+      CryptReleaseContext (crypt, 0);
+      return;
+    }
+    CryptReleaseContext (crypt, 0);
+  }
+#else
+  int fd;
+
+  /* Open kernel random generator */
+  fd = open("/dev/random", O_RDONLY);
+  if (fd != -1) {
+    /* Read len random bytes */
+    i = read(fd, buffer, len);
+    close (fd);
+
+    /* Check length of random bytes sequence generated */
+    if (i == len)
+      return;
+    else if (i < 0)
+      i = 0;
+  }
+#endif
+
+  /* Use default (less secure) random generator */
+  for (; i < len; i++)
+    buffer[i] = g_random_int_range (0, 256);
+}
+
 gboolean
 melo_rtsp_digest_auth_response (MeloRTSPClient *client, const gchar *realm,
                                 const gchar *opaque, gint signal_stale)
 {
   gchar buffer[256];
   gsize len;
-  gint i;
 
   g_return_val_if_fail (client, FALSE);
 
   /* Generate a nonce */
   if (!client->nonce) {
-    /* Create a random sequence: need to be improved! */
-    srand (time (NULL));
-    for (i = 0; i < 32; i++)
-      buffer[i] = (rand() * 256) / RAND_MAX;
+    /* Generate an array of 32 random bytes */
+    melo_rtsp_generate_nonce (buffer, 32);
 
     /* Convert it into md5 string */
     client->nonce = g_compute_checksum_for_data (G_CHECKSUM_MD5, buffer, 32);
