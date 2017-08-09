@@ -827,7 +827,7 @@ melo_rtsp_set_packet (MeloRTSPClient *client, guchar *buffer, gsize len,
   client->packet_free = free;
 
   /* Add content length */
-  g_snprintf (str, sizeof(str), "%u", len);
+  g_snprintf (str, sizeof(str), "%lu", len);
   melo_rtsp_add_header (client, "Content-Length", str);
 
   return TRUE;

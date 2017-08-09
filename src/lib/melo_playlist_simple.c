@@ -570,10 +570,10 @@ melo_playlist_simple_move_to (MeloPlaylist *playlist, const gchar *name,
                               const gchar *before, gint count)
 {
   MeloPlaylistSimplePrivate *priv = (MELO_PLAYLIST_SIMPLE (playlist))->priv;
-  GList *start, *end, *after;
+  GList *start, *end, *after = NULL;
 
   /* Cannot be moved */
-  if (!priv->removable)
+  if (priv->removable)
     return FALSE;
 
   /* Do not move */

@@ -301,7 +301,7 @@ melo_tags_set_cover_url (MeloTags *tags, GObject *obj, const gchar *path,
     url = g_strdup_printf ("%s/%s/%s%c%s", melo_tags_cover_url_base, otype, id,
                            del, path);
   else
-    url = g_strdup_printf ("%s/%s%c%s", otype, id, path, del, path);
+    url = g_strdup_printf ("%s/%s%c%s", otype, id, del, path);
 
   G_UNLOCK (melo_tags_mutex);
 

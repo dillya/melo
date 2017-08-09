@@ -847,8 +847,10 @@ melo_player_take_status_tags (MeloPlayer *player, MeloTags *tags)
 void
 melo_player_set_status_tags (MeloPlayer *player, MeloTags *tags)
 {
-  if (tags)
-    melo_tags_ref (tags);
+  if (!tags)
+    return;
+
+  melo_tags_ref (tags);
   melo_player_take_status_tags (player, tags);
 }
 
