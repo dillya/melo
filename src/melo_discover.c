@@ -129,7 +129,9 @@ melo_discover_init (MeloDiscover *self)
     memset(&sock_addr, 0, sizeof(sock_addr));
     sock_addr.nl_family = AF_NETLINK;
     sock_addr.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR;
-    bind(priv->netlink_fd, (struct sockaddr *) &sock_addr, sizeof(sock_addr));
+    if (bind(priv->netlink_fd, (struct sockaddr *) &sock_addr,
+             sizeof(sock_addr)))
+      return;
 
     /* Add netlink socket source event */
     priv->netlink_id = g_unix_fd_add (priv->netlink_fd, G_IO_IN,

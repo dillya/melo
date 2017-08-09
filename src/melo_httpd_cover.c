@@ -47,7 +47,7 @@ melo_httpd_cover_thread_handler (gpointer data, gpointer user_data)
     url++;
 
   /* Get cover data from its URL */
-  if (!melo_tags_get_cover_from_url (url, &cover, &type) || !cover) {
+  if (!url || !melo_tags_get_cover_from_url (url, &cover, &type) || !cover) {
     g_free (type);
     soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
     soup_server_unpause_message (server, msg);

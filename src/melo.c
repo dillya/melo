@@ -101,6 +101,8 @@ melo_event_callback (MeloEventClient *client, MeloEventType type, guint event,
       g_free (str);
     }
   }
+
+  return TRUE;
 }
 
 int
