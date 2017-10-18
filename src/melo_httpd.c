@@ -121,10 +121,13 @@ melo_httpd_init (MeloHTTPD *self)
   /* Create a new HTTP server */
   priv->server = soup_server_new (0, NULL);
 
-  /* Create a basic authentication domain */
+  /* Create a basic authentication domain
+   * Note: only /version can be accessed without credentials
+   */
   priv->auth_domain = soup_auth_domain_basic_new (
                           SOUP_AUTH_DOMAIN_REALM, MELO_HTTPD_REALM,
                           SOUP_AUTH_DOMAIN_ADD_PATH, "",
+                          SOUP_AUTH_DOMAIN_REMOVE_PATH, "/version",
                           SOUP_AUTH_DOMAIN_BASIC_AUTH_CALLBACK,
                               melo_httpd_basic_auth_callback,
                           SOUP_AUTH_DOMAIN_BASIC_AUTH_DATA, priv,
@@ -147,6 +150,24 @@ melo_httpd_new (void)
   return g_object_new (MELO_TYPE_HTTPD, NULL);
 }
 
+static void
+melo_httpd_version_handler (SoupServer *server, SoupMessage *msg,
+                            const char *path, GHashTable *query,
+                            SoupClientContext *client, gpointer user_data)
+{
+  static const char *version = PACKAGE_STRING;
+
+  /* Allow requests from Sparod website */
+  soup_message_headers_append (msg->response_headers,
+                               "Access-Control-Allow-Origin",
+                               "http://sparod.com");
+
+  /* Set response with PACKAGE_STRING which contains name and version */
+  soup_message_set_status (msg, SOUP_STATUS_OK);
+  soup_message_set_response (msg, "text/plain", SOUP_MEMORY_STATIC,
+                             version, strlen (version));
+}
+
 gboolean
 melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name)
 {
@@ -164,6 +185,10 @@ melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name)
 
   /* Add a default handler */
   soup_server_add_handler (server, NULL, melo_httpd_file_handler, NULL,
+                           NULL);
+
+  /* Add an handler for version */
+  soup_server_add_handler (server, "/version", melo_httpd_version_handler, NULL,
                            NULL);
 
   /* Add an handler for JSON-RPC */
