@@ -24,6 +24,7 @@
 
 #include <glib-object.h>
 
+#include "melo_sort.h"
 #include "melo_tags.h"
 
 G_BEGIN_DECLS
@@ -71,26 +72,6 @@ typedef enum {
   MELO_FILE_DB_FIELDS_COUNT
 } MeloFileDBFields;
 
-typedef enum {
-  MELO_FILE_DB_SORT_NONE = 0,
-  MELO_FILE_DB_SORT_FILE,
-  MELO_FILE_DB_SORT_TITLE,
-  MELO_FILE_DB_SORT_ARTIST,
-  MELO_FILE_DB_SORT_ALBUM,
-  MELO_FILE_DB_SORT_GENRE,
-  MELO_FILE_DB_SORT_DATE,
-  MELO_FILE_DB_SORT_TRACK,
-  MELO_FILE_DB_SORT_TRACKS,
-
-  /* Desc sort: use MELO_FILE_DB_SORT_AS_DESC() to set desc sort */
-  MELO_FILE_DB_SORT_NONE_DESC,
-
-  /* Sort count */
-  MELO_FILE_DB_SORT_COUNT = MELO_FILE_DB_SORT_NONE_DESC * 2,
-} MeloFileDBSort;
-#define MELO_FILE_DB_SORT_AS_DESC(sort) \
-  (sort + MELO_FILE_DB_SORT_NONE_DESC)
-
 GType melo_file_db_get_type (void);
 
 MeloFileDB *melo_file_db_new (const gchar *file, const gchar *cover_path);
@@ -127,32 +108,27 @@ typedef gboolean (*MeloFileDBGetList) (const gchar *path, const gchar *file,
 /* Get browser item list */
 gboolean melo_file_db_get_file_list (MeloFileDB *db, GObject *obj,
                                      MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count,
-                                     MeloFileDBSort sort,
+                                     gint offset, gint count, MeloSort sort,
                                      MeloTagsFields tags_fields,
                                      MeloFileDBFields field_0, ...);
 gboolean melo_file_db_get_song_list (MeloFileDB *db, GObject *obj,
                                      MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count,
-                                     MeloFileDBSort sort,
+                                     gint offset, gint count, MeloSort sort,
                                      MeloTagsFields tags_fields,
                                      MeloFileDBFields field_0, ...);
 gboolean melo_file_db_get_artist_list (MeloFileDB *db, GObject *obj,
                                      MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count,
-                                     MeloFileDBSort sort,
+                                     gint offset, gint count, MeloSort sort,
                                      MeloTagsFields tags_fields,
                                      MeloFileDBFields field_0, ...);
 gboolean melo_file_db_get_album_list (MeloFileDB *db, GObject *obj,
                                      MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count,
-                                     MeloFileDBSort sort,
+                                     gint offset, gint count, MeloSort sort,
                                      MeloTagsFields tags_fields,
                                      MeloFileDBFields field_0, ...);
 gboolean melo_file_db_get_genre_list (MeloFileDB *db, GObject *obj,
                                      MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count,
-                                     MeloFileDBSort sort,
+                                     gint offset, gint count, MeloSort sort,
                                      MeloTagsFields tags_fields,
                                      MeloFileDBFields field_0, ...);
 

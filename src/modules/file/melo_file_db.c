@@ -78,17 +78,6 @@ typedef enum {
   MELO_FILE_DB_TYPE_DATE,
 } MeloFileDBType;
 
-static const gchar *melo_file_db_order_string[] = {
-  [MELO_FILE_DB_SORT_FILE] = "file",
-  [MELO_FILE_DB_SORT_TITLE] = "title",
-  [MELO_FILE_DB_SORT_ARTIST] = "artist",
-  [MELO_FILE_DB_SORT_ALBUM] = "album",
-  [MELO_FILE_DB_SORT_GENRE] = "genre",
-  [MELO_FILE_DB_SORT_DATE] = "date",
-  [MELO_FILE_DB_SORT_TRACK] = "track",
-  [MELO_FILE_DB_SORT_TRACKS] = "tracks",
-};
-
 struct _MeloFileDBPrivate {
   GMutex mutex;
   sqlite3 *db;
@@ -463,7 +452,7 @@ melo_file_db_add_tags (MeloFileDB *db, const gchar *path, const gchar *filename,
 static gboolean
 melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
                     MeloFileDBGetList cb, gpointer user_data, MeloTags **utags,
-                    gint offset, gint count, MeloFileDBSort sort,
+                    gint offset, gint count, MeloSort sort,
                     MeloTagsFields tags_fields, MeloFileDBFields field,
                     va_list args)
 {
@@ -603,17 +592,14 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   } else
     conditions = g_strdup ("1");
 
-  if (sort != MELO_FILE_DB_SORT_NONE && sort != MELO_FILE_DB_SORT_NONE_DESC &&
-      sort < MELO_FILE_DB_SORT_COUNT) {
+  if (sort != MELO_SORT_NONE && melo_sort_is_valid (sort)) {
     /* Setup order clause */
     order = "ORDER BY ";
-    if (sort > MELO_FILE_DB_SORT_NONE_DESC) {
-      order_col = melo_file_db_order_string[sort-MELO_FILE_DB_SORT_NONE_DESC];
+    order_col = melo_sort_to_string (melo_sort_set_asc (sort));
+    if (melo_sort_is_desc (sort))
       order_sort = " COLLATE NOCASE DESC";
-    } else {
-      order_col = melo_file_db_order_string[sort];
+    else
       order_sort = " COLLATE NOCASE ASC";
-    }
   }
 
   /* Generate SQL request */
@@ -752,7 +738,7 @@ error:
     /* Get tags */ \
     va_start (args, field_0); \
     melo_file_db_vfind (db, MELO_FILE_DB_TYPE_##utype, obj, NULL, NULL, \
-                        &tags, 0, 1, MELO_FILE_DB_SORT_NONE, tags_fields, \
+                        &tags, 0, 1, MELO_SORT_NONE, tags_fields, \
                         field_0, args); \
     va_end (args); \
    \
@@ -762,8 +748,7 @@ error:
   gboolean \
   melo_file_db_get_##type##_list (MeloFileDB *db, GObject *obj, \
                                   MeloFileDBGetList cb, gpointer user_data, \
-                                  gint offset, gint count, \
-                                  MeloFileDBSort sort, \
+                                  gint offset, gint count, MeloSort sort, \
                                   MeloTagsFields tags_fields, \
                                   MeloFileDBFields field_0, ...) \
   { \

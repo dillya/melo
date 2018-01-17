@@ -268,8 +268,8 @@ melo_library_file_get_title_list (MeloLibraryFile *lfile, GList **list,
 
   return melo_file_db_get_song_list (priv->fdb, obj,
                                      melo_library_file_gen_title, list, offset,
-                                     count, MELO_FILE_DB_SORT_TITLE,
-                                     tags_fields, MELO_FILE_DB_FIELDS_END);
+                                     count, MELO_SORT_TITLE, tags_fields,
+                                     MELO_FILE_DB_FIELDS_END);
 }
 
 static gboolean
@@ -284,7 +284,7 @@ melo_library_file_get_artist_list (MeloLibraryFile *lfile, GList **list,
   if (id >= 0)
     return melo_file_db_get_song_list (priv->fdb, obj,
                                        melo_library_file_gen_title, list,
-                                       offset, count, MELO_FILE_DB_SORT_TITLE,
+                                       offset, count, MELO_SORT_TITLE,
                                        tags_fields,
                                        MELO_FILE_DB_FIELDS_ARTIST_ID, id,
                                        MELO_FILE_DB_FIELDS_END);
@@ -292,7 +292,7 @@ melo_library_file_get_artist_list (MeloLibraryFile *lfile, GList **list,
   /* Get artist list */
   return melo_file_db_get_artist_list (priv->fdb, obj,
                                        melo_library_file_gen_artist, list,
-                                       offset, count, MELO_FILE_DB_SORT_ARTIST,
+                                       offset, count, MELO_SORT_ARTIST,
                                        tags_fields | MELO_TAGS_FIELDS_ARTIST,
                                        MELO_FILE_DB_FIELDS_END);
 }
@@ -309,7 +309,7 @@ melo_library_file_get_album_list (MeloLibraryFile *lfile, GList **list,
   if (id >= 0)
     return melo_file_db_get_song_list (priv->fdb, obj,
                                        melo_library_file_gen_title, list,
-                                       offset, count, MELO_FILE_DB_SORT_TITLE,
+                                       offset, count, MELO_SORT_TITLE,
                                        tags_fields,
                                        MELO_FILE_DB_FIELDS_ALBUM_ID, id,
                                        MELO_FILE_DB_FIELDS_END);
@@ -317,7 +317,7 @@ melo_library_file_get_album_list (MeloLibraryFile *lfile, GList **list,
   /* Get album list */
   return melo_file_db_get_album_list (priv->fdb, obj,
                                       melo_library_file_gen_album, list,
-                                      offset, count, MELO_FILE_DB_SORT_ALBUM,
+                                      offset, count, MELO_SORT_ALBUM,
                                       tags_fields | MELO_TAGS_FIELDS_ALBUM,
                                       MELO_FILE_DB_FIELDS_END);
 }
@@ -334,7 +334,7 @@ melo_library_file_get_genre_list (MeloLibraryFile *lfile, GList **list,
   if (id >= 0)
     return melo_file_db_get_song_list (priv->fdb, obj,
                                        melo_library_file_gen_title, list,
-                                       offset, count, MELO_FILE_DB_SORT_TITLE,
+                                       offset, count, MELO_SORT_TITLE,
                                        tags_fields,
                                        MELO_FILE_DB_FIELDS_GENRE_ID, id,
                                        MELO_FILE_DB_FIELDS_END);
@@ -342,7 +342,7 @@ melo_library_file_get_genre_list (MeloLibraryFile *lfile, GList **list,
   /* Get genre list */
   return melo_file_db_get_genre_list (priv->fdb, obj,
                                       melo_library_file_gen_genre, list,
-                                      offset, count, MELO_FILE_DB_SORT_GENRE,
+                                      offset, count, MELO_SORT_GENRE,
                                       tags_fields | MELO_TAGS_FIELDS_GENRE,
                                       MELO_FILE_DB_FIELDS_END);
 }
@@ -507,15 +507,14 @@ melo_library_file_add (MeloBrowser *browser, const gchar *path)
   if (id2 == -1)
     return melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
                                        melo_library_file_add_cb,
-                                       browser->player, 0, -1,
-                                       MELO_FILE_DB_SORT_TITLE,
+                                       browser->player, 0, -1, MELO_SORT_TITLE,
                                        MELO_TAGS_FIELDS_FULL, filter, id,
                                        MELO_FILE_DB_FIELDS_END);
 
   /* Add media to playlist */
   return melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
                                      melo_library_file_add_cb, browser->player,
-                                     0, 1, MELO_FILE_DB_SORT_NONE,
+                                     0, 1, MELO_SORT_NONE,
                                      MELO_TAGS_FIELDS_FULL,
                                      MELO_FILE_DB_FIELDS_FILE_ID, id2,
                                      MELO_FILE_DB_FIELDS_END);
@@ -560,15 +559,13 @@ melo_library_file_play (MeloBrowser *browser, const gchar *path)
     /* Play first media */
     melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
                                 melo_library_file_play_cb, browser->player,
-                                0, 1, MELO_FILE_DB_SORT_TITLE,
-                                MELO_TAGS_FIELDS_FULL, filter, id,
-                                MELO_FILE_DB_FIELDS_END);
+                                0, 1, MELO_SORT_TITLE, MELO_TAGS_FIELDS_FULL,
+                                filter, id, MELO_FILE_DB_FIELDS_END);
 
     /* Add other to playlist */
     return melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
                                        melo_library_file_add_cb,
-                                       browser->player, 1, -1,
-                                       MELO_FILE_DB_SORT_TITLE,
+                                       browser->player, 1, -1, MELO_SORT_TITLE,
                                        MELO_TAGS_FIELDS_FULL, filter, id,
                                        MELO_FILE_DB_FIELDS_END);
   }
@@ -577,7 +574,7 @@ melo_library_file_play (MeloBrowser *browser, const gchar *path)
   /* Play media */
   return melo_file_db_get_file_list (lfile->priv->fdb, G_OBJECT (browser),
                                      melo_library_file_play_cb, browser->player,
-                                     0, 1, MELO_FILE_DB_SORT_NONE,
+                                     0, 1, MELO_SORT_NONE,
                                      MELO_TAGS_FIELDS_FULL,
                                      MELO_FILE_DB_FIELDS_FILE_ID, id2,
                                      MELO_FILE_DB_FIELDS_END);
