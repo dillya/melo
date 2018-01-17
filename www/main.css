@@ -1,4 +1,4 @@
-@media screen and (max-width:992px) {
+@media screen and (max-width:800px) {
   #page-side{display:none}
   #page-main{margin-left:0!important}
   #main-top{display:block!important}
@@ -8,7 +8,7 @@
 /*  .player{display:none} */
 /*  .nav{bottom:0!important} */
 }
-@media screen and (min-width:993px) {
+@media screen and (min-width:801px) {
   #page-side{display:block!important}
   #main-top{display:none}
   #main-content{bottom:0;top:0}
@@ -17,7 +17,7 @@
 /*  .player{display:block!important} */
   .menu-nav{bottom:310px}
 }
-@media (min-width:993px) {
+@media (min-width:801px) {
   .open-side{display:none!important}
 }
 
