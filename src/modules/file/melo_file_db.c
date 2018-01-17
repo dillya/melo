@@ -23,8 +23,8 @@
 
 #include "melo_file_db.h"
 
-#define MELO_FILE_DB_VERSION 4
-#define MELO_FILE_DB_VERSION_STR "4"
+#define MELO_FILE_DB_VERSION 5
+#define MELO_FILE_DB_VERSION_STR "5"
 
 /* Table creation */
 #define MELO_FILE_DB_CREATE \
@@ -56,6 +56,10 @@
   "CREATE TABLE path (" \
   "        'path'          TEXT NOT NULL UNIQUE" \
   ");" \
+  "CREATE VIRTUAL TABLE song_fts USING FTS4(file,title);" \
+  "CREATE VIRTUAL TABLE artist_fts USING FTS4(artist);" \
+  "CREATE VIRTUAL TABLE album_fts USING FTS4(album);" \
+  "CREATE VIRTUAL TABLE genre_fts USING FTS4(genre);" \
   "PRAGMA user_version = " MELO_FILE_DB_VERSION_STR ";"
 
 /* Get database version */
@@ -68,15 +72,6 @@
   "DROP TABLE IF EXISTS album;" \
   "DROP TABLE IF EXISTS genre;" \
   "DROP TABLE IF EXISTS path;"
-
-typedef enum {
-  MELO_FILE_DB_TYPE_FILE = 0,
-  MELO_FILE_DB_TYPE_SONG,
-  MELO_FILE_DB_TYPE_ARTIST,
-  MELO_FILE_DB_TYPE_ALBUM,
-  MELO_FILE_DB_TYPE_GENRE,
-  MELO_FILE_DB_TYPE_DATE,
-} MeloFileDBType;
 
 struct _MeloFileDBPrivate {
   GMutex mutex;
@@ -296,7 +291,7 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
   gint date = 0;
   gboolean ret;
   gchar *cover_file = NULL;
-  char *sql;
+  char *sql, *sql_fts;
 
   /* Lock database access */
   g_mutex_lock (&priv->mutex);
@@ -375,6 +370,12 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
     sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
     artist_id = sqlite3_last_insert_rowid (priv->db);
     sqlite3_free (sql);
+
+    /* Add artist in Full Text Search table */
+    sql_fts = sqlite3_mprintf ("INSERT INTO artist_fts (artist) VALUES ('%q')",
+                               artist);
+    sqlite3_exec (priv->db, sql_fts, NULL, NULL, NULL);
+    sqlite3_free (sql_fts);
   }
 
   /* Find album ID */
@@ -387,6 +388,12 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
     sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
     album_id = sqlite3_last_insert_rowid (priv->db);
     sqlite3_free (sql);
+
+    /* Add album in Full Text Search table */
+    sql_fts = sqlite3_mprintf ("INSERT INTO album_fts (album) VALUES ('%q')",
+                               album);
+    sqlite3_exec (priv->db, sql_fts, NULL, NULL, NULL);
+    sqlite3_free (sql_fts);
   }
 
   /* Find genre ID */
@@ -399,6 +406,12 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
     sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
     genre_id = sqlite3_last_insert_rowid (priv->db);
     sqlite3_free (sql);
+
+    /* Add genre in Full Text Search table */
+    sql_fts = sqlite3_mprintf ("INSERT INTO genre_fts (genre) VALUES ('%q')",
+                               genre);
+    sqlite3_exec (priv->db, sql_fts, NULL, NULL, NULL);
+    sqlite3_free (sql_fts);
   }
 
   /* Add song */
@@ -409,6 +422,8 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
                            "VALUES (%Q,%d,%d,%d,%d,%d,%d,%Q,'%q',%d,%d)",
                            title, artist_id, album_id, genre_id, date, track,
                            tracks, cover_file, filename, path_id, timestamp);
+    sql_fts = sqlite3_mprintf ("INSERT INTO song_fts (file,title) "
+                               "VALUES ('%q',%Q)", filename, title);
   } else {
     sql = sqlite3_mprintf ("UPDATE song SET title = %Q, artist_id = %d, "
                            "album_id = %d, genre_id = %d, date = %d, "
@@ -417,9 +432,17 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
                            "WHERE rowid = %d",
                            title, artist_id, album_id, genre_id, date, track,
                            tracks, cover_file, timestamp, row_id);
+    sql_fts = sqlite3_mprintf ("UPDATE song_fts SET title=%Q WHERE rowid = %d",
+                               title, row_id);
   }
   sqlite3_exec (priv->db, sql, NULL, NULL, NULL);
   sqlite3_free (sql);
+
+  /* Add song in Full Text Search table */
+  sqlite3_exec (priv->db, sql_fts, NULL, NULL, NULL);
+  sqlite3_free (sql_fts);
+
+  /* Get cover file */
   if (cover_out_file)
     *cover_out_file = cover_file;
   else
@@ -446,16 +469,17 @@ melo_file_db_add_tags (MeloFileDB *db, const gchar *path, const gchar *filename,
                                  cover_out_file);
 }
 
+#define MELO_FILE_DB_COND_SIZE 256
 #define MELO_FILE_DB_COLUMN_SIZE 256
-#define MELO_FILE_DB_COND_COUNT MELO_FILE_DB_FIELDS_COUNT
 
 static gboolean
 melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
                     MeloFileDBGetList cb, gpointer user_data, MeloTags **utags,
-                    gint offset, gint count, MeloSort sort,
+                    gint offset, gint count, MeloSort sort, gboolean match,
                     MeloTagsFields tags_fields, MeloFileDBFields field,
                     va_list args)
 {
+  const gchar *cond_join = match ? " OR " : " AND ";
   const gchar *order = "", *order_col = "", *order_sort = "";
   MeloFileDBPrivate *priv = db->priv;
   sqlite3_stmt *req = NULL;
@@ -464,11 +488,17 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   gboolean join_album = FALSE;
   gboolean join_genre = FALSE;
   gboolean join_path = FALSE;
+  GString *conds;
+  const gchar *file_cond = NULL;
+  const gchar *title_cond = NULL;
   gchar columns[MELO_FILE_DB_COLUMN_SIZE];
-  gchar *conds[MELO_FILE_DB_COND_COUNT+1];
-  gchar *conditions;
+  gchar *cols, *conditions;
   gchar *sql;
-  gint pos = 0, len = 0;
+
+  /* Prepare string for conditions */
+  conds = g_string_new_len (NULL, MELO_FILE_DB_COND_SIZE);
+  if (!conds)
+    return FALSE;
 
   /* Handle exclusive tags cover */
   if (tags_fields & MELO_TAGS_FIELDS_COVER_EX &&
@@ -476,122 +506,175 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
     tags_fields &= ~MELO_TAGS_FIELDS_COVER;
 
   /* Generate columns for request */
-  len = g_snprintf (columns, MELO_FILE_DB_COLUMN_SIZE,
-                    type <= MELO_FILE_DB_TYPE_SONG ? "song.rowid," : "rowid,");
+  cols = g_stpcpy (columns,
+                   type <= MELO_FILE_DB_TYPE_SONG ? "song.rowid," : "rowid,");
   if (type == MELO_FILE_DB_TYPE_FILE) {
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "path,");
+    cols = g_stpcpy (cols, "path,");
     join_path = TRUE;
   }
   if (type <= MELO_FILE_DB_TYPE_SONG)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "file,");
+    cols = g_stpcpy (cols, "file,");
   if (tags_fields & MELO_TAGS_FIELDS_TITLE)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "title,");
+    cols = g_stpcpy (cols, "title,");
   if (tags_fields & MELO_TAGS_FIELDS_ARTIST) {
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "artist,");
+    cols = g_stpcpy (cols, "artist,");
     join_artist = TRUE;
   }
   if (tags_fields & MELO_TAGS_FIELDS_ALBUM) {
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "album,");
+    cols = g_stpcpy (cols, "album,");
     join_album = TRUE;
   }
   if (tags_fields & MELO_TAGS_FIELDS_GENRE) {
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "genre,");
+    cols = g_stpcpy (cols, "genre,");
     join_genre = TRUE;
   }
   if (tags_fields & MELO_TAGS_FIELDS_DATE)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "date,");
+    cols = g_stpcpy (cols, "date,");
   if (tags_fields & MELO_TAGS_FIELDS_TRACK)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "track,");
+    cols = g_stpcpy (cols, "track,");
   if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len, "tracks,");
+    cols = g_stpcpy (cols, "tracks,");
   if (tags_fields & MELO_TAGS_FIELDS_COVER_URL)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len,
+    cols = g_stpcpy (cols,
                      type <= MELO_FILE_DB_TYPE_SONG ? "song.cover," : "cover,");
   if (tags_fields & MELO_TAGS_FIELDS_COVER)
-    len += g_snprintf (columns+len, MELO_FILE_DB_COLUMN_SIZE-len,
+    cols = g_stpcpy (cols,
                      type <= MELO_FILE_DB_TYPE_SONG ? "song.cover," : "cover,");
-  if (len)
-    columns[len-1] = '\0';
+  cols[-1] = '\0';
 
   /* Generate SQL request */
-  while (pos < MELO_FILE_DB_COND_COUNT && field != MELO_FILE_DB_FIELDS_END) {
+  while (field != MELO_FILE_DB_FIELDS_END) {
+    gchar temp[MELO_FILE_DB_COND_SIZE];
+    gboolean skip = FALSE;
+
     switch (field) {
       case MELO_FILE_DB_FIELDS_PATH:
-        conds[pos++] = sqlite3_mprintf ("path = '%q'",
-                                        va_arg (args, const gchar *));
+        sqlite3_snprintf (sizeof (temp), temp, "path = '%q'",
+                          va_arg (args, const gchar *));
         join_path = TRUE;
         break;
       case MELO_FILE_DB_FIELDS_PATH_ID:
-        conds[pos++] = sqlite3_mprintf ("path_id = %d",
-                                        va_arg (args, gint));
+        sqlite3_snprintf (sizeof (temp), temp, "path_id = '%d'",
+                          va_arg (args, gint));
         break;
       case MELO_FILE_DB_FIELDS_FILE:
-        conds[pos++] = sqlite3_mprintf ("file = '%q'",
-                                        va_arg (args, const gchar *));
+        if (match) {
+          file_cond = va_arg (args, const gchar *);
+          skip = TRUE;
+        } else {
+          sqlite3_snprintf (sizeof (temp), temp, "file = '%q'",
+                            va_arg (args, const gchar *));
+        }
         break;
       case MELO_FILE_DB_FIELDS_FILE_ID:
-        conds[pos++] = sqlite3_mprintf ("song.rowid = '%d'",
-                                        va_arg (args, gint));
+        sqlite3_snprintf (sizeof (temp), temp, "song.rowid = '%d'",
+                          va_arg (args, gint));
         break;
       case MELO_FILE_DB_FIELDS_TITLE:
-        conds[pos++] = sqlite3_mprintf ("title = '%q'",
-                                        va_arg (args, const gchar *));
+        if (match) {
+          title_cond = va_arg (args, const gchar *);
+          skip = TRUE;
+        } else {
+          sqlite3_snprintf (sizeof (temp), temp, "title = '%q'",
+                            va_arg (args, const gchar *));
+        }
         break;
       case MELO_FILE_DB_FIELDS_ARTIST:
-        conds[pos++] = sqlite3_mprintf ("artist = '%q'",
-                                        va_arg (args, const gchar *));
-        join_artist = TRUE;
+        if (match) {
+          sqlite3_snprintf (sizeof (temp), temp, "song.artist_id IN ("
+                        "SELECT docid FROM artist_fts WHERE artist MATCH '%q')",
+                        va_arg (args, const gchar *));
+        } else {
+          sqlite3_snprintf (sizeof (temp), temp, "artist = '%q'",
+                            va_arg (args, const gchar *));
+          join_artist = TRUE;
+        }
         break;
       case MELO_FILE_DB_FIELDS_ARTIST_ID:
-        conds[pos++] = sqlite3_mprintf ("artist_id = '%d'",
-                                        va_arg (args, gint));
+        sqlite3_snprintf (sizeof (temp), temp, "artist_id = '%d'",
+                          va_arg (args, gint));
         break;
       case MELO_FILE_DB_FIELDS_ALBUM:
-        conds[pos++] = sqlite3_mprintf ("album = '%q'",
-                                        va_arg (args, const gchar *));
-        join_album = TRUE;
+        if (match) {
+          sqlite3_snprintf (sizeof (temp), temp, "song.album_id IN ("
+                          "SELECT docid FROM album_fts WHERE album MATCH '%q')",
+                          va_arg (args, const gchar *));
+        } else {
+          sqlite3_snprintf (sizeof (temp), temp, "album = '%q'",
+                            va_arg (args, const gchar *));
+          join_album = TRUE;
+        }
         break;
       case MELO_FILE_DB_FIELDS_ALBUM_ID:
-        conds[pos++] = sqlite3_mprintf ("album_id = '%d'",
-                                        va_arg (args, gint));
+        sqlite3_snprintf (sizeof (temp), temp, "album_id = '%d'",
+                          va_arg (args, gint));
         break;
       case MELO_FILE_DB_FIELDS_GENRE:
-        conds[pos++] = sqlite3_mprintf ("genre = '%q'",
-                                        va_arg (args, const gchar *));
-        join_genre = TRUE;
+        if (match) {
+          sqlite3_snprintf (sizeof (temp), temp, "song.genre_id IN ("
+                          "SELECT docid FROM genre_fts WHERE genre MATCH '%q')",
+                          va_arg (args, const gchar *));
+        } else {
+          sqlite3_snprintf (sizeof (temp), temp, "genre = '%q'",
+                          va_arg (args, const gchar *));
+          join_genre = TRUE;
+        }
         break;
       case MELO_FILE_DB_FIELDS_GENRE_ID:
-        conds[pos++] = sqlite3_mprintf ("genre_id = '%d'",
-                                        va_arg (args, gint));
+        sqlite3_snprintf (sizeof (temp), temp, "genre_id = '%d'",
+                          va_arg (args, gint));
         break;
       case MELO_FILE_DB_FIELDS_DATE:
-        conds[pos++] = sqlite3_mprintf ("date = %d", va_arg (args, gint));
+        sqlite3_snprintf (sizeof (temp), temp, "date = '%d'",
+                          va_arg (args, gint));
         break;
       case MELO_FILE_DB_FIELDS_TRACK:
-        conds[pos++] = sqlite3_mprintf ("track = %d", va_arg (args, gint));
+        sqlite3_snprintf (sizeof (temp), temp, "track = '%d'",
+                          va_arg (args, gint));
         break;
       case MELO_FILE_DB_FIELDS_TRACKS:
-        conds[pos++] = sqlite3_mprintf ("tracks = %d", va_arg (args, gint));
+        sqlite3_snprintf (sizeof (temp), temp, "tracks = '%d'",
+                          va_arg (args, gint));
         break;
       default:
-        for (; pos; pos--)
-          sqlite3_free (conds[pos-1]);
+          g_string_free (conds, TRUE);
         goto error;
     }
 
+    /* Append condition */
+    if (!skip)
+      g_string_append (conds, temp);
+
     /* Get next field */
     field = va_arg (args, MeloFileDBFields);
+    if (field == MELO_FILE_DB_FIELDS_END)
+      break;
+
+    /* Append condition join */
+    if (!skip)
+      g_string_append (conds, cond_join);
   }
-  conds[pos] = NULL;
+
+  /* Generate condition for file / title in FTS table */
+  if (file_cond || title_cond) {
+    gchar temp[MELO_FILE_DB_COND_SIZE];
+
+    /* Append a mix condition for song FTS table */
+    sqlite3_snprintf (sizeof (temp), temp,
+                 "song.rowid IN (SELECT docid FROM song_fts WHERE %s%q%s%s%q')",
+                 file_cond ? "file MATCH '" : "", file_cond ? file_cond : "",
+                 file_cond && title_cond ? "' OR " : "",
+                 title_cond ? "title MATCH '" : "",
+                 title_cond ? title_cond : "");
+    g_string_append (conds, temp);
+  }
 
   /* Finalize condition */
-  if (pos) {
-    conditions = g_strjoinv (" AND ", conds);
-    for (; pos; pos--)
-      sqlite3_free (conds[pos-1]);
-  } else
-    conditions = g_strdup ("1");
+  if (!conds->len)
+    g_string_append (conds, "1");
+  conditions = g_string_free (conds, FALSE);
 
+  /* Generate order directive */
   if (sort != MELO_SORT_NONE && melo_sort_is_valid (sort)) {
     /* Setup order clause */
     order = "ORDER BY ";
@@ -708,7 +791,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
       *utags = tags;
 
     /* Call callback */
-    if (cb && !cb (path, file, id, tags, user_data))
+    if (cb && !cb (path, file, id, type, tags, user_data))
       goto error;
   }
 
@@ -723,59 +806,71 @@ error:
   return FALSE;
 }
 
-#define DEFINE_MELO_FILE_DB_GET(type, utype, filter) \
-  MeloTags * \
-  melo_file_db_get_##type (MeloFileDB *db, GObject *obj, \
-                         MeloTagsFields tags_fields, \
-                         MeloFileDBFields field_0, ...) \
-  { \
-    MeloTags *tags = NULL; \
-    va_list args; \
-   \
-    /* Apply filter on tags */ \
-    tags_fields &= filter; \
-   \
-    /* Get tags */ \
-    va_start (args, field_0); \
-    melo_file_db_vfind (db, MELO_FILE_DB_TYPE_##utype, obj, NULL, NULL, \
-                        &tags, 0, 1, MELO_SORT_NONE, tags_fields, \
-                        field_0, args); \
-    va_end (args); \
-   \
-    return tags; \
-  } \
-  \
-  gboolean \
-  melo_file_db_get_##type##_list (MeloFileDB *db, GObject *obj, \
-                                  MeloFileDBGetList cb, gpointer user_data, \
-                                  gint offset, gint count, MeloSort sort, \
-                                  MeloTagsFields tags_fields, \
-                                  MeloFileDBFields field_0, ...) \
-  { \
-    gboolean ret; \
-    va_list args; \
-   \
-    /* Apply filter on tags */ \
-    tags_fields &= filter; \
-   \
-    /* Get list */ \
-    va_start (args, field_0); \
-    ret = melo_file_db_vfind (db, MELO_FILE_DB_TYPE_##utype, obj, cb, \
-                              user_data, NULL, offset, count, sort, \
-                              tags_fields, field_0, args); \
-    va_end (args); \
-   \
-    return ret; \
+static MeloTagsFields
+melo_file_db_type_get_tags_fields_filter (MeloFileDBType type)
+{
+  MeloTagsFields filter = MELO_TAGS_FIELDS_COVER | MELO_TAGS_FIELDS_COVER_URL |
+                          MELO_TAGS_FIELDS_COVER_EX;
+
+  if (type <= MELO_FILE_DB_TYPE_SONG)
+    return MELO_TAGS_FIELDS_FULL;
+
+  switch (type) {
+    case MELO_FILE_DB_TYPE_ARTIST:
+      filter |= MELO_TAGS_FIELDS_ARTIST;
+      break;
+    case MELO_FILE_DB_TYPE_ALBUM:
+      filter |= MELO_TAGS_FIELDS_ALBUM;
+      break;
+    case MELO_FILE_DB_TYPE_GENRE:
+      filter |= MELO_TAGS_FIELDS_GENRE;
+      break;
+    default:
+      filter = 0;
   }
 
-#define MELO_FILE_DB_TAGS_FIELDS_COVER \
-  MELO_TAGS_FIELDS_COVER | MELO_TAGS_FIELDS_COVER_URL | \
-  MELO_TAGS_FIELDS_COVER_EX
-DEFINE_MELO_FILE_DB_GET (file, FILE, MELO_TAGS_FIELDS_FULL)
-DEFINE_MELO_FILE_DB_GET (song, SONG, MELO_TAGS_FIELDS_FULL)
-DEFINE_MELO_FILE_DB_GET (artist, ARTIST, MELO_TAGS_FIELDS_ARTIST |
-                                         MELO_FILE_DB_TAGS_FIELDS_COVER)
-DEFINE_MELO_FILE_DB_GET (album, ALBUM, MELO_TAGS_FIELDS_ALBUM |
-                                       MELO_FILE_DB_TAGS_FIELDS_COVER)
-DEFINE_MELO_FILE_DB_GET (genre, GENRE, MELO_TAGS_FIELDS_GENRE |
-                                       MELO_FILE_DB_TAGS_FIELDS_COVER)
+  return filter;
+}
+
+MeloTags *
+melo_file_db_get_tags (MeloFileDB *db, GObject *obj, MeloFileDBType type,
+                       MeloTagsFields tags_fields, MeloFileDBFields field_0,
+                       ...)
+{
+  MeloTags *tags = NULL;
+  va_list args;
+
+  /* Apply filter on tags */
+  tags_fields &= melo_file_db_type_get_tags_fields_filter (type);
+
+  /* Get tags */
+  va_start (args, field_0);
+  melo_file_db_vfind (db, type, obj, NULL, NULL, &tags, 0, 1, MELO_SORT_NONE,
+                      FALSE, tags_fields, field_0,
+                      args);
+  va_end (args);
+
+  return tags;
+}
+
+gboolean
+melo_file_db_get_list (MeloFileDB *db, GObject *obj,MeloFileDBGetList cb,
+                       gpointer user_data, gint offset, gint count,
+                       MeloSort sort, gboolean find, MeloFileDBType type,
+                       MeloTagsFields tags_fields, MeloFileDBFields field_0,
+                       ...)
+{
+  gboolean ret;
+  va_list args;
+
+  /* Apply filter on tags */
+  tags_fields &= melo_file_db_type_get_tags_fields_filter (type);
+
+  /* Get list */
+  va_start (args, field_0);
+  ret = melo_file_db_vfind (db, type, obj, cb, user_data, NULL, offset, count,
+                            sort, find, tags_fields, field_0, args);
+  va_end (args);
+
+  return ret;
+}

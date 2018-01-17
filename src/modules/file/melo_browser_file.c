@@ -463,7 +463,8 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
         MeloTags *tags = NULL;
 
         /* Get file from database */
-        tags = melo_file_db_get_song (priv->fdb, G_OBJECT (bfile),
+        tags = melo_file_db_get_tags (priv->fdb, G_OBJECT (bfile),
+                         MELO_FILE_DB_TYPE_SONG,
                          tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING ?
                                             MELO_TAGS_FIELDS_NONE : tags_fields,
                          MELO_FILE_DB_FIELDS_PATH_ID, path_id,
@@ -969,7 +970,8 @@ melo_browser_file_get_tags_from_uri (MeloBrowserFile *bfile, const gchar *uri,
 
   /* Get tags from database */
   if (priv->fdb) {
-    tags = melo_file_db_get_song (priv->fdb, G_OBJECT (bfile), fields,
+    tags = melo_file_db_get_tags (priv->fdb, G_OBJECT (bfile),
+                                  MELO_FILE_DB_TYPE_SONG, fields,
                                   MELO_FILE_DB_FIELDS_PATH, dir,
                                   MELO_FILE_DB_FIELDS_FILE, file,
                                   MELO_FILE_DB_FIELDS_END);
