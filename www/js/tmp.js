@@ -426,6 +426,7 @@ function melo_get_playlist_list(id, play) {
         item_class = "playlist_tags";
       }
 
+
       /* Generate list item */
       var item = $('<li><a class="play '+ item_class +'" href="#" title="' +
                    title + '">' + name + '</a>' +
@@ -436,6 +437,9 @@ function melo_get_playlist_list(id, play) {
       /* Set as current */
       if (l.name == current)
         item.addClass("current");
+
+      /* Escape name */
+      l.name = l.name.replace(/\"/g,"\\\"");
 
       /* Add link to play */
       item.children("a.play").click([id, l.name, play], function(e) {
@@ -486,6 +490,17 @@ function melo_playlist_play(id, name, play) {
 
     /* Update playlist and player */
     //melo_update_player (play);
+    melo_get_playlist_list (id, play);
+  });
+}
+
+function melo_playlist_shuffle(id, play) {
+  jsonrpc_call("playlist.sort", JSON.parse('["' + id + '","shuffle"]'),
+               null, function(response, data) {
+    if (response.error || !response.result)
+      return;
+
+    /* Update playlist and player */
     melo_get_playlist_list (id, play);
   });
 }
@@ -780,5 +795,6 @@ $(document).ready(function() {
   $("#browser_play_all").click(function() {melo_browser_play_all(); return false;});
   $("#playlist_poll").change(function() {melo_playlist_poll(this.checked); return false;});
   $("#playlist_refresh").click(function() {melo_get_playlist_list(playlist_poll_id, playlist_poll_player);return false;});
+  $("#playlist_shuffle").click(function() {melo_playlist_shuffle(playlist_poll_id, playlist_poll_player);return false;});
   $("#playlist_empty").click(function() {melo_playlist_empty(playlist_poll_id, playlist_poll_player);return false;});
 });
