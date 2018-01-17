@@ -44,6 +44,9 @@ static gboolean melo_playlist_simple_has_prev (MeloPlaylist *playlist);
 static gboolean melo_playlist_simple_has_next (MeloPlaylist *playlist);
 static gboolean melo_playlist_simple_play (MeloPlaylist *playlist,
                                            const gchar *name);
+static gboolean melo_playlist_simple_sort (MeloPlaylist *playlist,
+                                           const gchar *name, guint count,
+                                           MeloSort sort);
 static gboolean melo_playlist_simple_move (MeloPlaylist *playlist,
                                            const gchar *name, gint up,
                                            gint count);
@@ -121,6 +124,7 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   plclass->has_prev = melo_playlist_simple_has_prev;
   plclass->has_next = melo_playlist_simple_has_next;
   plclass->play = melo_playlist_simple_play;
+  plclass->sort = melo_playlist_simple_sort;
   plclass->move = melo_playlist_simple_move;
   plclass->move_to = melo_playlist_simple_move_to;
   plclass->remove = melo_playlist_simple_remove;
@@ -482,6 +486,69 @@ melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
   melo_playlist_item_unref (item);
 
   return TRUE;
+}
+
+static gboolean
+melo_playlist_simple_sort (MeloPlaylist *playlist, const gchar *name,
+                           guint count, MeloSort sort)
+{
+  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
+  MeloPlaylistSimplePrivate *priv = plsimple->priv;
+  GList *head, *tail, *list;
+
+  /* Lock playlist (current by default) */
+  g_mutex_lock (&priv->mutex);
+
+  /* Find media in list */
+  if (name) {
+    tail = g_hash_table_lookup (priv->names, name);
+    if (!tail)
+      goto failed;
+    tail = tail->next;
+  } else
+    tail = priv->current;
+
+  /* Find end of list */
+  list = count ? g_list_nth_prev (tail, count) : priv->playlist;
+  if (!list)
+    goto failed;
+  head = list->prev;
+
+  /* Separate playlist to sort */
+  if (tail) {
+    if (!tail->prev)
+      goto done;
+    tail->prev->next = NULL;
+    tail->prev = NULL;
+  }
+  if (head) {
+    head->next = NULL;
+    list->prev = NULL;
+  }
+
+  /* Sort randomly playlist */
+  list = melo_playlist_item_list_sort (list, sort);
+
+  /* Restore playlist */
+  if (head) {
+    head->next = list;
+    list->prev = head;
+  }
+  if (tail) {
+    tail->prev = g_list_last (list);
+    tail->prev->next = tail;
+  }
+  priv->playlist = head ? head : list;
+
+done:
+  /* Unlock playlist */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
+
+failed:
+  g_mutex_unlock (&priv->mutex);
+  return FALSE;
 }
 
 static GList *
