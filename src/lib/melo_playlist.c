@@ -289,6 +289,17 @@ melo_playlist_play (MeloPlaylist *playlist, const gchar *path)
 }
 
 gboolean
+melo_playlist_sort (MeloPlaylist *playlist, const gchar *name, guint count,
+                    MeloSort sort)
+{
+  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
+
+  g_return_val_if_fail (pclass->sort, FALSE);
+
+  return pclass->sort (playlist, name, count, sort);
+}
+
+gboolean
 melo_playlist_move (MeloPlaylist *playlist, const gchar *name, gint up,
                     gint count)
 {
@@ -395,4 +406,76 @@ melo_playlist_item_unref (MeloPlaylistItem *item)
   if (item->tags)
     melo_tags_unref (item->tags);
   g_slice_free (MeloPlaylistItem, item);
+}
+
+#define DELCARE_PLAYLIST_ITEM_CMP_FUNC(type,field) \
+static gint \
+melo_playlist_item_cmp_##type (gconstpointer a, gconstpointer b) \
+{ \
+  const MeloPlaylistItem *i1 = a, *i2 = b; \
+  return melo_sort_cmp_##type (i2->field, i1->field); \
+} \
+static gint \
+melo_playlist_item_cmp_##type##_desc (gconstpointer a, gconstpointer b) \
+{ \
+  const MeloPlaylistItem *i1 = a, *i2 = b; \
+  return melo_sort_cmp_##type (i1->field, i2->field); \
+}
+
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (file, name)
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (title, tags->title)
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (artist, tags->artist)
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (album, tags->album)
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (genre, tags->genre)
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (date, tags->date)
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (track, tags->track)
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (tracks, tags->tracks)
+
+GList *
+melo_playlist_item_list_sort (GList *list, MeloSort sort)
+{
+  GCompareFunc func;
+
+  switch (melo_sort_set_asc (sort)) {
+    case MELO_SORT_SHUFFLE:
+      func = melo_sort_cmp_shuffle;
+      break;
+    case MELO_SORT_FILE:
+      func = melo_sort_is_desc (sort) ? melo_playlist_item_cmp_file_desc :
+                                        melo_playlist_item_cmp_file;
+      break;
+    case MELO_SORT_TITLE:
+      func = melo_sort_is_desc (sort) ? melo_playlist_item_cmp_title_desc :
+                                        melo_playlist_item_cmp_title;
+      break;
+    case MELO_SORT_ARTIST:
+      func = melo_sort_is_desc (sort) ? melo_playlist_item_cmp_artist_desc :
+                                        melo_playlist_item_cmp_artist;
+      break;
+    case MELO_SORT_ALBUM:
+      func = melo_sort_is_desc (sort) ? melo_playlist_item_cmp_album_desc :
+                                        melo_playlist_item_cmp_album;
+      break;
+    case MELO_SORT_GENRE:
+      func = melo_sort_is_desc (sort) ? melo_playlist_item_cmp_genre_desc :
+                                        melo_playlist_item_cmp_genre;
+      break;
+    case MELO_SORT_DATE:
+      func = melo_sort_is_desc (sort) ? melo_playlist_item_cmp_date_desc :
+                                        melo_playlist_item_cmp_date;
+      break;
+    case MELO_SORT_TRACK:
+      func = melo_sort_is_desc (sort) ? melo_playlist_item_cmp_track_desc :
+                                        melo_playlist_item_cmp_track;
+      break;
+    case MELO_SORT_TRACKS:
+      func = melo_sort_is_desc (sort) ? melo_playlist_item_cmp_tracks_desc :
+                                        melo_playlist_item_cmp_tracks;
+      break;
+    case MELO_SORT_NONE:
+    default:
+      return list;
+  }
+
+  return g_list_sort (list, func);
 }

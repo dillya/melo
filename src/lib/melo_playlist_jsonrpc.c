@@ -285,6 +285,58 @@ melo_playlist_jsonrpc_item_action (const gchar *method,
 }
 
 static void
+melo_playlist_jsonrpc_sort (const gchar *method,
+                            JsonArray *s_params, JsonNode *params,
+                            JsonNode **result, JsonNode **error,
+                            gpointer user_data)
+{
+  const gchar *name = NULL;
+  gboolean ret = FALSE;
+  MeloPlaylist *plist;
+  MeloSort sort;
+  JsonObject *obj;
+  guint count = 0;
+
+  /* Get parameters */
+  obj = melo_jsonrpc_get_object (s_params, params, error);
+  if (!obj)
+    return;
+
+  /* Get playlist from ID */
+  plist = melo_playlist_jsonrpc_get_playlist (obj, error);
+  if (!plist) {
+    json_object_unref (obj);
+    return;
+  }
+
+  /* Get sort method */
+  sort = melo_sort_from_string (json_object_get_string_member (obj, "sort"));
+  if (!melo_sort_is_valid (sort))
+    goto end;
+
+  /* Get optional name and count */
+  if (json_object_has_member (obj, "name"))
+    name = json_object_get_string_member (obj, "name");
+  if (json_object_has_member (obj, "count"))
+    count = json_object_get_int_member (obj, "count");
+
+  /* Sort playlist */
+  ret = melo_playlist_sort (plist, name, count, sort);
+
+end:
+  json_object_unref (obj);
+  g_object_unref (plist);
+
+  /* Create result object */
+  obj = json_object_new ();
+  json_object_set_boolean_member (obj, "done", ret);
+
+  /* Return array */
+  *result = json_node_new (JSON_NODE_OBJECT);
+  json_node_take_object (*result, obj);
+}
+
+static void
 melo_playlist_jsonrpc_move (const gchar *method,
                             JsonArray *s_params, JsonNode *params,
                             JsonNode **result, JsonNode **error,
@@ -417,6 +469,24 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_playlist_jsonrpc_item_action,
+    .user_data = NULL,
+  },
+  {
+    .method = "sort",
+    .params = "["
+              "  {\"name\": \"id\", \"type\": \"string\"},"
+              "  {\"name\": \"sort\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"name\", \"type\": \"string\","
+              "    \"required\": false"
+              "  },"
+              "  {"
+              "    \"name\": \"count\", \"type\": \"integer\","
+              "    \"required\": false"
+              "  }"
+              "]",
+    .result = "{\"type\":\"object\"}",
+    .callback = melo_playlist_jsonrpc_sort,
     .user_data = NULL,
   },
   {

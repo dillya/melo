@@ -25,6 +25,7 @@
 #include <glib-object.h>
 
 #include "melo_tags.h"
+#include "melo_sort.h"
 
 G_BEGIN_DECLS
 
@@ -69,6 +70,8 @@ struct _MeloPlaylistClass {
   gboolean (*has_prev) (MeloPlaylist *playlist);
   gboolean (*has_next) (MeloPlaylist *playlist);
   gboolean (*play) (MeloPlaylist *playlist, const gchar *name);
+  gboolean (*sort) (MeloPlaylist *playlist, const gchar *name, guint count,
+                    MeloSort sort);
   gboolean (*move) (MeloPlaylist *playlist, const gchar *name, gint up,
                     gint count);
   gboolean (*move_to) (MeloPlaylist *playlist, const gchar *name,
@@ -119,6 +122,8 @@ gchar *melo_playlist_get_next (MeloPlaylist *playlist, gchar **name,
 gboolean melo_playlist_has_prev (MeloPlaylist *playlist);
 gboolean melo_playlist_has_next (MeloPlaylist *playlist);
 gboolean melo_playlist_play (MeloPlaylist *playlist, const gchar *name);
+gboolean melo_playlist_sort (MeloPlaylist *playlist, const gchar *name,
+                             guint count, MeloSort sort);
 gboolean melo_playlist_move (MeloPlaylist *playlist, const gchar *name, gint up,
                              gint count);
 gboolean melo_playlist_move_to (MeloPlaylist *playlist, const gchar *name,
@@ -137,6 +142,8 @@ MeloPlaylistItem *melo_playlist_item_new (const gchar *name,
                                           const gchar *path, MeloTags *tags);
 MeloPlaylistItem *melo_playlist_item_ref (MeloPlaylistItem *item);
 void melo_playlist_item_unref (MeloPlaylistItem *item);
+
+GList *melo_playlist_item_list_sort (GList *list, MeloSort sort);
 
 G_END_DECLS
 
