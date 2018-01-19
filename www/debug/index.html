@@ -137,6 +137,26 @@
         <p><span class="title">Browser list:</span></p>
         <div id="browser_go"></div>
         <div id="browser_search"></div>
+        <div id="browser_sort">
+          Sort by: <select name="browser_sort_type" id="browser_sort_type">
+            <option value="none">None</option>
+            <option value="file">File</option>
+            <option value="title">Title</option>
+            <option value="artist">Artist</option>
+            <option value="album">Album</option>
+            <option value="genre">Genre</option>
+            <option value="date">Date</option>
+            <option value="track">Track</option>
+            <option value="tracks">Tracks</option>
+            <option value="relevant">Relevance</option>
+            <option value="rating">Rating</option>
+            <option value="play_count">Play count</option>
+          </select>
+          <select name="browser_sort_order" id="browser_sort_order">
+            <option value="asc">ASC</option>
+            <option value="desc">DESC</option>
+          </select>
+        </div>
         <a id="browser_prev" href="#">&lt; Previous</a> |
         <a id="browser_add_all" href="#">Add all</a> |
         <a id="browser_play_all" href="#">Play all</a><br>
