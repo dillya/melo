@@ -41,19 +41,14 @@ static MeloBrowserInfo melo_browser_radio_info = {
 static const MeloBrowserInfo *melo_browser_radio_get_info (
                                                           MeloBrowser *browser);
 static MeloBrowserList *melo_browser_radio_get_list (MeloBrowser *browser,
-                                                  const gchar *path,
-                                                  gint offset, gint count,
-                                                  const gchar *token,
-                                                  MeloBrowserTagsMode tags_mode,
-                                                  MeloTagsFields tags_fields);
+                                        const gchar *path,
+                                        const MeloBrowserGetListParams *params);
 static MeloBrowserList *melo_browser_radio_search (MeloBrowser *browser,
-                                                  const gchar *input,
-                                                  gint offset, gint count,
-                                                  const gchar *token,
-                                                  MeloBrowserTagsMode tags_mode,
-                                                  MeloTagsFields tags_fields);
+                                         const gchar *input,
+                                         const MeloBrowserSearchParams *params);
 static gboolean melo_browser_radio_play (MeloBrowser *browser,
-                                         const gchar *path);
+                                         const gchar *path,
+                                         const MeloBrowserPlayParams *params);
 
 struct _MeloBrowserRadioPrivate {
   GMutex mutex;
@@ -198,9 +193,7 @@ bad_request:
 
 static MeloBrowserList *
 melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
-                             gint offset, gint count, const gchar *token,
-                             MeloBrowserTagsMode tags_mode,
-                             MeloTagsFields tags_fields)
+                             const MeloBrowserGetListParams *params)
 {
   MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
   static MeloBrowserList *list;
@@ -213,9 +206,9 @@ melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
     return NULL;
 
   /* Generate URL */
-  page = (offset / count) + 1;
+  page = (params->offset / params->count) + 1;
   url = g_strdup_printf ("http://www.sparod.com/radio%s?count=%d&page=%d",
-                         path, count, page);
+                         path, params->count, page);
 
   /* Get list from URL */
   list->items = melo_browser_radio_parse (bradio, url);
@@ -226,9 +219,7 @@ melo_browser_radio_get_list (MeloBrowser *browser, const gchar *path,
 
 static MeloBrowserList *
 melo_browser_radio_search (MeloBrowser *browser, const gchar *input,
-                           gint offset, gint count, const gchar *token,
-                           MeloBrowserTagsMode tags_mode,
-                           MeloTagsFields tags_fields)
+                           const MeloBrowserSearchParams *params)
 {
   MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
   static MeloBrowserList *list;
@@ -241,9 +232,9 @@ melo_browser_radio_search (MeloBrowser *browser, const gchar *input,
     return NULL;
 
   /* Generate URL */
-  page = (offset / count) + 1;
+  page = (params->offset / params->count) + 1;
   url = g_strdup_printf ("http://www.sparod.com/radio/search/%s?"
-                         "count=%d&page=%d", input, count, page);
+                         "count=%d&page=%d", input, params->count, page);
 
   /* Get list from URL */
   list->items = melo_browser_radio_parse (bradio, url);
@@ -253,7 +244,8 @@ melo_browser_radio_search (MeloBrowser *browser, const gchar *input,
 }
 
 static gboolean
-melo_browser_radio_play (MeloBrowser *browser, const gchar *path)
+melo_browser_radio_play (MeloBrowser *browser, const gchar *path,
+                         const MeloBrowserPlayParams *params)
 {
   MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
   SoupMessage *msg;

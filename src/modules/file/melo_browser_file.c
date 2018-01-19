@@ -47,17 +47,15 @@ static void melo_browser_file_set_id (GObject *obj,
                                       MeloBrowserFilePrivate *priv);
 static const MeloBrowserInfo *melo_browser_file_get_info (MeloBrowser *browser);
 static MeloBrowserList *melo_browser_file_get_list (MeloBrowser *browser,
-                                                  const gchar *path,
-                                                  gint offset, gint count,
-                                                  const gchar *token,
-                                                  MeloBrowserTagsMode tags_mode,
-                                                  MeloTagsFields tags_fields);
+                                        const gchar *path,
+                                        const MeloBrowserGetListParams *params);
 static MeloTags *melo_browser_file_get_tags (MeloBrowser *browser,
                                              const gchar *path,
                                              MeloTagsFields fields);
-static gboolean melo_browser_file_add (MeloBrowser *browser, const gchar *path);
-static gboolean melo_browser_file_play (MeloBrowser *browser,
-                                        const gchar *path);
+static gboolean melo_browser_file_add (MeloBrowser *browser, const gchar *path,
+                                       const MeloBrowserAddParams *params);
+static gboolean melo_browser_file_play (MeloBrowser *browser, const gchar *path,
+                                        const MeloBrowserPlayParams *params);
 static gboolean melo_browser_file_remove (MeloBrowser *browser,
                                           const gchar *path);
 
@@ -823,13 +821,12 @@ melo_browser_file_get_network_list (MeloBrowserFile *bfile, const gchar *path,
 
 static MeloBrowserList *
 melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
-                            gint offset, gint count, const gchar *token,
-                            MeloBrowserTagsMode tags_mode,
-                            MeloTagsFields tags_fields)
+                            const MeloBrowserGetListParams *params)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   MeloBrowserList *list;
   GList *l;
+  guint count = params->count;
 
   /* Create browser list */
   list = melo_browser_list_new (path);
@@ -864,18 +861,21 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
     /* Get file path: "/local/" */
     path = melo_brower_file_fix_path (path + 5);
     uri = g_strdup_printf ("file:%s/%s", bfile->priv->local_path, path);
-    list->items = melo_browser_file_get_local_list (bfile, uri, tags_mode,
-                                                    tags_fields);
+    list->items = melo_browser_file_get_local_list (bfile, uri,
+                                                    params->tags_mode,
+                                                    params->tags_fields);
     g_free (uri);
   } else if (g_str_has_prefix (path, "network")) {
     /* Get file path: "/network/" */
     list->items = melo_browser_file_get_network_list (bfile, path + 8,
-                                                      tags_mode, tags_fields);
+                                                      params->tags_mode,
+                                                      params->tags_fields);
   } else if (strlen (path) >= MELO_BROWSER_FILE_ID_LENGTH &&
              path[MELO_BROWSER_FILE_ID_LENGTH] == '/') {
     /* Volume path: "/VOLUME_ID/" */
-    list->items = melo_browser_file_get_volume_list (bfile, path, tags_mode,
-                                                     tags_fields);
+    list->items = melo_browser_file_get_volume_list (bfile, path,
+                                                     params->tags_mode,
+                                                     params->tags_fields);
   }
 
   /* Keep only requested part of list */
@@ -884,7 +884,7 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
     GList *next = l->next;
 
     /* Remove item when not in requested part */
-    if (!count || list->count < offset) {
+    if (!count || list->count < params->offset) {
       MeloBrowserItem *item = (MeloBrowserItem *) l->data;
       list->items = g_list_delete_link (list->items, l);
       melo_browser_item_free (item);
@@ -1030,7 +1030,8 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
 }
 
 static gboolean
-melo_browser_file_add (MeloBrowser *browser, const gchar *path)
+melo_browser_file_add (MeloBrowser *browser, const gchar *path,
+                       const MeloBrowserAddParams *params)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   gboolean ret;
@@ -1062,7 +1063,8 @@ melo_browser_file_add (MeloBrowser *browser, const gchar *path)
 }
 
 static gboolean
-melo_browser_file_play (MeloBrowser *browser, const gchar *path)
+melo_browser_file_play (MeloBrowser *browser, const gchar *path,
+                        const MeloBrowserPlayParams *params)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   gboolean ret;

@@ -222,30 +222,25 @@ melo_browser_get_player (MeloBrowser *browser)
 }
 
 MeloBrowserList *
-melo_browser_get_list (MeloBrowser *browser, const gchar *path, gint offset,
-                       gint count, const gchar *token,
-                       MeloBrowserTagsMode tags_mode,
-                       MeloTagsFields tags_fields)
+melo_browser_get_list (MeloBrowser *browser, const gchar *path,
+                       const MeloBrowserGetListParams *params)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
   g_return_val_if_fail (bclass->get_list, NULL);
 
-  return bclass->get_list (browser, path, offset, count, token, tags_mode,
-                           tags_fields);
+  return bclass->get_list (browser, path, params);
 }
 
 MeloBrowserList *
-melo_browser_search (MeloBrowser *browser, const gchar *input, gint offset,
-                     gint count, const gchar *token,
-                     MeloBrowserTagsMode tags_mode, MeloTagsFields tags_fields)
+melo_browser_search (MeloBrowser *browser, const gchar *input,
+                     const MeloBrowserSearchParams *params)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
   g_return_val_if_fail (bclass->search, NULL);
 
-  return bclass->search (browser, input, offset, count, token, tags_mode,
-                         tags_fields);
+  return bclass->search (browser, input, params);
 }
 
 gchar *
@@ -270,23 +265,25 @@ melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
 }
 
 gboolean
-melo_browser_add (MeloBrowser *browser, const gchar *path)
+melo_browser_add (MeloBrowser *browser, const gchar *path,
+                  const MeloBrowserAddParams *params)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
   g_return_val_if_fail (bclass->add, FALSE);
 
-  return bclass->add (browser, path);
+  return bclass->add (browser, path, params);
 }
 
 gboolean
-melo_browser_play (MeloBrowser *browser, const gchar *path)
+melo_browser_play (MeloBrowser *browser, const gchar *path,
+                   const MeloBrowserPlayParams *params)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
   g_return_val_if_fail (bclass->play, FALSE);
 
-  return bclass->play (browser, path);
+  return bclass->play (browser, path, params);
 }
 
 gboolean

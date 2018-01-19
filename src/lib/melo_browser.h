@@ -45,6 +45,11 @@ typedef struct _MeloBrowserItem MeloBrowserItem;
 
 typedef enum _MeloBrowserTagsMode MeloBrowserTagsMode;
 
+typedef struct _MeloBrowserGetListParams MeloBrowserGetListParams;
+typedef struct _MeloBrowserGetListParams MeloBrowserSearchParams;
+typedef struct _MeloBrowserAddParams MeloBrowserAddParams;
+typedef struct _MeloBrowserAddParams MeloBrowserPlayParams;
+
 struct _MeloBrowser {
   GObject parent_instance;
 
@@ -61,18 +66,16 @@ struct _MeloBrowserClass {
 
   const MeloBrowserInfo *(*get_info) (MeloBrowser *browser);
   MeloBrowserList *(*get_list) (MeloBrowser *browser, const gchar *path,
-                                gint offset, gint count, const gchar *token,
-                                MeloBrowserTagsMode tags_mode,
-                                MeloTagsFields tags_fields);
+                                const MeloBrowserGetListParams *params);
   MeloBrowserList *(*search) (MeloBrowser *browser, const gchar *input,
-                              gint offset, gint count, const gchar *token,
-                              MeloBrowserTagsMode tags_mode,
-                              MeloTagsFields tags_fields);
+                              const MeloBrowserSearchParams *params);
   gchar *(*search_hint) (MeloBrowser *browser, const gchar *input);
   MeloTags *(*get_tags) (MeloBrowser *browser, const gchar *path,
                          MeloTagsFields fields);
-  gboolean (*add) (MeloBrowser *browser, const gchar *path);
-  gboolean (*play) (MeloBrowser *browser, const gchar *path);
+  gboolean (*add) (MeloBrowser *browser, const gchar *path,
+                   const MeloBrowserAddParams *params);
+  gboolean (*play) (MeloBrowser *browser, const gchar *path,
+                    const MeloBrowserPlayParams *params);
   gboolean (*remove) (MeloBrowser *browser, const gchar *path);
 
   gboolean (*get_cover) (MeloBrowser *browser, const gchar *path,
@@ -126,6 +129,18 @@ enum _MeloBrowserTagsMode {
   MELO_BROWSER_TAGS_MODE_FULL_WITH_CACHING,
 };
 
+struct _MeloBrowserGetListParams {
+  gint offset;
+  gint count;
+  const gchar *token;
+  MeloBrowserTagsMode tags_mode;
+  MeloTagsFields tags_fields;
+};
+
+struct _MeloBrowserAddParams {
+  const gchar *token;
+};
+
 GType melo_browser_get_type (void);
 
 MeloBrowser *melo_browser_new (GType type, const gchar *id);
@@ -137,20 +152,16 @@ void melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player);
 MeloPlayer *melo_browser_get_player (MeloBrowser *browser);
 
 MeloBrowserList *melo_browser_get_list (MeloBrowser *browser, const gchar *path,
-                                        gint offset, gint count,
-                                        const gchar *token,
-                                        MeloBrowserTagsMode tags_mode,
-                                        MeloTagsFields tags_fields);
+                                        const MeloBrowserGetListParams *params);
 MeloBrowserList *melo_browser_search (MeloBrowser *browser, const gchar *input,
-                                      gint offset, gint count,
-                                      const gchar *token,
-                                      MeloBrowserTagsMode tags_mode,
-                                      MeloTagsFields tags_fields);
+                                      const MeloBrowserSearchParams *params);
 gchar *melo_browser_search_hint (MeloBrowser *browser, const gchar *input);
 MeloTags *melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
                                  MeloTagsFields fields);
-gboolean melo_browser_add (MeloBrowser *browser, const gchar *path);
-gboolean melo_browser_play (MeloBrowser *browser, const gchar *path);
+gboolean melo_browser_add (MeloBrowser *browser, const gchar *path,
+                           const MeloBrowserAddParams *params);
+gboolean melo_browser_play (MeloBrowser *browser, const gchar *path,
+                           const MeloBrowserPlayParams *params);
 gboolean melo_browser_remove (MeloBrowser *browser, const gchar *path);
 
 gboolean melo_browser_get_cover (MeloBrowser *browser, const gchar *path,

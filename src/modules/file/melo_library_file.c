@@ -40,23 +40,18 @@ static MeloBrowserInfo melo_library_file_info = {
 
 static const MeloBrowserInfo *melo_library_file_get_info (MeloBrowser *browser);
 static MeloBrowserList *melo_library_file_get_list (MeloBrowser *browser,
-                                                  const gchar *path,
-                                                  gint offset, gint count,
-                                                  const gchar *token,
-                                                  MeloBrowserTagsMode tags_mode,
-                                                  MeloTagsFields tags_fields);
+                                        const gchar *path,
+                                        const MeloBrowserGetListParams *params);
 static MeloBrowserList *melo_library_file_search (MeloBrowser *browser,
-                                                  const gchar *path,
-                                                  gint offset, gint count,
-                                                  const gchar *token,
-                                                  MeloBrowserTagsMode tags_mode,
-                                                  MeloTagsFields tags_fields);
+                                         const gchar *input,
+                                         const MeloBrowserSearchParams *params);
 static MeloTags *melo_library_file_get_tags (MeloBrowser *browser,
                                              const gchar *path,
                                              MeloTagsFields fields);
-static gboolean melo_library_file_add (MeloBrowser *browser, const gchar *path);
-static gboolean melo_library_file_play (MeloBrowser *browser,
-                                        const gchar *path);
+static gboolean melo_library_file_add (MeloBrowser *browser, const gchar *path,
+                                       const MeloBrowserAddParams *params);
+static gboolean melo_library_file_play (MeloBrowser *browser, const gchar *path,
+                                        const MeloBrowserPlayParams *params);
 
 static gboolean melo_library_file_get_cover (MeloBrowser *browser,
                                              const gchar *path, GBytes **data,
@@ -316,9 +311,7 @@ melo_library_file_get_genre_list (MeloLibraryFile *lfile, GList **list,
 
 static MeloBrowserList *
 melo_library_file_get_list (MeloBrowser *browser, const gchar *path,
-                            gint offset, gint count, const gchar *token,
-                            MeloBrowserTagsMode tags_mode,
-                            MeloTagsFields tags_fields)
+                            const MeloBrowserGetListParams *params)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
   MeloBrowserList *list;
@@ -369,20 +362,21 @@ melo_library_file_get_list (MeloBrowser *browser, const gchar *path,
   /* Get list */
   switch (type) {
     case MELO_FILE_DB_TYPE_SONG:
-      melo_library_file_get_title_list (lfile, &list->items, offset, count,
-                                        tags_fields);
+      melo_library_file_get_title_list (lfile, &list->items, params->offset,
+                                        params->count, params->tags_fields);
       break;
     case MELO_FILE_DB_TYPE_ARTIST:
-      melo_library_file_get_artist_list (lfile, &list->items, id, offset, count,
-                                         tags_fields);
+      melo_library_file_get_artist_list (lfile, &list->items, id,
+                                         params->offset, params->count,
+                                         params->tags_fields);
       break;
     case MELO_FILE_DB_TYPE_ALBUM:
-      melo_library_file_get_album_list (lfile, &list->items, id, offset, count,
-                                        tags_fields);
+      melo_library_file_get_album_list (lfile, &list->items, id, params->offset,
+                                        params->count, params->tags_fields);
       break;
     case MELO_FILE_DB_TYPE_GENRE:
-      melo_library_file_get_genre_list (lfile, &list->items, id, offset, count,
-                                        tags_fields);
+      melo_library_file_get_genre_list (lfile, &list->items, id, params->offset,
+                                        params->count, params->tags_fields);
       break;
   }
 
@@ -393,10 +387,8 @@ melo_library_file_get_list (MeloBrowser *browser, const gchar *path,
 }
 
 static MeloBrowserList *
-melo_library_file_search (MeloBrowser *browser, const gchar *path, gint offset,
-                          gint count, const gchar *token,
-                          MeloBrowserTagsMode tags_mode,
-                          MeloTagsFields tags_fields)
+melo_library_file_search (MeloBrowser *browser, const gchar *input,
+                          const MeloBrowserSearchParams *params)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
   MeloLibraryFilePrivate *priv = lfile->priv;
@@ -406,7 +398,7 @@ melo_library_file_search (MeloBrowser *browser, const gchar *path, gint offset,
   gint id;
 
   /* Check path */
-  if (!path)
+  if (!input)
     return NULL;
 
   /* Create browser list */
@@ -415,10 +407,10 @@ melo_library_file_search (MeloBrowser *browser, const gchar *path, gint offset,
     return NULL;
 
   melo_file_db_get_list (priv->fdb, obj, melo_library_file_gen, &list->items,
-                         offset, count, MELO_SORT_TITLE, TRUE,
-                         MELO_FILE_DB_TYPE_SONG, tags_fields,
-                         MELO_FILE_DB_FIELDS_TITLE, path,
-                         MELO_FILE_DB_FIELDS_FILE, path,
+                         params->offset, params->count, MELO_SORT_TITLE, TRUE,
+                         MELO_FILE_DB_TYPE_SONG, params->tags_fields,
+                         MELO_FILE_DB_FIELDS_TITLE, input,
+                         MELO_FILE_DB_FIELDS_FILE, input,
                          MELO_FILE_DB_FIELDS_END);
 
   return list;
@@ -478,7 +470,8 @@ melo_library_file_add_cb (const gchar *path, const gchar *file, gint id,
 }
 
 static gboolean
-melo_library_file_add (MeloBrowser *browser, const gchar *path)
+melo_library_file_add (MeloBrowser *browser, const gchar *path,
+                       const MeloBrowserAddParams *params)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
   MeloFileDBFields filter;
@@ -530,7 +523,8 @@ melo_library_file_play_cb (const gchar *path, const gchar *file, gint id,
 }
 
 static gboolean
-melo_library_file_play (MeloBrowser *browser, const gchar *path)
+melo_library_file_play (MeloBrowser *browser, const gchar *path,
+                        const MeloBrowserPlayParams *params)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
   MeloFileDBFields filter;
