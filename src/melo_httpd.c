@@ -156,11 +156,19 @@ melo_httpd_version_handler (SoupServer *server, SoupMessage *msg,
                             SoupClientContext *client, gpointer user_data)
 {
   static const char *version = PACKAGE_STRING;
+  const gchar *origin;
+
+  /* Get Origin header */
+  origin = soup_message_headers_get_one (msg->request_headers, "Origin");
+  if (!g_str_has_suffix (origin, "://sparod.com") &&
+      !g_str_has_suffix (origin, ".sparod.com")) {
+    soup_message_set_status (msg, SOUP_STATUS_FORBIDDEN);
+    return;
+  }
 
   /* Allow requests from Sparod website */
   soup_message_headers_append (msg->response_headers,
-                               "Access-Control-Allow-Origin",
-                               "http://sparod.com");
+                               "Access-Control-Allow-Origin", origin);
 
   /* Set response with PACKAGE_STRING which contains name and version */
   soup_message_set_status (msg, SOUP_STATUS_OK);
