@@ -180,9 +180,11 @@ main (int argc, char *argv[])
                                 &context.audio.channels))
     context.audio.channels = 2;
 
-  /* Get HTTP server port */
+  /* Get HTTP server ports */
   if (!melo_config_get_integer (config, "http", "port", &context.port))
     context.port = 8080;
+  if (!melo_config_get_integer (config, "http", "sport", &context.sport))
+    context.port = 8443;
 
   /* Initialize main audio sink */
   melo_sink_main_init (context.audio.rate, context.audio.channels);
@@ -190,7 +192,8 @@ main (int argc, char *argv[])
   /* Add discoverer */
   context.disco = melo_discover_new ();
   if (melo_config_get_boolean (config, "general", "register",&reg) && reg)
-    melo_discover_register_device (context.disco, context.name, context.port);
+    melo_discover_register_device (context.disco, context.name, context.port,
+                                   context.sport);
 
   /* Register event client for debug purpose */
   if (event_debug)
@@ -226,7 +229,45 @@ main (int argc, char *argv[])
 
   /* Create and start HTTP server */
   context.server = melo_httpd_new ();
-  if (!melo_httpd_start (context.server, context.port, context.name))
+
+  /* Load and set HTTPs certificate */
+  if (context.sport) {
+    gchar *cert_file, *key_file;
+
+    /* Generate certificate and key path */
+    cert_file = g_strdup_printf ("%s/melo/default.crt", g_get_user_config_dir ());
+    key_file = g_strdup_printf ("%s/melo/default.key", g_get_user_config_dir ());
+
+    /* Generate files if not present */
+    if (!g_file_test (cert_file, G_FILE_TEST_EXISTS) ||
+        !g_file_test (key_file, G_FILE_TEST_EXISTS)) {
+      gchar *cmd_argv[] = {
+        "openssl", "req", "-newkey", "rsa:4096", "-nodes", "-sha512", "-x509",
+        "-subj", "/C=US/ST=California/L=San-Francisco/O=Sparod/CN=melo",
+        "-days", "3650", "-nodes",  "-out", cert_file, "-keyout", key_file, NULL
+      };
+      GError *err = NULL;
+      gint status = 0;
+
+      /* Generate default SSL certificate */
+      if (!g_spawn_sync (NULL, cmd_argv, NULL, G_SPAWN_SEARCH_PATH |
+                    G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                    NULL, NULL, NULL, NULL, &status, NULL) || status) {
+        g_warning ("failed to create certificate (%d): disable HTTPS support",
+                   status);
+      }
+    }
+
+    /* Set certificate */
+    if (!melo_httpd_set_certificate (context.server, cert_file, key_file))
+      context.sport = 0;
+    g_free (cert_file);
+    g_free (key_file);
+  }
+
+  /* Start HTTP server */
+  if (!melo_httpd_start (context.server, context.port, context.sport,
+                         context.name))
     goto end;
 
   /* Load HTTP server configuration */

@@ -51,6 +51,7 @@ struct _MeloHTTPDPrivate {
   /* Avahi client */
   MeloAvahi *avahi;
   const MeloAvahiService *http_service;
+  const MeloAvahiService *https_service;
 
   /* Authentication */
   SoupAuthDomain *auth_domain;
@@ -160,8 +161,8 @@ melo_httpd_version_handler (SoupServer *server, SoupMessage *msg,
 
   /* Get Origin header */
   origin = soup_message_headers_get_one (msg->request_headers, "Origin");
-  if (!g_str_has_suffix (origin, "://sparod.com") &&
-      !g_str_has_suffix (origin, ".sparod.com")) {
+  if (!origin || (!g_str_has_suffix (origin, "://sparod.com") &&
+      !g_str_has_suffix (origin, ".sparod.com"))) {
     soup_message_set_status (msg, SOUP_STATUS_FORBIDDEN);
     return;
   }
@@ -177,18 +178,54 @@ melo_httpd_version_handler (SoupServer *server, SoupMessage *msg,
 }
 
 gboolean
-melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name)
+melo_httpd_set_certificate (MeloHTTPD *httpd, const gchar *cert_file,
+                            const gchar *key_file)
+{
+  MeloHTTPDPrivate *priv = httpd->priv;
+  SoupServer *server = priv->server;
+  GError *err = NULL;
+
+  /* Load certificate from files */
+  if (!soup_server_set_ssl_cert_file (server, cert_file, key_file, &err)) {
+    g_warning ("failed to load certicated for HTTPS: %s", err->message);
+    g_clear_error (&err);
+    return FALSE;
+  }
+}
+
+gboolean
+melo_httpd_start (MeloHTTPD *httpd, guint port, guint sport, const gchar *name)
 {
   MeloHTTPDPrivate *priv = httpd->priv;
   SoupServer *server = priv->server;
   GError *err = NULL;
   gboolean res;
 
-  /* Start listening */
-  res = soup_server_listen_all (server, port, 0, &err);
-  if (res == FALSE) {
-    g_clear_error (&err);
+  /* Nothing to listen */
+  if (!port && !sport)
     return FALSE;
+
+  /* Start listening for HTTP */
+  if (port) {
+    res = soup_server_listen_all (server, port, 0, &err);
+    if (res == FALSE) {
+      g_error ("failed to start HTTP server on port %u: %s", port,
+               err->message);
+      g_clear_error (&err);
+      return FALSE;
+    }
+  }
+
+  /* Start listening for HTTPS */
+  if (sport) {
+    res = soup_server_listen_all (server, sport, SOUP_SERVER_LISTEN_HTTPS,
+                                  &err);
+    if (res == FALSE) {
+      g_warning ("failed to start HTTPS server on port %u: %s", sport,
+               err->message);
+      g_clear_error (&err);
+      sport = 0;
+    }
   }
 
   /* Add a default handler */
@@ -210,10 +247,15 @@ melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name)
   /* Set cover URL base */
   melo_tags_set_cover_url_base ("cover");
 
-  /* Add avahi service */
-  if (priv->avahi)
-    priv->http_service = melo_avahi_add_service (priv->avahi, name,
-                                                 "_http._tcp", port, NULL);
+  /* Add avahi service(s) */
+  if (priv->avahi) {
+    if (port)
+      priv->http_service = melo_avahi_add_service (priv->avahi, name,
+                                                   "_http._tcp", port, NULL);
+    if (sport)
+      priv->https_service = melo_avahi_add_service (priv->avahi, name,
+                                                   "_https._tcp", sport, NULL);
+  }
 
   return TRUE;
 }
@@ -227,8 +269,12 @@ melo_httpd_stop (MeloHTTPD *httpd)
   soup_server_disconnect (priv->server);
 
   /* Remove avahi service */
-  if (priv->avahi)
-    melo_avahi_remove_service (priv->avahi, priv->http_service);
+  if (priv->avahi) {
+    if (priv->http_service)
+      melo_avahi_remove_service (priv->avahi, priv->http_service);
+    if (priv->https_service)
+      melo_avahi_remove_service (priv->avahi, priv->https_service);
+  }
 }
 
 void
@@ -237,9 +283,14 @@ melo_httpd_set_name (MeloHTTPD *httpd, const gchar *name)
   MeloHTTPDPrivate *priv = httpd->priv;
 
   /* Update avahi name service */
-  if (priv->avahi && priv->http_service)
-    melo_avahi_update_service (priv->avahi, priv->http_service, name, NULL, 0,
-                               FALSE);
+  if (priv->avahi) {
+    if (priv->http_service)
+      melo_avahi_update_service (priv->avahi, priv->http_service, name, NULL, 0,
+                                 FALSE);
+    if (priv->https_service)
+      melo_avahi_update_service (priv->avahi, priv->https_service, name, NULL,
+                                 0, FALSE);
+  }
 }
 
 void

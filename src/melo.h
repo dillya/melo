@@ -38,6 +38,7 @@ struct _MeloContext {
   MeloHTTPD *server;
   gchar *name;
   gint64 port;
+  gint64 sport;
 };
 
 #endif /* __MELO_H__ */

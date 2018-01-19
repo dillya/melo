@@ -64,10 +64,18 @@ static MeloConfigItem melo_config_http[] = {
   },
   {
     .id = "port",
-    .name = "TCP port",
+    .name = "TCP port (HTTP)",
     .type = MELO_CONFIG_TYPE_INTEGER,
     .element = MELO_CONFIG_ELEMENT_NUMBER,
     .def._integer = 8080,
+  },
+  {
+
+    .id = "sport",
+    .name = "TCP port (HTTPS)",
+    .type = MELO_CONFIG_TYPE_INTEGER,
+    .element = MELO_CONFIG_ELEMENT_NUMBER,
+    .def._integer = 0,
   },
   {
     .id = NULL,
@@ -162,7 +170,8 @@ melo_config_main_update_general (MeloConfigContext *context, gpointer user_data)
   /* Update discoverer */
   if (melo_config_get_updated_boolean (context, "register", &bnew, &bold)) {
     if (bnew)
-      melo_discover_register_device (ctx->disco, ctx->name, ctx->port);
+      melo_discover_register_device (ctx->disco, ctx->name, ctx->port,
+                                     ctx->sport);
     else if (bold)
       melo_discover_unregister_device (ctx->disco);
   }

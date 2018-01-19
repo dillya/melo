@@ -52,7 +52,11 @@ GType melo_httpd_get_type (void);
 
 MeloHTTPD *melo_httpd_new (void);
 
-gboolean melo_httpd_start (MeloHTTPD *httpd, guint port, const gchar *name);
+gboolean melo_httpd_set_certificate (MeloHTTPD *httpd, const gchar *cert_file,
+                                     const gchar *key_file);
+
+gboolean melo_httpd_start (MeloHTTPD *httpd, guint port, guint sport,
+                           const gchar *name);
 void melo_httpd_stop (MeloHTTPD *httpd);
 
 void melo_httpd_set_name (MeloHTTPD *httpd, const gchar *name);
