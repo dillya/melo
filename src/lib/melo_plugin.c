@@ -103,6 +103,10 @@ melo_plugin_load_unclock (const gchar *name, gboolean enable)
   if (!g_module_symbol (module, "melo_plugin", (gpointer *) &plugin))
       goto err_close;
 
+  /* Check API version */
+  if (plugin->api_version != MELO_API_VERSION)
+    goto err_close;
+
   /* Add plugin to list */
   ctx = g_slice_new0 (MeloPluginContext);
   if (!ctx)

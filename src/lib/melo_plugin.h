@@ -25,6 +25,8 @@
 #include <glib.h>
 #include <gmodule.h>
 
+#define MELO_API_VERSION 1
+
 typedef struct _MeloPlugin MeloPlugin;
 typedef gboolean (*MeloPluginEnable) (void);
 typedef gboolean (*MeloPluginDisable) (void);
@@ -36,6 +38,7 @@ struct _MeloPlugin {
   const gchar *description;
   MeloPluginEnable enable;
   MeloPluginDisable disable;
+  guint api_version;
 };
 
 struct _MeloPluginItem {
@@ -56,5 +59,15 @@ void melo_plugin_unload_all ();
 
 GList *melo_plugin_get_list ();
 void melo_plugin_item_free (MeloPluginItem *item);
+
+#define DECLARE_MELO_PLUGIN(_name,_description,_enable_func,_disable_func) \
+  G_MODULE_EXPORT \
+  const MeloPlugin melo_plugin = { \
+    .name = _name, \
+    .description = _description, \
+    .enable = _enable_func, \
+    .disable = _disable_func, \
+    .api_version = MELO_API_VERSION, \
+  };
 
 #endif /* __MELO_PLUGIN_H__ */
