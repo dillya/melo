@@ -52,6 +52,17 @@ struct _MeloFileDBClass {
 };
 
 typedef enum {
+  MELO_FILE_DB_TYPE_FILE = 0,
+  MELO_FILE_DB_TYPE_SONG,
+  MELO_FILE_DB_TYPE_ARTIST,
+  MELO_FILE_DB_TYPE_ALBUM,
+  MELO_FILE_DB_TYPE_GENRE,
+
+  /* Types count */
+  MELO_FILE_DB_TYPE_COUNT
+} MeloFileDBType;
+
+typedef enum {
   MELO_FILE_DB_FIELDS_END = 0,
   MELO_FILE_DB_FIELDS_PATH,
   MELO_FILE_DB_FIELDS_PATH_ID,
@@ -87,50 +98,23 @@ gboolean melo_file_db_add_tags2 (MeloFileDB *db, gint path_id,
                                  const gchar *filename, gint timestamp,
                                  MeloTags *tags, gchar **cover_out_file);
 
-/* Get specific entry */
-MeloTags *melo_file_db_get_song (MeloFileDB *db, GObject *obj,
+/* Get tags for one or more types */
+MeloTags *melo_file_db_get_tags (MeloFileDB *db, GObject *obj,
+                                 MeloFileDBType type,
                                  MeloTagsFields tags_fields,
                                  MeloFileDBFields field_0, ...);
-MeloTags *melo_file_db_get_artist (MeloFileDB *db, GObject *obj,
-                                   MeloTagsFields tags_fields,
-                                   MeloFileDBFields field_0, ...);
-MeloTags *melo_file_db_get_album (MeloFileDB *db, GObject *obj,
-                                  MeloTagsFields tags_fields,
-                                  MeloFileDBFields field_0, ...);
-MeloTags *melo_file_db_get_genre (MeloFileDB *db, GObject *obj,
-                                  MeloTagsFields tags_fields,
-                                  MeloFileDBFields field_0, ...);
 
 typedef gboolean (*MeloFileDBGetList) (const gchar *path, const gchar *file,
-                                       gint id, MeloTags *tags,
-                                       gpointer user_data);
+                                       gint id, MeloFileDBType type,
+                                       MeloTags *tags, gpointer user_data);
 
-/* Get browser item list */
-gboolean melo_file_db_get_file_list (MeloFileDB *db, GObject *obj,
-                                     MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count, MeloSort sort,
-                                     MeloTagsFields tags_fields,
-                                     MeloFileDBFields field_0, ...);
-gboolean melo_file_db_get_song_list (MeloFileDB *db, GObject *obj,
-                                     MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count, MeloSort sort,
-                                     MeloTagsFields tags_fields,
-                                     MeloFileDBFields field_0, ...);
-gboolean melo_file_db_get_artist_list (MeloFileDB *db, GObject *obj,
-                                     MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count, MeloSort sort,
-                                     MeloTagsFields tags_fields,
-                                     MeloFileDBFields field_0, ...);
-gboolean melo_file_db_get_album_list (MeloFileDB *db, GObject *obj,
-                                     MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count, MeloSort sort,
-                                     MeloTagsFields tags_fields,
-                                     MeloFileDBFields field_0, ...);
-gboolean melo_file_db_get_genre_list (MeloFileDB *db, GObject *obj,
-                                     MeloFileDBGetList cb, gpointer user_data,
-                                     gint offset, gint count, MeloSort sort,
-                                     MeloTagsFields tags_fields,
-                                     MeloFileDBFields field_0, ...);
+/* Get item list for one or more types */
+gboolean melo_file_db_get_list (MeloFileDB *db, GObject *obj,
+                                MeloFileDBGetList cb, gpointer user_data,
+                                gint offset, gint count, MeloSort sort,
+                                gboolean find, MeloFileDBType type,
+                                MeloTagsFields tags_fields,
+                                MeloFileDBFields field_0, ...);
 
 G_END_DECLS
 
