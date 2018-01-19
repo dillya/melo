@@ -85,7 +85,7 @@ function melo_get_browser(browser) {
       var button = $('<input type="button" value="' + play  + '">');
       button.click([id, form], function (e) {
         var input = e.data[1].children("input").val();
-        melo_browser_action("play", e.data[0], input, false);
+        melo_browser_action("play", e.data[0], input, "", false);
       });
       form.append(button);
     }
@@ -93,7 +93,7 @@ function melo_get_browser(browser) {
       var button = $('<input type="button" value="' + add  + '">');
       button.click([id, form], function (e) {
         var input = e.data[1].children("input").val();
-        melo_browser_action("add", e.data[0], input, false);
+        melo_browser_action("add", e.data[0], input, "", false);
       });
       form.append(button);
     }
@@ -229,8 +229,8 @@ function melo_browser_list(method, id, path, off, count, token) {
         }).toggleClass("browser_category");
       } else {
         /* Do action on file / item */
-        item.children("a").click([id, fpath], function(e) {
-          melo_browser_action("play", e.data[0], e.data[1], false);
+        item.children("a").click([id, fpath, token], function(e) {
+          melo_browser_action("play", e.data[0], e.data[1], e.data[2], false);
           return false;
         }).toggleClass(item_class);
       }
@@ -238,8 +238,8 @@ function melo_browser_list(method, id, path, off, count, token) {
       /* Add a link if item is addable */
       if (items[i].add != null) {
         item.append(' [<a class="add" href="#">' + items[i].add + '</a>]');
-        item.children('a.add').click([id, fpath], function(e) {
-          melo_browser_action("add", e.data[0], e.data[1], false);
+        item.children('a.add').click([id, fpath, token], function(e) {
+          melo_browser_action("add", e.data[0], e.data[1], e.data[2], false);
           return false;
         });
       }
@@ -287,8 +287,9 @@ function melo_browser_search(id, path, off, count, token) {
   melo_browser_list("search", id, path, off, count, token);
 }
 
-function melo_browser_action(action, id, path, update) {
-  jsonrpc_call("browser." + action, JSON.parse('["' + id + '","' + path + '"]'),
+function melo_browser_action(action, id, path, token, update) {
+  jsonrpc_call("browser." + action,
+               JSON.parse('["' + id + '","' + path + '","' + token + '"]'),
                null, function(response, data) {
     if (response.error || !response.result)
       return;
@@ -383,12 +384,14 @@ function melo_browser_previous() {
 
 function melo_browser_add_all() {
   melo_browser_action("add", melo_browser_current_id,
-                      melo_browser_current_path, false);
+                      melo_browser_current_path, melo_browser_current_token,
+                      false);
 }
 
 function melo_browser_play_all() {
   melo_browser_action("play", melo_browser_current_id,
-                      melo_browser_current_path, false);
+                      melo_browser_current_path, melo_browser_current_token,
+                      false);
 }
 
 function melo_get_playlist_list(id, play) {
