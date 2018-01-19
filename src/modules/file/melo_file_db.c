@@ -73,6 +73,17 @@
   "DROP TABLE IF EXISTS genre;" \
   "DROP TABLE IF EXISTS path;"
 
+static const gchar *melo_sort_to_file_db_string[MELO_SORT_COUNT] = {
+  [MELO_SORT_FILE] = "file",
+  [MELO_SORT_TITLE] = "title",
+  [MELO_SORT_ARTIST] = "artist",
+  [MELO_SORT_ALBUM] = "album",
+  [MELO_SORT_GENRE] = "genre",
+  [MELO_SORT_DATE] = "date",
+  [MELO_SORT_TRACK] = "track",
+  [MELO_SORT_TRACKS] = "tracks",
+};
+
 struct _MeloFileDBPrivate {
   GMutex mutex;
   sqlite3 *db;
@@ -675,10 +686,11 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   conditions = g_string_free (conds, FALSE);
 
   /* Generate order directive */
-  if (sort != MELO_SORT_NONE && melo_sort_is_valid (sort)) {
+  if (sort != MELO_SORT_NONE && melo_sort_is_valid (sort) &&
+      melo_sort_to_file_db_string[melo_sort_set_asc (sort)]) {
     /* Setup order clause */
     order = "ORDER BY ";
-    order_col = melo_sort_to_string (melo_sort_set_asc (sort));
+    order_col = melo_sort_to_file_db_string[melo_sort_set_asc (sort)];
     if (melo_sort_is_desc (sort))
       order_sort = " COLLATE NOCASE DESC";
     else
