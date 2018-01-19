@@ -337,6 +337,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   MeloBrowserJSONRPCListFields fields;
   MeloBrowserTagsMode tags_mode = MELO_BROWSER_TAGS_MODE_NONE;
   MeloTagsFields tags_fields = MELO_TAGS_FIELDS_NONE;
+  MeloSort sort = MELO_SORT_NONE;
   MeloBrowserList *list;
   MeloBrowser *bro;
   JsonObject *obj;
@@ -370,6 +371,10 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   offset = json_object_get_int_member (obj, "offset");
   count = json_object_get_int_member (obj, "count");
 
+  /* Get sort */
+  if (json_object_has_member (obj, "sort"))
+    sort = melo_sort_from_string (json_object_get_string_member (obj, "sort"));
+
   /* Get navigation token */
   if (json_object_has_member (obj, "token"))
     token = json_object_get_string_member (obj, "token");
@@ -381,14 +386,14 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   /* Get browser list */
   if (!g_strcmp0 (method, "browser.search")) {
     MeloBrowserSearchParams params = {
-      .offset = offset, .count = count,
+      .offset = offset, .count = count, .sort = sort,
       .token = token, .tags_mode = tags_mode, .tags_fields = tags_fields,
     };
 
     list = melo_browser_search (bro, input, &params);
   } else {
     MeloBrowserGetListParams params = {
-      .offset = offset, .count = count,
+      .offset = offset, .count = count, .sort = sort,
       .token = token, .tags_mode = tags_mode, .tags_fields = tags_fields,
     };
 
@@ -515,6 +520,7 @@ melo_browser_jsonrpc_item_action (const gchar *method,
 {
   const gchar *path;
   const gchar *token = NULL;
+  MeloSort sort = MELO_SORT_NONE;
   MeloBrowser *bro;
   JsonObject *obj;
   gboolean ret = FALSE;
@@ -538,16 +544,20 @@ melo_browser_jsonrpc_item_action (const gchar *method,
   if (json_object_has_member (obj, "token"))
     token = json_object_get_string_member (obj, "token");
 
+  /* Get sort */
+  if (json_object_has_member (obj, "sort"))
+    sort = melo_sort_from_string (json_object_get_string_member (obj, "sort"));
+
   /* Do action on item */
   if (!g_strcmp0 (method, "browser.play")) {
     MeloBrowserPlayParams params = {
-      .token = token,
+      .sort = sort, .token = token,
     };
 
     ret = melo_browser_play (bro, path, &params);
   } else if (!g_strcmp0 (method, "browser.add")) {
     MeloBrowserAddParams params = {
-      .token = token,
+      .sort = sort, .token = token,
     };
 
     ret = melo_browser_add (bro, path, &params);
@@ -593,7 +603,7 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "    \"required\": false"
               "  },"
               "  {"
-              "    \"name\": \"sort\", \"type\": \"object\","
+              "    \"name\": \"sort\", \"type\": \"string\","
               "    \"required\": false"
               "  },"
               "  {"
@@ -618,7 +628,7 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "    \"required\": false"
               "  },"
               "  {"
-              "    \"name\": \"sort\", \"type\": \"object\","
+              "    \"name\": \"sort\", \"type\": \"string\","
               "    \"required\": false"
               "  },"
               "  {"
@@ -660,6 +670,10 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "  {\"name\": \"id\", \"type\": \"string\"},"
               "  {\"name\": \"path\", \"type\": \"string\"},"
               "  {"
+              "    \"name\": \"sort\", \"type\": \"string\","
+              "    \"required\": false"
+              "  },"
+              "  {"
               "    \"name\": \"token\", \"type\": \"string\","
               "    \"required\": false"
               "  }"
@@ -673,6 +687,10 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
               "  {\"name\": \"path\", \"type\": \"string\"},"
+              "  {"
+              "    \"name\": \"sort\", \"type\": \"string\","
+              "    \"required\": false"
+              "  },"
               "  {"
               "    \"name\": \"token\", \"type\": \"string\","
               "    \"required\": false"

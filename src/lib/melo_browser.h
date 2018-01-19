@@ -132,12 +132,14 @@ enum _MeloBrowserTagsMode {
 struct _MeloBrowserGetListParams {
   gint offset;
   gint count;
+  MeloSort sort;
   const gchar *token;
   MeloBrowserTagsMode tags_mode;
   MeloTagsFields tags_fields;
 };
 
 struct _MeloBrowserAddParams {
+  MeloSort sort;
   const gchar *token;
 };
 
