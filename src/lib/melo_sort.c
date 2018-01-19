@@ -26,16 +26,19 @@ struct {
   const gchar *name;
   const gchar *name_desc;
 } static const melo_sort_map[] = {
-  { MELO_SORT_NONE,    "none",    "none"        },
-  { MELO_SORT_SHUFFLE, "shuffle", "shuffle"     },
-  { MELO_SORT_FILE,    "file",    "file_desc"   },
-  { MELO_SORT_TITLE,   "title",   "title_desc"  },
-  { MELO_SORT_ARTIST,  "artist",  "artist_desc" },
-  { MELO_SORT_ALBUM,   "album",   "album_desc"  },
-  { MELO_SORT_GENRE,   "genre",   "genre_desc"  },
-  { MELO_SORT_DATE,    "date",    "date_desc"   },
-  { MELO_SORT_TRACK,   "track",   "track_desc"  },
-  { MELO_SORT_TRACKS,  "tracks",  "tracks_desc" },
+  { MELO_SORT_NONE,         "none",         "none"               },
+  { MELO_SORT_SHUFFLE,      "shuffle",      "shuffle"            },
+  { MELO_SORT_FILE,         "file",         "file_desc"          },
+  { MELO_SORT_TITLE,        "title",        "title_desc"         },
+  { MELO_SORT_ARTIST,       "artist",       "artist_desc"        },
+  { MELO_SORT_ALBUM,        "album",        "album_desc"         },
+  { MELO_SORT_GENRE,        "genre",        "genre_desc"         },
+  { MELO_SORT_DATE,         "date",         "date_desc"          },
+  { MELO_SORT_TRACK,        "track",        "track_desc"         },
+  { MELO_SORT_TRACKS,       "tracks",       "tracks_desc"        },
+  { MELO_SORT_RELEVANT,     "relevant",     "relevant_desc"      },
+  { MELO_SORT_RATING,       "rating",       "rating_desc"        },
+  { MELO_SORT_PLAY_COUNT,   "play_count",   "play_count_desc"    },
 };
 
 const gchar *
@@ -60,10 +63,15 @@ melo_sort_from_string (const gchar *name)
 {
   gint i;
 
-  for (i = 0; i < G_N_ELEMENTS (melo_sort_map); i++)
-    if (!g_strcmp0 (melo_sort_map[i].name, name) ||
-        !g_strcmp0 (melo_sort_map[i].name_desc, name))
+  if (!name)
+    return MELO_SORT_NONE;
+
+  for (i = 0; i < G_N_ELEMENTS (melo_sort_map); i++) {
+    if (!g_strcmp0 (melo_sort_map[i].name, name))
       return melo_sort_map[i].sort;
+    if (!g_strcmp0 (melo_sort_map[i].name_desc, name))
+      return melo_sort_set_desc (melo_sort_map[i].sort);
+  }
 
   return MELO_SORT_COUNT;
 }

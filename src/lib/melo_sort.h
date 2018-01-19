@@ -42,6 +42,11 @@ typedef enum {
   MELO_SORT_TRACK,
   MELO_SORT_TRACKS,
 
+  /* Sort by usage */
+  MELO_SORT_RELEVANT,
+  MELO_SORT_RATING,
+  MELO_SORT_PLAY_COUNT,
+
   /* Sort count */
   MELO_SORT_COUNT,
 } MeloSort;
@@ -83,6 +88,12 @@ static inline gboolean
 melo_sort_is_desc (MeloSort sort)
 {
   return (sort & MELO_SORT_DESC);
+}
+
+static inline MeloSort
+melo_sort_replace (MeloSort sort, MeloSort new_sort)
+{
+  return (sort & ~MELO_SORT_MASK) | new_sort;
 }
 
 const gchar *melo_sort_to_string (MeloSort sort);
