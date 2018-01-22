@@ -324,7 +324,7 @@ melo_player_file_setup (MeloPlayer *player, const gchar *path,
   g_mutex_lock (&priv->mutex);
 
   /* Stop pipeline */
-  gst_element_set_state (priv->pipeline, GST_STATE_READY);
+  gst_element_set_state (priv->pipeline, GST_STATE_NULL);
 
   /* Extract file name from URI */
   if (!name) {

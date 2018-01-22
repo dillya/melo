@@ -317,7 +317,7 @@ melo_player_radio_setup (MeloPlayer *player, const gchar *path,
     name = "Unknown radio";
 
   /* Stop pipeline */
-  gst_element_set_state (priv->pipeline, GST_STATE_READY);
+  gst_element_set_state (priv->pipeline, GST_STATE_NULL);
 
   /* Replace status */
   if (priv->btags) {
