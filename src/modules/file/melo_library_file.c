@@ -22,6 +22,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "melo_file_utils.h"
+
 #include "melo_library_file.h"
 
 /* File library info */
@@ -467,6 +469,12 @@ melo_library_file_add_cb (const gchar *path, const gchar *file, gint id,
   if (!uri)
     return FALSE;
 
+  /* Check and mount volume for remote files */
+  if (!melo_file_utils_check_and_mount_uri (uri, NULL, NULL)) {
+    g_free (uri);
+    return FALSE;
+  }
+
   /* Add media */
   ret = melo_player_add (player, uri, file, tags);
   melo_tags_unref (tags);
@@ -519,6 +527,12 @@ melo_library_file_play_cb (const gchar *path, const gchar *file, gint id,
   uri = g_strjoin ("/", path, file, NULL);
   if (!uri)
     return FALSE;
+
+  /* Check and mount volume for remote files */
+  if (!melo_file_utils_check_and_mount_uri (uri, NULL, NULL)) {
+    g_free (uri);
+    return FALSE;
+  }
 
   /* Play media */
   ret = melo_player_play (player, uri, file, tags, TRUE);
