@@ -50,10 +50,10 @@ static MeloBrowserList *melo_library_file_search (MeloBrowser *browser,
 static MeloTags *melo_library_file_get_tags (MeloBrowser *browser,
                                              const gchar *path,
                                              MeloTagsFields fields);
-static gboolean melo_library_file_add (MeloBrowser *browser, const gchar *path,
-                                       const MeloBrowserAddParams *params);
-static gboolean melo_library_file_play (MeloBrowser *browser, const gchar *path,
-                                        const MeloBrowserPlayParams *params);
+static gboolean melo_library_file_action (MeloBrowser *browser,
+                                         const gchar *path,
+                                         MeloBrowserItemAction action,
+                                         const MeloBrowserActionParams *params);
 
 static gboolean melo_library_file_get_cover (MeloBrowser *browser,
                                              const gchar *path, GBytes **data,
@@ -90,8 +90,7 @@ melo_library_file_class_init (MeloLibraryFileClass *klass)
   bclass->get_list = melo_library_file_get_list;
   bclass->search = melo_library_file_search;
   bclass->get_tags = melo_library_file_get_tags;
-  bclass->add = melo_library_file_add;
-  bclass->play = melo_library_file_play;
+  bclass->action = melo_library_file_action;
 
   bclass->get_cover = melo_library_file_get_cover;
 
@@ -186,29 +185,27 @@ melo_library_file_gen (const gchar *path, const gchar *file, gint id,
                        MeloFileDBType type, MeloTags *tags, gpointer user_data)
 {
   GList **list = (GList **) user_data;
-  const gchar *item_type = NULL;
-  const gchar *full_name = NULL;
-  const gchar *add = NULL;
+  MeloBrowserItemType item_type;
+  const gchar *name = NULL;
   MeloBrowserItem *item;
 
   switch (type) {
     case MELO_FILE_DB_TYPE_FILE:
     case MELO_FILE_DB_TYPE_SONG:
-      item_type = "media";
-      full_name = tags && tags->title ? tags->title : file;
-      add = "Add to playlist";
+      item_type = MELO_BROWSER_ITEM_TYPE_MEDIA;
+      name = tags && tags->title ? tags->title : file;
       break;
     case MELO_FILE_DB_TYPE_ARTIST:
-      item_type = "category";
-      full_name = tags->artist;
+      item_type = MELO_BROWSER_ITEM_TYPE_CATEGORY;
+      name = tags->artist;
       break;
     case MELO_FILE_DB_TYPE_ALBUM:
-      item_type = "category";
-      full_name = tags->album;
+      item_type = MELO_BROWSER_ITEM_TYPE_CATEGORY;
+      name = tags->album;
       break;
     case MELO_FILE_DB_TYPE_GENRE:
-      item_type = "category";
-      full_name = tags->genre;
+      item_type = MELO_BROWSER_ITEM_TYPE_CATEGORY;
+      name = tags->genre;
       break;
     default:
       return FALSE;
@@ -216,10 +213,11 @@ melo_library_file_gen (const gchar *path, const gchar *file, gint id,
 
   /* Create MeloBrowserItem */
   item = melo_browser_item_new (NULL, item_type);
-  item->name = melo_library_gen_id (id);
-  item->full_name = g_strdup (full_name);
-  item->add = g_strdup (add);
+  item->id = melo_library_gen_id (id);
+  item->name = g_strdup (name);
   item->tags = tags;
+  item->actions = MELO_BROWSER_ITEM_ACTION_FIELDS_ADD |
+                  MELO_BROWSER_ITEM_ACTION_FIELDS_PLAY;
   *list = g_list_prepend (*list, item);
 
   return TRUE;
@@ -338,23 +336,23 @@ melo_library_file_get_list (MeloBrowser *browser, const gchar *path,
     MeloBrowserItem *item;
 
     /* Add title entry to browser by title */
-    item = melo_browser_item_new ("title", "category");
-    item->full_name = g_strdup ("Title");
+    item = melo_browser_item_new ("title", MELO_BROWSER_ITEM_TYPE_CATEGORY);
+    item->name = g_strdup ("Title");
     list->items = g_list_append(list->items, item);
 
     /* Add artist entry to browser by artist */
-    item = melo_browser_item_new ("artist", "category");
-    item->full_name = g_strdup ("Artist");
+    item = melo_browser_item_new ("artist", MELO_BROWSER_ITEM_TYPE_CATEGORY);
+    item->name = g_strdup ("Artist");
     list->items = g_list_append(list->items, item);
 
     /* Add album entry to browser by album */
-    item = melo_browser_item_new ("album", "category");
-    item->full_name = g_strdup ("Album");
+    item = melo_browser_item_new ("album", MELO_BROWSER_ITEM_TYPE_CATEGORY);
+    item->name = g_strdup ("Album");
     list->items = g_list_append(list->items, item);
 
     /* Add genre entry to browser by genre */
-    item = melo_browser_item_new ("genre", "category");
-    item->full_name = g_strdup ("Genre");
+    item = melo_browser_item_new ("genre", MELO_BROWSER_ITEM_TYPE_CATEGORY);
+    item->name = g_strdup ("Genre");
     list->items = g_list_append(list->items, item);
 
     return list;
@@ -485,7 +483,7 @@ melo_library_file_add_cb (const gchar *path, const gchar *file, gint id,
 
 static gboolean
 melo_library_file_add (MeloBrowser *browser, const gchar *path,
-                       const MeloBrowserAddParams *params)
+                       const MeloBrowserActionParams *params)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
   MeloFileDBFields filter;
@@ -544,7 +542,7 @@ melo_library_file_play_cb (const gchar *path, const gchar *file, gint id,
 
 static gboolean
 melo_library_file_play (MeloBrowser *browser, const gchar *path,
-                        const MeloBrowserPlayParams *params)
+                        const MeloBrowserActionParams *params)
 {
   MeloLibraryFile *lfile = MELO_LIBRARY_FILE (browser);
   MeloFileDBFields filter;
@@ -582,6 +580,22 @@ melo_library_file_play (MeloBrowser *browser, const gchar *path,
                                 MELO_FILE_DB_TYPE_FILE, MELO_TAGS_FIELDS_FULL,
                                 MELO_FILE_DB_FIELDS_FILE_ID, id2,
                                 MELO_FILE_DB_FIELDS_END);
+}
+static gboolean
+melo_library_file_action (MeloBrowser *browser, const gchar *path,
+                          MeloBrowserItemAction action,
+                          const MeloBrowserActionParams *params)
+{
+  switch (action) {
+    case MELO_BROWSER_ITEM_ACTION_ADD:
+      return melo_library_file_add (browser, path, params);
+    case MELO_BROWSER_ITEM_ACTION_PLAY:
+      return melo_library_file_play (browser, path, params);
+    default:
+      ;
+  }
+
+  return FALSE;
 }
 
 static gboolean

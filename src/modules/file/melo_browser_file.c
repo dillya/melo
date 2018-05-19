@@ -54,12 +54,10 @@ static MeloBrowserList *melo_browser_file_get_list (MeloBrowser *browser,
 static MeloTags *melo_browser_file_get_tags (MeloBrowser *browser,
                                              const gchar *path,
                                              MeloTagsFields fields);
-static gboolean melo_browser_file_add (MeloBrowser *browser, const gchar *path,
-                                       const MeloBrowserAddParams *params);
-static gboolean melo_browser_file_play (MeloBrowser *browser, const gchar *path,
-                                        const MeloBrowserPlayParams *params);
-static gboolean melo_browser_file_remove (MeloBrowser *browser,
-                                          const gchar *path);
+static gboolean melo_browser_file_action (MeloBrowser *browser,
+                                         const gchar *path,
+                                         MeloBrowserItemAction action,
+                                         const MeloBrowserActionParams *params);
 
 static gboolean melo_browser_file_get_cover (MeloBrowser *browser,
                                              const gchar *path, GBytes **data,
@@ -120,9 +118,7 @@ melo_browser_file_class_init (MeloBrowserFileClass *klass)
   bclass->get_info = melo_browser_file_get_info;
   bclass->get_list = melo_browser_file_get_list;
   bclass->get_tags = melo_browser_file_get_tags;
-  bclass->add = melo_browser_file_add;
-  bclass->play = melo_browser_file_play;
-  bclass->remove = melo_browser_file_remove;
+  bclass->action = melo_browser_file_action;
 
   bclass->get_cover = melo_browser_file_get_cover;
 
@@ -392,29 +388,30 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
 
   /* Create list */
   while ((info = g_file_enumerator_next_file (dir_enum, NULL, NULL))) {
+    MeloBrowserItemActionFields actions;
+    MeloBrowserItemType itype;
     MeloBrowserItem *item;
-    const gchar *itype;
-    gchar *name;
-    gchar *add = NULL;
     GFileType type;
     GList **l;
+    gchar *id;
 
     /* Get item type */
     type = g_file_info_get_file_type (info);
     if (type == G_FILE_TYPE_REGULAR) {
-      itype = "file";
-      name = g_strdup (g_file_info_get_name (info));
-      add = g_strdup ("Add to playlist");
+      id = g_strdup (g_file_info_get_name (info));
+      itype = MELO_BROWSER_ITEM_TYPE_FILE;
+      actions = MELO_BROWSER_ITEM_ACTION_FIELDS_ADD |
+                MELO_BROWSER_ITEM_ACTION_FIELDS_PLAY;
       l = &list;
     } else if (type == G_FILE_TYPE_DIRECTORY) {
-      itype = "directory";
-      name = g_strdup (g_file_info_get_name (info));
+      id = g_strdup (g_file_info_get_name (info));
+      itype = MELO_BROWSER_ITEM_TYPE_FOLDER;
+      actions = MELO_BROWSER_ITEM_ACTION_FIELDS_NONE;
       l = &dir_list;
     } else if (type == G_FILE_TYPE_SHORTCUT ||
                type == G_FILE_TYPE_MOUNTABLE) {
       const gchar *uri;
       gchar *sha1;
-      itype = "directory";
       l = &dir_list;
       uri = g_file_info_get_attribute_string (info,
                                           G_FILE_ATTRIBUTE_STANDARD_TARGET_URI);
@@ -424,12 +421,20 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
                                           (const guchar *) uri, strlen (uri));
 
       /* Keep only MELO_BROWSER_FILE_ID_LENGTH first characters to create ID */
-      name = g_strndup (sha1, MELO_BROWSER_FILE_ID_LENGTH);
+      id = g_strndup (sha1, MELO_BROWSER_FILE_ID_LENGTH);
       g_free (sha1);
 
       /* Add shortcut to hash table */
-      if (!g_hash_table_lookup (priv->shortcuts, name))
-        g_hash_table_insert (priv->shortcuts, g_strdup (name), g_strdup (uri));
+      if (!g_hash_table_lookup (priv->shortcuts, id))
+        g_hash_table_insert (priv->shortcuts, g_strdup (id), g_strdup (uri));
+
+      if (type == G_FILE_TYPE_MOUNTABLE) {
+        itype = MELO_BROWSER_ITEM_TYPE_DEVICE;
+        actions = MELO_BROWSER_ITEM_ACTION_FIELDS_EJECT;
+      } else {
+        itype = MELO_BROWSER_ITEM_TYPE_REMOTE;
+        actions = MELO_BROWSER_ITEM_ACTION_FIELDS_REMOVE;
+      }
     } else {
       g_object_unref (info);
       continue;
@@ -437,9 +442,9 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
 
     /* Create a new browser item */
     item = melo_browser_item_new (NULL, itype);
-    item->name = name;
-    item->full_name = g_strdup (g_file_info_get_display_name (info));
-    item->add = add;
+    item->id = id;
+    item->name = g_strdup (g_file_info_get_display_name (info));
+    item->actions = actions;
 
     /* Insert into list */
     if (type == G_FILE_TYPE_REGULAR) {
@@ -452,7 +457,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
                          tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING ?
                                             MELO_TAGS_FIELDS_NONE : tags_fields,
                          MELO_FILE_DB_FIELDS_PATH_ID, path_id,
-                         MELO_FILE_DB_FIELDS_FILE, name,
+                         MELO_FILE_DB_FIELDS_FILE, id,
                          MELO_FILE_DB_FIELDS_END);
 
         /* No tags available in database */
@@ -460,7 +465,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
           gchar *file_uri;
 
           /* Generate complete file URI */
-          file_uri = g_strdup_printf ("%s/%s", path, name);
+          file_uri = g_strdup_printf ("%s/%s", path, id);
 
           if (tags_mode == MELO_BROWSER_TAGS_MODE_FULL) {
             GstDiscovererInfo *info;
@@ -473,7 +478,7 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
             info = gst_discoverer_discover_uri (disco, file_uri, NULL);
             if (info) {
               tags = melo_browser_file_discover_tags (bfile, info, NULL,
-                                                      path_id, name);
+                                                      path_id, id);
               g_object_unref (info);
             }
           } else if (tags_mode == MELO_BROWSER_TAGS_MODE_NONE_WITH_CACHING ||
@@ -632,6 +637,7 @@ melo_browser_file_get_volume_list (MeloBrowserFile *bfile, const gchar *path,
 static GList *
 melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
 {
+  MeloBrowserItemActionFields actions = MELO_BROWSER_ITEM_ACTION_FIELDS_NONE;
   MeloBrowserFilePrivate *priv = bfile->priv;
   GList *l;
 
@@ -642,8 +648,7 @@ melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
   for (l = priv->vms; l != NULL; l = l->next) {
     GObject *obj = G_OBJECT (l->data);
     MeloBrowserItem *item;
-    gchar *full_name, *id;
-    gchar *remove = NULL;
+    gchar *id, *name;
     GVolume *vol;
     GMount *mnt;
 
@@ -667,26 +672,26 @@ melo_browser_file_list_volumes (MeloBrowserFile *bfile, GList *list)
         g_object_ref (mnt);
     }
 
-    /* Get id and full name */
+    /* Get id and display name */
     if (mnt) {
-      full_name = g_mount_get_name (mnt);
+      name = g_mount_get_name (mnt);
       id = g_strdup (g_object_get_data (G_OBJECT (mnt), MELO_BROWSER_FILE_ID));
       if (g_mount_can_unmount (mnt))
-        remove = g_strdup ("eject");
+        actions = MELO_BROWSER_ITEM_ACTION_FIELDS_EJECT;
       g_object_unref (mnt);
     } else {
-      full_name = g_volume_get_name (vol);
+      name = g_volume_get_name (vol);
       id = g_strdup (g_object_get_data (G_OBJECT (vol), MELO_BROWSER_FILE_ID));
       if (g_volume_can_eject (vol))
-        remove = g_strdup ("eject");
+        actions = MELO_BROWSER_ITEM_ACTION_FIELDS_EJECT;
       g_object_unref (vol);
     }
 
     /* Create item */
-    item = melo_browser_item_new (NULL, "category");
-    item->name = id;
-    item->full_name = full_name;
-    item->remove = remove;
+    item = melo_browser_item_new (NULL, MELO_BROWSER_ITEM_TYPE_DEVICE);
+    item->id = id;
+    item->name = name;
+    item->actions = actions;
     list = g_list_append(list, item);
   }
 
@@ -809,13 +814,13 @@ melo_browser_file_get_list (MeloBrowser *browser, const gchar *path,
     MeloBrowserItem *item;
 
     /* Add Local entry for local file system */
-    item = melo_browser_item_new ("local", "category");
-    item->full_name = g_strdup ("Local");
+    item = melo_browser_item_new ("local", MELO_BROWSER_ITEM_TYPE_CATEGORY);
+    item->name = g_strdup ("Local");
     list->items = g_list_append(list->items, item);
 
     /* Add Network entry for scanning network */
-    item = melo_browser_item_new ("network", "category");
-    item->full_name = g_strdup ("Network");
+    item = melo_browser_item_new ("network", MELO_BROWSER_ITEM_TYPE_CATEGORY);
+    item->name = g_strdup ("Network");
     list->items = g_list_append(list->items, item);
 
     /* Add local volumes to list */
@@ -996,7 +1001,7 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
 
 static gboolean
 melo_browser_file_add (MeloBrowser *browser, const gchar *path,
-                       const MeloBrowserAddParams *params)
+                       const MeloBrowserActionParams *params)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   gboolean ret;
@@ -1029,7 +1034,7 @@ melo_browser_file_add (MeloBrowser *browser, const gchar *path,
 
 static gboolean
 melo_browser_file_play (MeloBrowser *browser, const gchar *path,
-                        const MeloBrowserPlayParams *params)
+                        const MeloBrowserActionParams *params)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
   gboolean ret;
@@ -1130,6 +1135,26 @@ melo_browser_file_remove (MeloBrowser *browser, const gchar *path)
   g_mutex_clear (&mutex);
 
   return TRUE;
+}
+
+static gboolean
+melo_browser_file_action (MeloBrowser *browser, const gchar *path,
+                          MeloBrowserItemAction action,
+                          const MeloBrowserActionParams *params)
+{
+  switch (action) {
+    case MELO_BROWSER_ITEM_ACTION_ADD:
+      return melo_browser_file_add (browser, path, params);
+    case MELO_BROWSER_ITEM_ACTION_PLAY:
+      return melo_browser_file_play (browser, path, params);
+    case MELO_BROWSER_ITEM_ACTION_REMOVE:
+    case MELO_BROWSER_ITEM_ACTION_EJECT:
+      return melo_browser_file_remove (browser, path);
+    default:
+      ;
+  }
+
+  return FALSE;
 }
 
 static gboolean
