@@ -11,6 +11,7 @@ libmelo_file_la_SOURCES = \
 	melo_library_file.c \
 	melo_player_file.c \
 	melo_config_file.c \
+	melo_file_utils.c \
 	melo_file_db.c \
 	melo_file.c
 
@@ -24,6 +25,7 @@ libmelo_file_la_LIBADD = \
 noinst_HEADERS = \
 	melo_file.h \
 	melo_file_db.h \
+	melo_file_utils.h \
 	melo_browser_file.h \
 	melo_library_file.h \
 	melo_player_file.h \

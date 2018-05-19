@@ -57,7 +57,7 @@ GType melo_discover_get_type (void);
 MeloDiscover *melo_discover_new (void);
 
 gboolean melo_discover_register_device (MeloDiscover *disco, const gchar *name,
-                                        guint port);
+                                        guint port, guint sport);
 gboolean melo_discover_unregister_device (MeloDiscover *disco);
 
 G_END_DECLS

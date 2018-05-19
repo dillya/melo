@@ -45,6 +45,7 @@ struct _MeloDiscoverPrivate {
   gchar *serial;
   gchar *name;
   guint port;
+  guint sport;
   GList *ifaces;
 };
 
@@ -430,8 +431,9 @@ melo_discover_add_device (MeloDiscover *disco)
 
   /* Prepare request for device registration */
   req = g_strdup_printf (MELO_DISCOVER_URL "?action=add_device&"
-                         "serial=%s&name=%s&hostname=%s&port=%u",
-                         priv->serial, priv->name, host, priv->port);
+                         "serial=%s&name=%s&hostname=%s&port=%u&sport=%u",
+                         priv->serial, priv->name, host, priv->port,
+                         priv->sport);
 
   /* Register device on Melo website */
   msg = soup_message_new ("GET", req);
@@ -493,7 +495,7 @@ melo_discover_add_device (MeloDiscover *disco)
 
 gboolean
 melo_discover_register_device (MeloDiscover *disco, const gchar *name,
-                               guint port)
+                               guint port, guint sport)
 {
   MeloDiscoverPrivate *priv = disco->priv;
   gboolean ret;
@@ -506,6 +508,7 @@ melo_discover_register_device (MeloDiscover *disco, const gchar *name,
   priv->register_device = TRUE;
   priv->name = g_strdup (name);
   priv->port = port;
+  priv->sport = sport;
 
   /* Add device to Melo website */
   ret = melo_discover_add_device (disco);

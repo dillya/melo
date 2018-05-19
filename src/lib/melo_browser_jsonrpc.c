@@ -23,20 +23,20 @@
 
 typedef enum {
   MELO_BROWSER_JSONRPC_LIST_FIELDS_NONE = 0,
-  MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME = 1,
-  MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL_NAME = 2,
-  MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE = 4,
-  MELO_BROWSER_JSONRPC_LIST_FIELDS_CMDS = 8,
-  MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS = 16,
+  MELO_BROWSER_JSONRPC_LIST_FIELDS_ID = 1,
+  MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME = 2,
+  MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS = 4,
+  MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE = 8,
+  MELO_BROWSER_JSONRPC_LIST_FIELDS_ACTIONS = 16,
 
   MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL = ~0,
 } MeloBrowserJSONRPCListFields;
 
 #define MELO_BROWSER_JSONRPC_LIST_FIELDS_DEFAULT \
-  (MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME | \
-   MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL_NAME | \
+  (MELO_BROWSER_JSONRPC_LIST_FIELDS_ID | \
+   MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME | \
    MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE | \
-   MELO_BROWSER_JSONRPC_LIST_FIELDS_CMDS)
+   MELO_BROWSER_JSONRPC_LIST_FIELDS_ACTIONS)
 
 typedef enum {
   MELO_BROWSER_JSONRPC_TAGS_NONE = 0,
@@ -186,16 +186,16 @@ melo_browser_jsonrpc_get_list_fields (JsonObject *obj)
     } else if (!g_strcmp0 (field, "full")) {
       fields = MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL;
       break;
-    } else if (!g_strcmp0 (field, "name"))
+    } else if (!g_strcmp0 (field, "id"))
+      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_ID;
+    else if (!g_strcmp0 (field, "name"))
       fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME;
-    else if (!g_strcmp0 (field, "full_name"))
-      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL_NAME;
-    else if (!g_strcmp0 (field, "type"))
-      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE;
-    else if (!g_strcmp0 (field, "cmds"))
-      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_CMDS;
     else if (!g_strcmp0 (field, "tags"))
       fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS;
+    else if (!g_strcmp0 (field, "type"))
+      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE;
+    else if (!g_strcmp0 (field, "actions"))
+      fields |= MELO_BROWSER_JSONRPC_LIST_FIELDS_ACTIONS;
   }
 
   return fields;
@@ -226,22 +226,35 @@ melo_browser_jsonrpc_list_to_object (const MeloBrowserList *list,
   for (l = list->items; l != NULL; l = l->next) {
     MeloBrowserItem *item = (MeloBrowserItem *) l->data;
     JsonObject *obj = json_object_new ();
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_ID)
+      json_object_set_string_member (obj, "id", item->id);
     if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_NAME)
       json_object_set_string_member (obj, "name", item->name);
-    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_FULL_NAME)
-      json_object_set_string_member (obj, "full_name", item->full_name);
-    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE)
-      json_object_set_string_member (obj, "type", item->type);
-    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_CMDS) {
-      json_object_set_string_member (obj, "add", item->add);
-      json_object_set_string_member (obj, "remove", item->remove);
-    }
     if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TAGS) {
       if (item->tags) {
         JsonObject *tags = melo_tags_to_json_object (item->tags, tags_fields);
         json_object_set_object_member (obj, "tags", tags);
       } else
         json_object_set_null_member (obj, "tags");
+    }
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE)
+      json_object_set_string_member (obj, "type",
+                                 melo_browser_item_type_to_string (item->type));
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_ACTIONS) {
+      JsonArray *actions;
+
+      /* Generate action list */
+      actions = json_array_new ();
+      if (actions) {
+        gint i;
+
+        for (i = 0; i < MELO_BROWSER_ITEM_ACTION_COUNT; i++)
+          if (item->actions & (1 << i))
+            json_array_add_string_element (actions,
+                                        melo_browser_item_action_to_string (i));
+
+        json_object_set_array_member (obj, "actions", actions);
+      }
     }
     json_array_add_object_element (array, obj);
   }
@@ -519,8 +532,8 @@ melo_browser_jsonrpc_item_action (const gchar *method,
                                   gpointer user_data)
 {
   const gchar *path;
-  const gchar *token = NULL;
-  MeloSort sort = MELO_SORT_NONE;
+  MeloBrowserActionParams action_params;
+  MeloBrowserItemAction action;
   MeloBrowser *bro;
   JsonObject *obj;
   gboolean ret = FALSE;
@@ -539,30 +552,24 @@ melo_browser_jsonrpc_item_action (const gchar *method,
 
   /* Get path */
   path = json_object_get_string_member (obj, "path");
+  action = melo_browser_item_action_from_string (
+                                 json_object_get_string_member (obj, "action"));
 
   /* Get token if available */
   if (json_object_has_member (obj, "token"))
-    token = json_object_get_string_member (obj, "token");
+    action_params.token = json_object_get_string_member (obj, "token");
+  else
+    action_params.token = NULL;
 
   /* Get sort */
   if (json_object_has_member (obj, "sort"))
-    sort = melo_sort_from_string (json_object_get_string_member (obj, "sort"));
+    action_params.sort = melo_sort_from_string (
+                                   json_object_get_string_member (obj, "sort"));
+  else
+    action_params.sort = MELO_SORT_NONE;
 
-  /* Do action on item */
-  if (!g_strcmp0 (method, "browser.play")) {
-    MeloBrowserPlayParams params = {
-      .sort = sort, .token = token,
-    };
-
-    ret = melo_browser_play (bro, path, &params);
-  } else if (!g_strcmp0 (method, "browser.add")) {
-    MeloBrowserAddParams params = {
-      .sort = sort, .token = token,
-    };
-
-    ret = melo_browser_add (bro, path, &params);
-  } else if (!g_strcmp0 (method, "browser.remove"))
-    ret = melo_browser_remove (bro, path);
+  /* Do action */
+  ret = melo_browser_action (bro, path, action, &action_params);
   json_object_unref (obj);
   g_object_unref (bro);
 
@@ -665,10 +672,11 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
     .user_data = NULL,
   },
   {
-    .method = "play",
+    .method = "action",
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
               "  {\"name\": \"path\", \"type\": \"string\"},"
+              "  {\"name\": \"action\", \"type\": \"string\"},"
               "  {"
               "    \"name\": \"sort\", \"type\": \"string\","
               "    \"required\": false"
@@ -677,34 +685,6 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
               "    \"name\": \"token\", \"type\": \"string\","
               "    \"required\": false"
               "  }"
-              "]",
-    .result = "{\"type\":\"object\"}",
-    .callback = melo_browser_jsonrpc_item_action,
-    .user_data = NULL,
-  },
-  {
-    .method = "add",
-    .params = "["
-              "  {\"name\": \"id\", \"type\": \"string\"},"
-              "  {\"name\": \"path\", \"type\": \"string\"},"
-              "  {"
-              "    \"name\": \"sort\", \"type\": \"string\","
-              "    \"required\": false"
-              "  },"
-              "  {"
-              "    \"name\": \"token\", \"type\": \"string\","
-              "    \"required\": false"
-              "  }"
-              "]",
-    .result = "{\"type\":\"object\"}",
-    .callback = melo_browser_jsonrpc_item_action,
-    .user_data = NULL,
-  },
-  {
-    .method = "remove",
-    .params = "["
-              "  {\"name\": \"id\", \"type\": \"string\"},"
-              "  {\"name\": \"path\", \"type\": \"string\"}"
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_browser_jsonrpc_item_action,

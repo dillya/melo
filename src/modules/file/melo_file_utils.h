@@ -1,7 +1,7 @@
 /*
- * melo.h: Shared definition of Melo program
+ * melo_file_utils.h: Utils for File module
  *
- * Copyright (C) 2016 Alexandre Dilly <dillya@sparod.com>
+ * Copyright (C) 2018 Alexandre Dilly <dillya@sparod.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -19,26 +19,18 @@
  * Boston, MA  02110-1301, USA.
  */
 
-#ifndef __MELO_H__
-#define __MELO_H__
+#ifndef __MELO_FILE_UTILS_H__
+#define __MELO_FILE_UTILS_H__
 
-#include "melo_httpd.h"
-#include "melo_discover.h"
+#include <glib.h>
+#include <gio/gio.h>
 
-typedef struct _MeloContext MeloContext;
+/* Check if a file is accessible and mount the associated volume if necessary */
+gboolean melo_file_utils_check_and_mount_file (GFile *file,
+                                               GCancellable *cancellable,
+                                               GError **error);
+gboolean melo_file_utils_check_and_mount_uri (const gchar *uri,
+                                              GCancellable *cancellable,
+                                              GError **error);
 
-struct _MeloContext {
-  MeloDiscover *disco;
-  /* Audio settings */
-  struct {
-    gint64 rate;
-    gint64 channels;
-  } audio;
-  /* HTTP server settings */
-  MeloHTTPD *server;
-  gchar *name;
-  gint64 port;
-  gint64 sport;
-};
-
-#endif /* __MELO_H__ */
+#endif /* __MELO_FILE_UTILS_H__ */

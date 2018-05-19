@@ -265,35 +265,15 @@ melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
 }
 
 gboolean
-melo_browser_add (MeloBrowser *browser, const gchar *path,
-                  const MeloBrowserAddParams *params)
+melo_browser_action (MeloBrowser *browser, const gchar *path,
+                     MeloBrowserItemAction action,
+                     const MeloBrowserActionParams *params)
 {
   MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
 
-  g_return_val_if_fail (bclass->add, FALSE);
+  g_return_val_if_fail (bclass->action, FALSE);
 
-  return bclass->add (browser, path, params);
-}
-
-gboolean
-melo_browser_play (MeloBrowser *browser, const gchar *path,
-                   const MeloBrowserPlayParams *params)
-{
-  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
-
-  g_return_val_if_fail (bclass->play, FALSE);
-
-  return bclass->play (browser, path, params);
-}
-
-gboolean
-melo_browser_remove (MeloBrowser *browser, const gchar *path)
-{
-  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
-
-  g_return_val_if_fail (bclass->remove, FALSE);
-
-  return bclass->remove (browser, path);
+  return bclass->action (browser, path, action, params);
 }
 
 gboolean
@@ -333,8 +313,68 @@ melo_browser_list_free (MeloBrowserList *list)
   g_slice_free (MeloBrowserList, list);
 }
 
+static const gchar *melo_browser_item_type_map[MELO_BROWSER_ITEM_TYPE_COUNT] = {
+  [MELO_BROWSER_ITEM_TYPE_MEDIA] = "media",
+  [MELO_BROWSER_ITEM_TYPE_CATEGORY] = "category",
+  [MELO_BROWSER_ITEM_TYPE_FILE] = "file",
+  [MELO_BROWSER_ITEM_TYPE_FOLDER] = "folder",
+  [MELO_BROWSER_ITEM_TYPE_DEVICE] = "device",
+  [MELO_BROWSER_ITEM_TYPE_REMOTE] = "remote",
+  [MELO_BROWSER_ITEM_TYPE_CUSTOM] = "custom",
+};
+
+MeloBrowserItemType
+melo_browser_item_type_from_string (const gchar *type)
+{
+  gint i;
+
+  for (i = 0; i < MELO_BROWSER_ITEM_TYPE_COUNT; i++)
+    if (!g_strcmp0 (melo_browser_item_type_map[i], type))
+      return i;
+
+  return MELO_BROWSER_ITEM_TYPE_CUSTOM;
+}
+
+const gchar *
+melo_browser_item_type_to_string (MeloBrowserItemType type)
+{
+  if (type < MELO_BROWSER_ITEM_TYPE_COUNT)
+    return melo_browser_item_type_map[type];
+  return NULL;
+}
+
+static const gchar *
+melo_browser_item_action_map[MELO_BROWSER_ITEM_ACTION_COUNT] = {
+  [MELO_BROWSER_ITEM_ACTION_PLAY] = "play",
+  [MELO_BROWSER_ITEM_ACTION_ADD] = "add",
+  [MELO_BROWSER_ITEM_ACTION_REMOVE] = "remove",
+  [MELO_BROWSER_ITEM_ACTION_REMOVE_FILE] = "remove_file",
+  [MELO_BROWSER_ITEM_ACTION_EJECT] = "eject",
+  [MELO_BROWSER_ITEM_ACTION_CUSTOM] = "custom",
+};
+
+MeloBrowserItemAction
+melo_browser_item_action_from_string (const gchar *act)
+{
+  gint i;
+
+  for (i = 0; i < MELO_BROWSER_ITEM_ACTION_COUNT; i++)
+    if (!g_strcmp0 (melo_browser_item_action_map[i], act))
+      return i;
+
+  return MELO_BROWSER_ITEM_ACTION_CUSTOM;
+}
+
+const gchar *
+melo_browser_item_action_to_string (MeloBrowserItemAction act)
+{
+  if (act < MELO_BROWSER_ITEM_ACTION_COUNT)
+    return melo_browser_item_action_map[act];
+  return NULL;
+}
+
 MeloBrowserItem *
-melo_browser_item_new (const gchar *name, const gchar *type)
+melo_browser_item_new (const gchar *id, MeloBrowserItemType type)
 {
   MeloBrowserItem *item;
 
@@ -344,8 +384,8 @@ melo_browser_item_new (const gchar *name, const gchar *type)
     return NULL;
 
   /* Set name and type */
-  item->name = g_strdup (name);
-  item->type = g_strdup (type);
+  item->id = g_strdup (id);
+  item->type = type;
 
   return item;
 }
@@ -353,22 +393,16 @@ melo_browser_item_new (const gchar *name, const gchar *type)
 gint
 melo_browser_item_cmp (const MeloBrowserItem *a, const MeloBrowserItem *b)
 {
-  return g_strcmp0 (a->name, b->name);
+  return g_strcmp0 (a->id, b->id);
 }
 
 void
 melo_browser_item_free (MeloBrowserItem *item)
 {
+  if (item->id)
+    g_free (item->id);
   if (item->name)
     g_free (item->name);
-  if (item->full_name)
-    g_free (item->full_name);
-  if (item->type)
-    g_free (item->type);
-  if (item->add)
-    g_free (item->add);
-  if (item->remove)
-    g_free (item->remove);
   if (item->tags)
     melo_tags_unref (item->tags);
   g_slice_free (MeloBrowserItem, item);

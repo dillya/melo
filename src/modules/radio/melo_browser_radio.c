@@ -46,9 +46,10 @@ static MeloBrowserList *melo_browser_radio_get_list (MeloBrowser *browser,
 static MeloBrowserList *melo_browser_radio_search (MeloBrowser *browser,
                                          const gchar *input,
                                          const MeloBrowserSearchParams *params);
-static gboolean melo_browser_radio_play (MeloBrowser *browser,
+static gboolean melo_browser_radio_action (MeloBrowser *browser,
                                          const gchar *path,
-                                         const MeloBrowserPlayParams *params);
+                                         MeloBrowserItemAction action,
+                                         const MeloBrowserActionParams *params);
 
 struct _MeloBrowserRadioPrivate {
   GMutex mutex;
@@ -83,7 +84,7 @@ melo_browser_radio_class_init (MeloBrowserRadioClass *klass)
   bclass->get_info = melo_browser_radio_get_info;
   bclass->get_list = melo_browser_radio_get_list;
   bclass->search = melo_browser_radio_search;
-  bclass->play = melo_browser_radio_play;
+  bclass->action = melo_browser_radio_action;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_browser_radio_finalize;
@@ -150,7 +151,7 @@ melo_browser_radio_parse (MeloBrowserRadio *bradio, const gchar *url)
   array = json_node_get_array (node);
   count = json_array_get_length (array);
   for (i = 0; i < count; i ++) {
-    const gchar *name, *full_name, *type;
+    const gchar *id, *name, *type;
     MeloBrowserItem *item;
 
     /* Get next entry */
@@ -159,14 +160,18 @@ melo_browser_radio_parse (MeloBrowserRadio *bradio, const gchar *url)
       continue;
 
     /* Get name, full_name and type */
-    name = json_object_get_string_member (obj, "id");
-    full_name = json_object_get_string_member (obj, "name");
+    id = json_object_get_string_member (obj, "id");
+    name = json_object_get_string_member (obj, "name");
     type = json_object_get_string_member (obj, "type");
 
     /* Generate new item */
-    item = melo_browser_item_new (name, NULL);
-    item->full_name = full_name ? g_strdup (full_name) : g_strdup ("Unknown");
-    item->type = *type == 'm' ? g_strdup ("category") : g_strdup ("radio");
+    item = melo_browser_item_new (id, 0);
+    if (*type != 'm') {
+      item->type = MELO_BROWSER_ITEM_TYPE_MEDIA;
+      item->actions = MELO_BROWSER_ITEM_ACTION_FIELDS_PLAY;
+    } else
+      item->type = MELO_BROWSER_ITEM_TYPE_CATEGORY;
+    item->name = name ? g_strdup (name) : g_strdup ("Unknown");
 
     /* Add item to list */
     list = g_list_prepend (list, item);
@@ -244,8 +249,9 @@ melo_browser_radio_search (MeloBrowser *browser, const gchar *input,
 }
 
 static gboolean
-melo_browser_radio_play (MeloBrowser *browser, const gchar *path,
-                         const MeloBrowserPlayParams *params)
+melo_browser_radio_action (MeloBrowser *browser, const gchar *path,
+                           MeloBrowserItemAction action,
+                           const MeloBrowserActionParams *params)
 {
   MeloBrowserRadio *bradio = MELO_BROWSER_RADIO (browser);
   SoupMessage *msg;
@@ -256,6 +262,10 @@ melo_browser_radio_play (MeloBrowser *browser, const gchar *path,
   const gchar *name, *surl;
   gchar *url;
   gboolean ret;
+
+  /* Only support play */
+  if (action != MELO_BROWSER_ITEM_ACTION_PLAY)
+    return FALSE;
 
   /* Generate URL */
   url = g_strdup_printf ("http://www.sparod.com/radio%s", path);
