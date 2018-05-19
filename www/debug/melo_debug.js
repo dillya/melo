@@ -307,15 +307,15 @@ function melo_browser_list(method, id, path, off, count, token) {
     /* Generate list */
     $('#browser_list').html("");
     for (var i = 0; i < items.length; i++) {
-      var name = items[i].name;
+      var name = items[i].id;
       var title = name;
-      var npath = path + items[i].name + "/";
-      var fpath = path + items[i].name;
+      var npath = path + items[i].id + "/";
+      var fpath = path + items[i].id;
       var item_class = "browser_media";
 
       /* Use full name when available */
-      if (items[i].full_name != null) {
-        name = items[i].full_name;
+      if (items[i].name != null) {
+        name = items[i].name;
         title = name;
       }
 
@@ -326,7 +326,7 @@ function melo_browser_list(method, id, path, off, count, token) {
           name = items[i].tags.artist + ' - ' + items[i].tags.title;
         else
           name = items[i].tags.title;
-        title = items[i].full_name  + ' (' + name + ')';
+        title = items[i].name  + ' (' + name + ')';
         item_class = "browser_tags";
       }
 
@@ -335,15 +335,15 @@ function melo_browser_list(method, id, path, off, count, token) {
                                         items[i].type + ']</li>');
 
       /* Setup link */
-      if (items[i].type == "directory" ||
-          items[i].type == "category") {
+      if (items[i].type != "media" &&
+          items[i].type != "file") {
         /* Get list of children */
         item.children("a").click([id, npath], function(e) {
           melo_browser_get_list(e.data[0], e.data[1], 0, 0, null);
           return false;
         }).toggleClass("browser_category");
       } else {
-        /* Do action on file / item */
+        /* Do action on item */
         item.children("a").click([id, fpath, sort, token], function(e) {
           melo_browser_action("play", e.data[0], e.data[1], e.data[2],
                               e.data[3], false);
@@ -351,24 +351,16 @@ function melo_browser_list(method, id, path, off, count, token) {
         }).toggleClass(item_class);
       }
 
-      /* Add a link if item is addable */
-      if (items[i].add != null) {
-        item.append(' [<a class="add" href="#">' + items[i].add + '</a>]');
-        item.children('a.add').click([id, fpath, sort, token], function(e) {
-          melo_browser_action("add", e.data[0], e.data[1], e.data[2],
-                              e.data[3], false);
+      /* Add action links */
+      items[i].actions.forEach(function (action) {
+        item.append(' [<a class="' + action + '" href="#">' + action + '</a>]');
+        item.children('a.' + action).click([action, id, fpath, sort, token],
+                                           function(e) {
+          melo_browser_action(e.data[0], e.data[1], e.data[2], e.data[3],
+                              e.data[4], false);
           return false;
         });
-      }
-
-      /* Add a link if item is removable */
-      if (items[i].remove != null) {
-        item.append(' [<a class="rm" href="#">' + items[i].remove + '</a>]');
-        item.children('a.rm').click([id, npath], function(e) {
-          melo_browser_action("remove", e.data[0], e.data[1], null, null, true);
-          return false;
-        });
-      }
+      });
 
       /* Add a link to display tags */
       if (items[i].type != "directory" && items[i].type != "category") {
@@ -417,8 +409,8 @@ function melo_browser_update_list()
 }
 
 function melo_browser_action(action, id, path, sort, token, update) {
-  jsonrpc_call("browser." + action,
-               JSON.parse('["' + id + '","' + path + '","' + sort + '","' + token + '"]'),
+  jsonrpc_call("browser.action",
+               JSON.parse('["' + id + '","' + path + '","' + action + '","' + sort + '","' + token + '"]'),
                null, function(response, data) {
     if (response.error || !response.result)
       return;
