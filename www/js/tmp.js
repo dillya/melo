@@ -253,6 +253,8 @@ function melo_browser_list(method, id, path, off, count, token) {
 
       /* Add action links */
       items[i].actions.forEach(function (action) {
+        if (action == "custom")
+          return;
         item.append(' [<a class="' + action + '" href="#">' + action + '</a>]');
         item.children('a.' + action).click([action, id, fpath, sort, token],
                                            function(e) {
@@ -261,6 +263,19 @@ function melo_browser_list(method, id, path, off, count, token) {
           return false;
         });
       });
+
+      /* Add custom action links */
+      if (items[i].actions_custom) {
+        items[i].actions_custom.forEach(function (action) {
+          item.append(' [<a class="' + action.id + '" href="#">#' + action.name + '</a>]');
+          item.children('a.' + action.id).click([action.id, id, fpath, sort, token],
+                                           function(e) {
+            melo_browser_action(e.data[0], e.data[1], e.data[2], e.data[3],
+                                e.data[4], false);
+            return false;
+          });
+        });
+      }
 
       /* Add a link to display tags */
       if (items[i].type != "directory" && items[i].type != "category") {
