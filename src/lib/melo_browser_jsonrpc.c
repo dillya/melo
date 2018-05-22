@@ -237,9 +237,12 @@ melo_browser_jsonrpc_list_to_object (const MeloBrowserList *list,
       } else
         json_object_set_null_member (obj, "tags");
     }
-    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE)
+    if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_TYPE) {
       json_object_set_string_member (obj, "type",
                                  melo_browser_item_type_to_string (item->type));
+      if (item->type == MELO_BROWSER_ITEM_TYPE_CUSTOM)
+        json_object_set_string_member (obj, "type_custom", item->type_custom);
+    }
     if (fields & MELO_BROWSER_JSONRPC_LIST_FIELDS_ACTIONS) {
       JsonArray *actions;
 
@@ -254,6 +257,27 @@ melo_browser_jsonrpc_list_to_object (const MeloBrowserList *list,
                                         melo_browser_item_action_to_string (i));
 
         json_object_set_array_member (obj, "actions", actions);
+      }
+
+      /* Generate custom action list */
+      if (item->actions_custom) {
+        actions = json_array_new ();
+        if (actions) {
+          JsonObject *o;
+
+          while (item->actions_custom->id) {
+            o = json_object_new ();
+            if (o) {
+              json_object_set_string_member (o, "id", item->actions_custom->id);
+              json_object_set_string_member (o, "name",
+                                             item->actions_custom->name);
+              json_array_add_object_element (actions, o);
+            }
+            item->actions_custom++;
+          }
+
+          json_object_set_array_member (obj, "actions_custom", actions);
+        }
       }
     }
     json_array_add_object_element (array, obj);

@@ -44,6 +44,16 @@ enum {
   PROP_LAST
 };
 
+enum {
+  REGISTER_BROWSER,
+  UNREGISTER_BROWSER,
+  REGISTER_PLAYER,
+  UNREGISTER_PLAYER,
+  LAST_SIGNAL
+};
+
+static guint melo_module_signals[LAST_SIGNAL];
+
 static void melo_module_set_property (GObject *object, guint property_id,
                                       const GValue *value, GParamSpec *pspec);
 static void melo_module_get_property (GObject *object, guint property_id,
@@ -87,6 +97,26 @@ melo_module_class_init (MeloModuleClass *klass)
       g_param_spec_string ("id", "ID", "Module ID", NULL,
                            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                            G_PARAM_STATIC_STRINGS));
+
+  /* Install signals for browsers */
+  melo_module_signals[REGISTER_BROWSER] =
+    g_signal_new ("register-browser", G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1,
+                  MELO_TYPE_BROWSER);
+  melo_module_signals[UNREGISTER_BROWSER] =
+    g_signal_new ("unregister-browser", G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1,
+                  MELO_TYPE_BROWSER);
+
+  /* Install signals for players */
+  melo_module_signals[REGISTER_PLAYER] =
+    g_signal_new ("register-player", G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1,
+                  MELO_TYPE_PLAYER);
+  melo_module_signals[UNREGISTER_PLAYER] =
+    g_signal_new ("unregister-player", G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1,
+                  MELO_TYPE_PLAYER);
 }
 
 static void
@@ -173,8 +203,7 @@ melo_module_register_browser (MeloModule *module, MeloBrowser *browser)
                                       g_object_ref (browser));
 
   /* Signal module for attachment */
-  if (mclass->register_browser)
-    mclass->register_browser (module, browser);
+  g_signal_emit (module, melo_module_signals[REGISTER_BROWSER], 0, browser);
 
   /* Unlock browser list */
   g_mutex_unlock (&priv->browser_mutex);
@@ -202,8 +231,7 @@ melo_module_unregister_browser (MeloModule *module, const char *id)
     goto unlock;
 
   /* Signal module for remove */
-  if (mclass->unregister_browser)
-    mclass->unregister_browser (module, bro);
+  g_signal_emit (module, melo_module_signals[UNREGISTER_BROWSER], 0, bro);
 
   /* Remove browser from list */
   priv->browser_list = g_list_remove (priv->browser_list, bro);
@@ -252,8 +280,7 @@ melo_module_register_player (MeloModule *module, MeloPlayer *player)
                                       g_object_ref (player));
 
   /* Signal module for attachment */
-  if (mclass->register_player)
-    mclass->register_player (module, player);
+  g_signal_emit (module, melo_module_signals[REGISTER_PLAYER], 0, player);
 
   /* Unlock player list */
   g_mutex_unlock (&priv->player_mutex);
@@ -281,8 +308,7 @@ melo_module_unregister_player (MeloModule *module, const char *id)
     goto unlock;
 
   /* Signal module for remove */
-  if (mclass->unregister_player)
-    mclass->unregister_player (module, play);
+  g_signal_emit (module, melo_module_signals[UNREGISTER_PLAYER], 0, play);
 
   /* Remove player from list */
   priv->player_list = g_list_remove (priv->player_list, play);

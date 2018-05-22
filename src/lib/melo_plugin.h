@@ -25,7 +25,7 @@
 #include <glib.h>
 #include <gmodule.h>
 
-#define MELO_API_VERSION 2
+#define MELO_API_VERSION 4
 
 typedef struct _MeloPlugin MeloPlugin;
 typedef gboolean (*MeloPluginEnable) (void);
