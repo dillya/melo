@@ -73,7 +73,6 @@ melo_radio_class_init (MeloRadioClass *klass)
   GObjectClass *oclass = G_OBJECT_CLASS (klass);
 
   mclass->get_info = melo_radio_get_info;
-  mclass->register_browser = melo_radio_register_browser;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_radio_finalize;
@@ -96,6 +95,10 @@ melo_radio_init (MeloRadio *self)
 
   /* Setup playlist with cover URL override */
   g_object_set (G_OBJECT (priv->playlist), "override-cover-url", TRUE, NULL);
+
+  /* Catch new browser registration */
+  g_signal_connect (self, "register-browser",
+                    (GCallback) melo_radio_register_browser, NULL);
 
   /* Register browser and player */
   melo_module_register_browser (MELO_MODULE (self), priv->radios);
