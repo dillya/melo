@@ -45,6 +45,7 @@ typedef struct _MeloBrowserList MeloBrowserList;
 typedef enum _MeloBrowserItemType MeloBrowserItemType;
 typedef enum _MeloBrowserItemAction MeloBrowserItemAction;
 typedef enum _MeloBrowserItemActionFields MeloBrowserItemActionFields;
+typedef struct _MeloBrowserItemActionCustom MeloBrowserItemActionCustom;
 typedef struct _MeloBrowserItem MeloBrowserItem;
 
 typedef enum _MeloBrowserTagsMode MeloBrowserTagsMode;
@@ -165,7 +166,9 @@ struct _MeloBrowserItem {
   gchar *name;
   MeloTags *tags;
   MeloBrowserItemType type;
+  const gchar *type_custom;
   MeloBrowserItemActionFields actions;
+  const MeloBrowserItemActionCustom *actions_custom;
 };
 
 enum _MeloBrowserTagsMode {
