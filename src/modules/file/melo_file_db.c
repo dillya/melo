@@ -499,6 +499,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   gboolean join_album = FALSE;
   gboolean join_genre = FALSE;
   gboolean join_path = FALSE;
+  gboolean join = FALSE;
   GString *conds;
   const gchar *file_cond = NULL;
   const gchar *title_cond = NULL;
@@ -517,8 +518,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
     tags_fields &= ~MELO_TAGS_FIELDS_COVER;
 
   /* Generate columns for request */
-  cols = g_stpcpy (columns,
-                   type <= MELO_FILE_DB_TYPE_SONG ? "song.rowid," : "rowid,");
+  cols = g_stpcpy (columns, "m.rowid,");
   if (type == MELO_FILE_DB_TYPE_FILE) {
     cols = g_stpcpy (cols, "path,");
     join_path = TRUE;
@@ -546,11 +546,9 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
     cols = g_stpcpy (cols, "tracks,");
   if (tags_fields & MELO_TAGS_FIELDS_COVER_URL)
-    cols = g_stpcpy (cols,
-                     type <= MELO_FILE_DB_TYPE_SONG ? "song.cover," : "cover,");
+    cols = g_stpcpy (cols, "m.cover,");
   if (tags_fields & MELO_TAGS_FIELDS_COVER)
-    cols = g_stpcpy (cols,
-                     type <= MELO_FILE_DB_TYPE_SONG ? "song.cover," : "cover,");
+    cols = g_stpcpy (cols, "m.cover,");
   cols[-1] = '\0';
 
   /* Generate SQL request */
@@ -578,7 +576,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
         }
         break;
       case MELO_FILE_DB_FIELDS_FILE_ID:
-        sqlite3_snprintf (sizeof (temp), temp, "song.rowid = '%d'",
+        sqlite3_snprintf (sizeof (temp), temp, "m.rowid = '%d'",
                           va_arg (args, gint));
         break;
       case MELO_FILE_DB_FIELDS_TITLE:
@@ -592,7 +590,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
         break;
       case MELO_FILE_DB_FIELDS_ARTIST:
         if (match) {
-          sqlite3_snprintf (sizeof (temp), temp, "song.artist_id IN ("
+          sqlite3_snprintf (sizeof (temp), temp, "m.artist_id IN ("
                         "SELECT docid FROM artist_fts WHERE artist MATCH '%q')",
                         va_arg (args, const gchar *));
         } else {
@@ -604,10 +602,11 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
       case MELO_FILE_DB_FIELDS_ARTIST_ID:
         sqlite3_snprintf (sizeof (temp), temp, "artist_id = '%d'",
                           va_arg (args, gint));
+        join = type != MELO_FILE_DB_TYPE_ARTIST;
         break;
       case MELO_FILE_DB_FIELDS_ALBUM:
         if (match) {
-          sqlite3_snprintf (sizeof (temp), temp, "song.album_id IN ("
+          sqlite3_snprintf (sizeof (temp), temp, "m.album_id IN ("
                           "SELECT docid FROM album_fts WHERE album MATCH '%q')",
                           va_arg (args, const gchar *));
         } else {
@@ -619,10 +618,11 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
       case MELO_FILE_DB_FIELDS_ALBUM_ID:
         sqlite3_snprintf (sizeof (temp), temp, "album_id = '%d'",
                           va_arg (args, gint));
+        join = type != MELO_FILE_DB_TYPE_ALBUM;
         break;
       case MELO_FILE_DB_FIELDS_GENRE:
         if (match) {
-          sqlite3_snprintf (sizeof (temp), temp, "song.genre_id IN ("
+          sqlite3_snprintf (sizeof (temp), temp, "mg.genre_id IN ("
                           "SELECT docid FROM genre_fts WHERE genre MATCH '%q')",
                           va_arg (args, const gchar *));
         } else {
@@ -634,6 +634,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
       case MELO_FILE_DB_FIELDS_GENRE_ID:
         sqlite3_snprintf (sizeof (temp), temp, "genre_id = '%d'",
                           va_arg (args, gint));
+        join = type != MELO_FILE_DB_TYPE_GENRE;
         break;
       case MELO_FILE_DB_FIELDS_DATE:
         sqlite3_snprintf (sizeof (temp), temp, "date = '%d'",
@@ -672,7 +673,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
 
     /* Append a mix condition for song FTS table */
     sqlite3_snprintf (sizeof (temp), temp,
-                 "song.rowid IN (SELECT docid FROM song_fts WHERE %s%q%s%s%q')",
+                 "m.rowid IN (SELECT docid FROM song_fts WHERE %s%q%s%s%q')",
                  file_cond ? "file MATCH '" : "", file_cond ? file_cond : "",
                  file_cond && title_cond ? "' OR " : "",
                  title_cond ? "title MATCH '" : "",
@@ -701,29 +702,33 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   switch (type) {
     case MELO_FILE_DB_TYPE_SONG:
     case MELO_FILE_DB_TYPE_FILE:
-      sql = sqlite3_mprintf ("SELECT %s FROM song %s %s %s %s WHERE %s %s%s%s "
-         "LIMIT %d,%d", columns,
-         join_artist ? "LEFT JOIN artist ON song.artist_id = artist.rowid" : "",
-         join_album ? "LEFT JOIN album ON song.album_id = album.rowid" : "",
-         join_genre ? "LEFT JOIN genre ON song.genre_id = genre.rowid" : "",
-         join_path ? "LEFT JOIN path ON song.path_id = path.rowid" : "",
-         conditions, order, order_col, order_sort, offset, count);
+      sql = sqlite3_mprintf ("SELECT %s FROM song m %s %s %s %s "
+            "WHERE %s %s%s%s LIMIT %d,%d", columns,
+            join_artist ? "LEFT JOIN artist ON m.artist_id = artist.rowid" : "",
+            join_album ? "LEFT JOIN album ON m.album_id = album.rowid" : "",
+            join_genre ? "LEFT JOIN genre ON m.genre_id = genre.rowid" : "",
+            join_path ? "LEFT JOIN path ON m.path_id = path.rowid" : "",
+            conditions, order, order_col, order_sort, offset, count);
       break;
     case MELO_FILE_DB_TYPE_ARTIST:
-      sql = sqlite3_mprintf ("SELECT %s FROM artist WHERE %s %s%s%s "
-                             "LIMIT %d,%d",
-                             columns, conditions, order, order_col, order_sort,
-                             offset, count);
+      sql = sqlite3_mprintf ("SELECT DISTINCT %s FROM artist m %s "
+                       "WHERE %s %s%s%s LIMIT %d,%d", columns,
+                       join ? "LEFT JOIN song ON song.artist_id = m.rowid" : "",
+                       conditions, order, order_col, order_sort, offset, count);
       break;
     case MELO_FILE_DB_TYPE_ALBUM:
-      sql = sqlite3_mprintf ("SELECT %s FROM album WHERE %s %s%s%s LIMIT %d,%d",
-                             columns, conditions, order, order_col, order_sort,
-                             offset, count);
+      sql = sqlite3_mprintf ("SELECT DISTINCT %s FROM album m %s "
+                        "WHERE %s %s%s%s LIMIT %d,%d", columns,
+                        join ? "LEFT JOIN song ON song.album_id = m.rowid" : "",
+                        conditions, order, order_col, order_sort, offset,
+                        count);
       break;
     case MELO_FILE_DB_TYPE_GENRE:
-      sql = sqlite3_mprintf ("SELECT %s FROM genre WHERE %s %s%s%s LIMIT %d,%d",
-                             columns, conditions, order, order_col, order_sort,
-                             offset, count);
+      sql = sqlite3_mprintf ("SELECT DISTINCT %s FROM genre m %s "
+                       "WHERE %s %s%s%s LIMIT %d,%d", columns,
+                        join ? "LEFT JOIN song ON song.genre_id = m.rowid" : "",
+                        conditions, order, order_col, order_sort, offset,
+                        count);
       break;
     default:
       sql = NULL;
