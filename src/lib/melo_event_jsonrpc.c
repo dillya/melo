@@ -162,7 +162,7 @@ static MeloEventJsonrpcString melo_event_jsonrpc_strings[] = {
 };
 
 JsonObject *
-melo_event_jsonrpc_evnet_to_object (MeloEventType type, guint event,
+melo_event_jsonrpc_event_to_object (MeloEventType type, guint event,
                                     const gchar *id, gpointer data)
 {
   const gchar *event_string = NULL;

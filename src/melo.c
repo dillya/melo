@@ -83,7 +83,7 @@ melo_event_callback (MeloEventClient *client, MeloEventType type, guint event,
   gchar *str;
 
   /* Convert event to Json object */
-  obj = melo_event_jsonrpc_evnet_to_object (type, event, id, data);
+  obj = melo_event_jsonrpc_event_to_object (type, event, id, data);
   if (obj) {
     /* Create node */
     node = json_node_new (JSON_NODE_OBJECT);
