@@ -23,6 +23,14 @@
 #include "melo_browser_jsonrpc.h"
 #include "melo_player_jsonrpc.h"
 
+/**
+ * SECTION:melo_module_jsonrpc
+ * @title: MeloModuleJsonRPC
+ * @short_description: Basic JSON-RPC methods for Melo Module
+ *
+ * Helper which implements all basic JSON-RPC methods for #MeloModule.
+ */
+
 typedef enum {
   MELO_MODULE_JSONRPC_INFO_FIELDS_NONE = 0,
   MELO_MODULE_JSONRPC_INFO_FIELDS_NAME = 1,
@@ -516,7 +524,11 @@ static MeloJSONRPCMethod melo_module_jsonrpc_methods[] = {
   },
 };
 
-/* Register / Unregister methods */
+/**
+ * melo_module_jsonrpc_register_methods:
+ *
+ * Register all JSON-RPC methods for #MeloModule.
+ */
 void
 melo_module_jsonrpc_register_methods (void)
 {
@@ -524,6 +536,11 @@ melo_module_jsonrpc_register_methods (void)
                                  G_N_ELEMENTS (melo_module_jsonrpc_methods));
 }
 
+/**
+ * melo_module_jsonrpc_unregister_methods:
+ *
+ * Unregister all JSON-RPC methods for #MeloModule.
+ */
 void
 melo_module_jsonrpc_unregister_methods (void)
 {

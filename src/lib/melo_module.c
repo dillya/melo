@@ -21,6 +21,45 @@
 
 #include "melo_module.h"
 
+/**
+ * SECTION:melo_module
+ * @title: MeloModule
+ * @short_description: Base class for Melo Module
+ *
+ * #MeloModule is the main object used in Melo to bring new functionalities to
+ * Melo. A #MeloModule can handle one or more #MeloBrowser and #MeloPlayer to
+ * bring browsing and/or playing capabilities for a specific service and/or
+ * protocol.
+ *
+ * A new #MeloModule is instance is added to Melo with melo_module_register()
+ * and it can be removed (and freed) with melo_module_unregister().
+ * Each #MeloModule instance is associated to an unique ID which can be used to
+ * retrieve it with melo_module_get_module_by_id().
+ *
+ * In the #MeloModule implementation, a #MeloBrowser instance can be attached
+ * with melo_module_register_browser() and a #MeloPlayer instance can be
+ * attached with melo_module_register_player(). The #MeloModule takes a
+ * reference on the #MeloBrowser / #MeloPlayer instance, so when calling
+ * melo_module_unregister_browser() or melo_module_unregister_player() the
+ * reference is only decremented for the instance.
+ *
+ * A list of #MeloBrowser / #MeloPlayer attached instance can be retrieved
+ * respectively with melo_module_get_browser_list() and
+ * melo_module_get_player_list().
+ *
+ * Each #MeloModule must defines a #MeloModuleInfo which provides the details
+ * about the #MeloModule instance (its name, description, capabilities, ...).
+ * This structure is retrieved through the melo_module_get_info() which must be
+ * implemented in #MeloModule derived class.
+ *
+ * A #MeloModule instance comes always with a default directory where to store
+ * specific files for persistence. The path can be retrieved with
+ * melo_module_build_path().
+ *
+ * A #MeloConfig can be attached to the #MeloModule instance in defining the @id
+ * field of the #MeloModuleInfo defined.
+ */
+
 /* Internal module list */
 G_LOCK_DEFINE_STATIC (melo_module_mutex);
 static GHashTable *melo_modules_hash = NULL;
@@ -92,27 +131,61 @@ melo_module_class_init (MeloModuleClass *klass)
   object_class->set_property = melo_module_set_property;
   object_class->get_property = melo_module_get_property;
 
-  /* Install ID property */
+  /**
+   * MeloModule:id:
+   *
+   * The ID of the module. This must be set during the construct and it can
+   * be only read after instantiation.
+   */
   g_object_class_install_property (object_class, PROP_ID,
       g_param_spec_string ("id", "ID", "Module ID", NULL,
                            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                            G_PARAM_STATIC_STRINGS));
 
-  /* Install signals for browsers */
+  /**
+   * MeloModule::register-browser:
+   * @module: the module
+   * @browser: the #MeloBrowser which has been registered
+   *
+   * Will be emitted after the browser was attached to the module.
+   */
   melo_module_signals[REGISTER_BROWSER] =
     g_signal_new ("register-browser", G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1,
                   MELO_TYPE_BROWSER);
+
+  /**
+   * MeloModule::unregister-browser:
+   * @module: the module
+   * @browser: the #MeloBrowser which has been unregistered
+   *
+   * Will be emitted after the browser was detached from the module and before
+   * being unrefed.
+   */
   melo_module_signals[UNREGISTER_BROWSER] =
     g_signal_new ("unregister-browser", G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1,
                   MELO_TYPE_BROWSER);
 
-  /* Install signals for players */
+  /**
+   * MeloModule::register-player:
+   * @module: the module
+   * @player: the #MeloPlayer which has been registered
+   *
+   * Will be emitted after the player was attached to the module.
+   */
   melo_module_signals[REGISTER_PLAYER] =
     g_signal_new ("register-player", G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1,
                   MELO_TYPE_PLAYER);
+  /**
+   * MeloModule::unregister-player:
+   * @module: the module
+   * @player: the #MeloPlayer which has been unregistered
+   *
+   * Will be emitted after the player was detached from the module and before
+   * being unrefed.
+   */
   melo_module_signals[UNREGISTER_PLAYER] =
     g_signal_new ("unregister-player", G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1,
@@ -136,6 +209,14 @@ melo_module_init (MeloModule *self)
   priv->player_list = NULL;
 }
 
+/**
+ * melo_module_get_id:
+ * @module: the module
+ *
+ * Get the #MeloModule ID.
+ *
+ * Returns: the ID of the #MeloModule.
+ */
 const gchar *
 melo_module_get_id (MeloModule *module)
 {
@@ -173,6 +254,14 @@ melo_module_get_property (GObject *object, guint property_id, GValue *value,
   }
 }
 
+/**
+ * melo_module_get_info:
+ * @module: the module
+ *
+ * Get the details of the #MeloModule.
+ *
+ * Returns: a #MeloModuleInfo or %NULL if get_info callback is not defined.
+ */
 const MeloModuleInfo *
 melo_module_get_info (MeloModule *module)
 {
@@ -184,7 +273,16 @@ melo_module_get_info (MeloModule *module)
   return mclass->get_info (module);
 }
 
-/* Register a browser into module */
+/**
+ * melo_module_register_browser:
+ * @module: the module
+ * @browser: the #MeloBrowser to attach
+ *
+ * The #MeloBrowser is attached to the #MeloModule and its instance will be
+ * listed with melo_module_get_browser_list().
+ *
+ * Returns: %TRUE if browser has been attached to the module.
+ */
 gboolean
 melo_module_register_browser (MeloModule *module, MeloBrowser *browser)
 {
@@ -215,6 +313,14 @@ failed:
   return FALSE;
 }
 
+/**
+ * melo_module_unregister_browser:
+ * @module: the module
+ * @id: the ID of the #MeloBrowser to detach
+ *
+ * The #MeloBrowser is retrieved by its ID and removed from internal list of the
+ * #MeloModule.
+ */
 void
 melo_module_unregister_browser (MeloModule *module, const char *id)
 {
@@ -243,6 +349,17 @@ unlock:
   g_mutex_unlock (&priv->browser_mutex);
 }
 
+/**
+ * melo_module_get_browser_list:
+ * @module: the module
+ *
+ * Get a #GList of all #MeloBrowser attached to the #MeloModule.
+ *
+ * Returns: (transfer full) (element-type MeloBrowser): a #GList of all
+ * #MeloBrowser attached to the module. You must free list and its data when you
+ * are done with it. You can use g_list_free_full() with g_object_unref() to do
+ * this.
+ */
 GList *
 melo_module_get_browser_list (MeloModule *module)
 {
@@ -261,7 +378,16 @@ melo_module_get_browser_list (MeloModule *module)
   return list;
 }
 
-/* Register a player into module */
+/**
+ * melo_module_register_player:
+ * @module: the module
+ * @player: the #MeloPlayer to attach
+ *
+ * The #MeloPlayer is attached to the #MeloModule and its instance will be
+ * listed with melo_module_get_player_list().
+ *
+ * Returns: %TRUE if player has been attached to the module.
+ */
 gboolean
 melo_module_register_player (MeloModule *module, MeloPlayer *player)
 {
@@ -292,6 +418,14 @@ failed:
   return FALSE;
 }
 
+/**
+ * melo_module_unregister_player:
+ * @module: the module
+ * @id: the ID of the #MeloPlayer to detach
+ *
+ * The #MeloPlayer is retrieved by its ID and removed from internal list of the
+ * #MeloModule.
+ */
 void
 melo_module_unregister_player (MeloModule *module, const char *id)
 {
@@ -320,6 +454,17 @@ unlock:
   g_mutex_unlock (&priv->player_mutex);
 }
 
+/**
+ * melo_module_get_player_list:
+ * @module: the module
+ *
+ * Get a #GList of all #MeloPlayer attached to the #MeloModule.
+ *
+ * Returns: (transfer full) (element-type MeloPlayer): a #GList of all
+ * #MeloPlayer attached to the module. You must free list and its data when you
+ * are done with it. You can use g_list_free_full() with g_object_unref() to do
+ * this.
+ */
 GList *
 melo_module_get_player_list (MeloModule *module)
 {
@@ -338,7 +483,17 @@ melo_module_get_player_list (MeloModule *module)
   return list;
 }
 
-/* Register a new module */
+/**
+ * melo_module_register:
+ * @type: the type ID of the #MeloModule subtype to register (and instantiate)
+ * @id: the #MeloModule ID to use for the new instance
+ *
+ * A new #MeloModule subtype is instantiated and registered into global module
+ * list of Melo. The @id provided is used to identify the #MeloModule instance
+ * and can be used to retrieve it with melo_module_get_module_by_id().
+ *
+ * Returns: %TRUE if module has been instantiated and registered.
+ */
 gboolean
 melo_module_register (GType type, const gchar *id)
 {
@@ -377,6 +532,13 @@ failed:
   return FALSE;
 }
 
+/**
+ * melo_module_unregister:
+ * @id: the #MeloModule ID to unregister and unref
+ *
+ * The #MeloModule instance is retrieved with its ID and removed from global
+ * module list. Then, it is unref.
+ */
 void
 melo_module_unregister (const gchar *id)
 {
@@ -406,6 +568,15 @@ unlock:
   G_UNLOCK (melo_module_mutex);
 }
 
+/**
+ * melo_module_get_module_list:
+ *
+ * Get a #GList of all #MeloModule registered.
+ *
+ * Returns: (transfer full): a #GList of all #MeloModule registered. You must
+ * free list and its data when you are done with it. You can use
+ * g_list_free_full() with g_object_unref() to do this.
+ */
 GList *
 melo_module_get_module_list (void)
 {
@@ -423,6 +594,15 @@ melo_module_get_module_list (void)
   return list;
 }
 
+/**
+ * melo_module_get_module_by_id:
+ * @id: the #MeloModule ID to retrieve
+ *
+ * Get an instance of the #MeloModule with its ID.
+ *
+ * Returns: (transfer full): the #MeloModule instance or %NULL if not found. Use
+ * g_object_unref() after usage.
+ */
 MeloModule *
 melo_module_get_module_by_id (const gchar *id)
 {
@@ -444,6 +624,17 @@ melo_module_get_module_by_id (const gchar *id)
   return mod;
 }
 
+/**
+ * melo_module_build_path:
+ * @module: the module
+ * @file: name of the file to use
+ *
+ * Generate the full path to a file which will be stored in the default
+ * dedicated folder of the #MeloModule.
+ *
+ * Returns: (transfer full): the full path of the file. The string must be freed
+ * after usage with g_free().
+ */
 gchar *
 melo_module_build_path (MeloModule *module, const gchar *file)
 {
