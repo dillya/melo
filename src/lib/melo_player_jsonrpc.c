@@ -21,6 +21,14 @@
 
 #include "melo_player_jsonrpc.h"
 
+/**
+ * SECTION:melo_player_jsonrpc
+ * @title: MeloPlayerJsonRPC
+ * @short_description: Basic JSON-RPC methods for Melo Player
+ *
+ * Helper which implements all basic JSON-RPC methods for #MeloPlayer.
+ */
+
 static MeloPlayer *
 melo_player_jsonrpc_get_player (JsonObject *obj, JsonNode **error)
 {
@@ -39,6 +47,16 @@ melo_player_jsonrpc_get_player (JsonObject *obj, JsonNode **error)
   return NULL;
 }
 
+/**
+ * melo_player_jsonrpc_get_info_fields:
+ * @obj: the #JsonObject to parse
+ * @name: the name of the #JsonArray in @obj containing the fields
+ *
+ * Generate a #MeloPlayerJSONRPCInfoFields from a #JsonObject passed in @obj,
+ * in order to know which fields of #MeloPlayerInfo are requested.
+ *
+ * Returns: a #MeloPlayerJSONRPCInfoFields generated from the object.
+ */
 MeloPlayerJSONRPCInfoFields
 melo_player_jsonrpc_get_info_fields (JsonObject *obj, const gchar *name)
 {
@@ -79,6 +97,18 @@ melo_player_jsonrpc_get_info_fields (JsonObject *obj, const gchar *name)
   return fields;
 }
 
+/**
+ * melo_player_jsonrpc_info_to_object:
+ * @id: the ID of the #MeloPlayer from which getting the #MeloPlayerInfo
+ * @info: the #MeloPlayerInfo associated to the #MeloPlayer
+ * @fields: the fields to fill in the #JsonObject from the @info
+ *
+ * Generate a #JsonObject which contains the translated details on the
+ * #MeloPlayer pointed by @id.
+ *
+ * Returns: (transfer full): a new #JsonObject containing request details or
+ * %NULL if an error occurred.
+ */
 JsonObject *
 melo_player_jsonrpc_info_to_object (const gchar *id,
                                     const MeloPlayerInfo *info,
@@ -160,6 +190,20 @@ melo_player_jsonrpc_get_status_fields (JsonObject *obj, const char *name)
   return fields;
 }
 
+/**
+ * melo_player_jsonrpc_status_to_object:
+ * @status: the #MeloPlayerStatus associated to the #MeloPlayer
+ * @fields: the fields to fill in the #JsonObject from the @status
+ * @tags_fields: the fields to copy from the #MeloTags included in the
+ *    #MeloPlayerStatus
+ * @tags_timestamp: the timestamp from #MeloTags
+ *
+ * Generate a #JsonObject which contains the translated status handled by the
+ * #MeloPlayerStatus pointed by @status.
+ *
+ * Returns: (transfer full): a new #JsonObject containing request status or
+ * %NULL if an error occurred.
+ */
 JsonObject *
 melo_player_jsonrpc_status_to_object (const MeloPlayerStatus *status,
                                       MeloPlayerJSONRPCStatusFields fields,
@@ -734,7 +778,11 @@ static MeloJSONRPCMethod melo_player_jsonrpc_methods[] = {
   },
 };
 
-/* Register / Unregister methods */
+/**
+ * melo_player_jsonrpc_register_methods:
+ *
+ * Register all JSON-RPC methods for #MeloPlayer.
+ */
 void
 melo_player_jsonrpc_register_methods (void)
 {
@@ -742,6 +790,11 @@ melo_player_jsonrpc_register_methods (void)
                                  G_N_ELEMENTS (melo_player_jsonrpc_methods));
 }
 
+/**
+ * melo_player_jsonrpc_unregister_methods:
+ *
+ * Unregister all JSON-RPC methods for #MeloPlayer.
+ */
 void
 melo_player_jsonrpc_unregister_methods (void)
 {

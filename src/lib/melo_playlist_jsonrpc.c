@@ -21,6 +21,14 @@
 
 #include "melo_playlist_jsonrpc.h"
 
+/**
+ * SECTION:melo_playlist_jsonrpc
+ * @title: MeloPlaylistJsonRPC
+ * @short_description: Basic JSON-RPC methods for Melo Play list
+ *
+ * Helper which implements all basic JSON-RPC methods for #MeloPlaylist.
+ */
+
 typedef enum {
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NONE = 0,
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME = 1,
@@ -540,7 +548,11 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
   },
 };
 
-/* Register / Unregister methods */
+/**
+ * melo_playlist_jsonrpc_register_methods:
+ *
+ * Register all JSON-RPC methods for #MeloPlaylist.
+ */
 void
 melo_playlist_jsonrpc_register_methods (void)
 {
@@ -548,6 +560,11 @@ melo_playlist_jsonrpc_register_methods (void)
                                  G_N_ELEMENTS (melo_playlist_jsonrpc_methods));
 }
 
+/**
+ * melo_playlist_jsonrpc_unregister_methods:
+ *
+ * Unregister all JSON-RPC methods for #MeloPlaylist.
+ */
 void
 melo_playlist_jsonrpc_unregister_methods (void)
 {

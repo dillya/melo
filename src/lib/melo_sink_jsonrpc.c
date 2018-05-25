@@ -21,6 +21,14 @@
 
 #include "melo_sink_jsonrpc.h"
 
+/**
+ * SECTION:melo_sink_jsonrpc
+ * @title: MeloSinkJsonRPC
+ * @short_description: Basic JSON-RPC methods for Melo Sink
+ *
+ * Helper which implements all basic JSON-RPC methods for #MeloSink.
+ */
+
 typedef enum {
   MELO_SINK_JSONRPC_FIELDS_NONE = 0,
   MELO_SINK_JSONRPC_FIELDS_ID,
@@ -333,7 +341,11 @@ static MeloJSONRPCMethod melo_sink_jsonrpc_methods[] = {
   },
 };
 
-/* Register / Unregister methods */
+/**
+ * melo_sink_jsonrpc_register_methods:
+ *
+ * Register all JSON-RPC methods for #MeloSink.
+ */
 void
 melo_sink_jsonrpc_register_methods (void)
 {
@@ -341,6 +353,11 @@ melo_sink_jsonrpc_register_methods (void)
                                  G_N_ELEMENTS (melo_sink_jsonrpc_methods));
 }
 
+/**
+ * melo_sink_jsonrpc_unregister_methods:
+ *
+ * Unregister all JSON-RPC methods for #MeloSink.
+ */
 void
 melo_sink_jsonrpc_unregister_methods (void)
 {

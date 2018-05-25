@@ -21,6 +21,14 @@
 
 #include "melo_config_jsonrpc.h"
 
+/**
+ * SECTION:melo_config_jsonrpc
+ * @title: MeloConfigJsonRPC
+ * @short_description: Basic JSON-RPC methods for Melo Configuratio
+ *
+ * Helper which implements all basic JSON-RPC methods for #MeloConfig.
+ */
+
 static MeloConfig *
 melo_config_jsonrpc_get_config (JsonObject *obj, JsonNode **error)
 {
@@ -379,7 +387,11 @@ static MeloJSONRPCMethod melo_config_jsonrpc_methods[] = {
   },
 };
 
-/* Register / Unregister methods */
+/**
+ * melo_config_jsonrpc_register_methods:
+ *
+ * Register all JSON-RPC methods for #MeloConfig.
+ */
 void
 melo_config_jsonrpc_register_methods (void)
 {
@@ -387,6 +399,11 @@ melo_config_jsonrpc_register_methods (void)
                                  G_N_ELEMENTS (melo_config_jsonrpc_methods));
 }
 
+/**
+ * melo_config_jsonrpc_unregister_methods:
+ *
+ * Unregister all JSON-RPC methods for #MeloConfig.
+ */
 void
 melo_config_jsonrpc_unregister_methods (void)
 {
