@@ -27,6 +27,26 @@
 #include "config.h"
 #endif
 
+/**
+ * SECTION:melo_jsonrpc
+ * @title: MeloJsonRPC
+ * @short_description: A JSON-RPC 2.0 parser
+ *
+ * Melo implements a global JSON-RPC parser which handles many JSON-RPC methods
+ * registered with melo_jsonrpc_register_method() or with
+ * melo_jsonrpc_register_methods().
+ *
+ * Any code can then call the melo_jsonrpc_parse_request() to parse a string
+ * containing a JSON-RPC request.
+ *
+ * It allows possibility to any object in Melo to register its own JSON-RPC
+ * methods and be called when a new request is received through an HTTP server
+ * or any else type of transport protocol like WebSocket.
+ *
+ * The melo_jsonrpc_parse_request() should be only called by the main
+ * application and not from any Melo object like #MeloModule.
+ */
+
 typedef struct _MeloJSONRPCInternalMethod {
   /* Schema nodes */
   JsonArray *params;
@@ -69,6 +89,22 @@ melo_jsonrpc_free_method (gpointer data)
   g_slice_free (MeloJSONRPCInternalMethod, m);
 }
 
+/**
+ * melo_jsonrpc_register_method:
+ * @group: prefix of the method
+ * @method: the method name
+ * @params: the schema of the parameters accepted as JSON
+ * @result: the schema of the result provided as JSON
+ * @callback: the callback of type #MeloJSONRPCCallback to call when @method,
+ *    @params and @result are matching
+ * @user_data: the user data to use when calling @callback
+ *
+ * Register one JSON-RPC method named @method and prefixed with @group.
+ * The final method will be as "@group.@name".
+ * For more details on the @params and @method, please see #MeloJSONRPCMethod.
+ *
+ * Returns: %TRUE if method has been registered, %FALSE otherwise.
+ */
 gboolean
 melo_jsonrpc_register_method (const gchar *group, const gchar *method,
                               JsonArray *params, JsonObject *result,
@@ -120,6 +156,13 @@ failed:
   return FALSE;
 }
 
+/**
+ * melo_jsonrpc_unregister_method:
+ * @group: prefix of the method
+ * @method: the method name
+ *
+ * Unregister one JSON-RPC method named @method and prefixed with @group.
+ */
 void
 melo_jsonrpc_unregister_method (const gchar *group, const gchar *method)
 {
@@ -147,7 +190,18 @@ melo_jsonrpc_unregister_method (const gchar *group, const gchar *method)
   g_free (complete_method);
 }
 
-/* Register an array of JSON-RPC methods */
+/**
+ * melo_jsonrpc_register_methods:
+ * @group: prefix of the method
+ * @methods: an array of #MeloJSONRPCMethod
+ * @count: the number of methods in @methods
+ *
+ * Register multiple JSON-RPC method named with the same prefix @group. All
+ * final methods will be as "@group.NAME".
+ *
+ * Returns: 0 if all methods have been registered or the number of methods which
+ * has not been registered.
+ */
 guint
 melo_jsonrpc_register_methods (const gchar *group, MeloJSONRPCMethod *methods,
                                guint count)
@@ -213,6 +267,14 @@ melo_jsonrpc_register_methods (const gchar *group, MeloJSONRPCMethod *methods,
   return errors;
 }
 
+/**
+ * melo_jsonrpc_unregister_methods:
+ * @group: prefix of the method
+ * @methods: an array of #MeloJSONRPCMethod
+ * @count: the number of methods in @methods
+ *
+ * Unregister multiple JSON-RPC method named with the same prefix @group.
+ */
 void
 melo_jsonrpc_unregister_methods (const gchar *group, MeloJSONRPCMethod *methods,
                                  guint count)
@@ -341,8 +403,24 @@ internal:
                                         "Internal error");
 }
 
+/**
+ * melo_jsonrpc_parse_request:
+ * @request: the JSON-RPC requrest serialized in a string
+ * @length: the length og @request, can be -1 for null-terminated string
+ * @error: a pointer to a #GError which is set if an error occurred
+ *
+ * Parse a string @request containing a JSON-RPC serialized request, call the
+ * registered callback which match the request method and present the result
+ * as a JSON-RPC response serialized in a string.
+ * If the method is not registered, a JSON-RPC response is generated with the
+ * error MELO_JSONRPC_ERROR_METHOD_NOT_FOUND.
+ *
+ * Returns: (transfer full): a string containing the serialized #JsonNode
+ * corresponding to the respond to the JSON-RPC request. Use g_free() after
+ * usage.
+ */
 gchar *
-melo_jsonrpc_parse_request (const gchar *request, gsize length, GError **eror)
+melo_jsonrpc_parse_request (const gchar *request, gsize length, GError **error)
 {
   JsonParser *parser;
   JsonNodeType type;
@@ -675,6 +753,19 @@ failed:
   return FALSE;
 }
 
+/**
+ * melo_jsonrpc_check_params:
+ * @schema_params: the schema to use for parameters checking (see
+ *    #MeloJSONRPCMethod for more details)
+ * @params: the parameters to check
+ * @error: a pointer to a #JsonNode which is set with a valid JSON-RPC error if
+ *    an error has occurred
+ *
+ * Check if JSON-RPC parameters in @params are matching the schema in
+ * @schema_params.
+ *
+ * Returns: %TRUE if the parameters are valid, %FALSE otherwise.
+ */
 gboolean
 melo_jsonrpc_check_params (JsonArray *schema_params, JsonNode *params,
                            JsonNode **error)
@@ -682,6 +773,20 @@ melo_jsonrpc_check_params (JsonArray *schema_params, JsonNode *params,
   return melo_jsonrpc_get_json_node (schema_params, params, NULL, NULL, error);
 }
 
+/**
+ * melo_jsonrpc_get_object:
+ * @schema_params: the schema to use for parameters conversion (see
+ *    #MeloJSONRPCMethod for more details)
+ * @params: the parameters to convert
+ * @error: a pointer to a #JsonNode which is set with a valid JSON-RPC error if
+ *    an error has occurred
+ *
+ * Convert the #JsonNode containing the parameters into a #JsonObject with all
+ * members corresponding to each parameters.
+ *
+ * Returns: (transfer full): a new #JsonObject containing all parameters sorted
+ * by name, or %NULL if an error occurred. Use json_object_unref() after usage.
+ */
 JsonObject *
 melo_jsonrpc_get_object (JsonArray *schema_params, JsonNode *params,
                          JsonNode **error)
@@ -700,6 +805,21 @@ melo_jsonrpc_get_object (JsonArray *schema_params, JsonNode *params,
   return obj;
 }
 
+/**
+ * melo_jsonrpc_get_array:
+ * @schema_params: the schema to use for parameters conversion (see
+ *    #MeloJSONRPCMethod for more details)
+ * @params: the parameters to convert
+ * @error: a pointer to a #JsonNode which is set with a valid JSON-RPC error if
+ *    an error has occurred
+ *
+ * Convert the #JsonNode containing the parameters into a #JsonArray with all
+ * items sorted as the provided schema.
+ *
+ * Returns: (transfer full): a new #JsonArray containing all parameters sorted
+ * as provided schema, or %NULL if an error occurred. Use json_array_unref()
+ * after usage.
+ */
 JsonArray *
 melo_jsonrpc_get_array (JsonArray *schema_params, JsonNode *params,
                         JsonNode **error)
@@ -868,6 +988,18 @@ melo_jsonrpc_build_error_str (MeloJSONRPCError error_code,
   return str;
 }
 
+/**
+ * melo_jsonrpc_build_error_node:
+ * @error_code: the JSON-RPC error code
+ * @error_format: the string format. See the printf() documentation
+ * @...: the parameters to insert into the format string
+ *
+ * Generate a JSON-RPC response with @error set.
+ *
+ * Returns: (transfer full): a new #JsonNode containing the JSON-RPC response
+ * with @error set, or %NULL if an error occurred. Use json_node_unref() after
+ * usage.
+ */
 JsonNode *
 melo_jsonrpc_build_error_node (MeloJSONRPCError error_code,
                                const char *error_format, ...)
