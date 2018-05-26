@@ -44,6 +44,25 @@ typedef struct _MeloPlayerInfo MeloPlayerInfo;
 typedef struct _MeloPlayerStatus MeloPlayerStatus;
 typedef struct _MeloPlayerStatusPrivate MeloPlayerStatusPrivate;
 
+/**
+ * MeloPlayerState:
+ * @MELO_PLAYER_STATE_NONE: Player has no media loaded
+ * @MELO_PLAYER_STATE_LOADING: Loading a new media (the media informations have
+ *    yet been completely retrieved: it can occur with a file from the network)
+ * @MELO_PLAYER_STATE_BUFFERING: Buffering the media (the media is loaded but
+ *    the player is buffering data before playing some samples)
+ * @MELO_PLAYER_STATE_PLAYING: Playing the media
+ * @MELO_PLAYER_STATE_PAUSED_LOADING: Loading the media in paused state
+ * @MELO_PLAYER_STATE_PAUSED_BUFFERING: Buffering the media in paused state
+ * @MELO_PLAYER_STATE_PAUSED: Media is paused
+ * @MELO_PLAYER_STATE_STOPPED: Media is stopped
+ * @MELO_PLAYER_STATE_ERROR: An error occurred during one of previous states
+ * @MELO_PLAYER_STATE_COUNT: Number of state type
+ *
+ * #MeloPlayerState indicates the current state of a #MeloPlayer. It is used to
+ * know if the player is loading or buffering (especially for remote network
+ * media), playing or waiting to play.
+ */
 typedef enum {
   MELO_PLAYER_STATE_NONE,
   MELO_PLAYER_STATE_LOADING,
@@ -58,6 +77,11 @@ typedef enum {
   MELO_PLAYER_STATE_COUNT,
 } MeloPlayerState;
 
+/**
+ * MeloPlayer:
+ *
+ * The opaque #MeloPlayer data structure.
+ */
 struct _MeloPlayer {
   GObject parent_instance;
 
@@ -68,13 +92,30 @@ struct _MeloPlayer {
   MeloPlayerPrivate *priv;
 };
 
+/**
+ * MeloPlayerClass:
+ * @parent_class: Object parent class
+ * @get_info: Provide the #MeloPlayerInfo defined by the #MeloPlayer
+ * @add: Add a media by path to the player (and then playlist if used)
+ * @load: Load a media by path with the player in pause / stopped state
+ * @play: Play a media by path with the player
+ * @set_state: Set player state (playing / paused / stopped)
+ * @prev: Play previous media in playlist
+ * @next: Play nest media in playlist
+ * @set_pos: Seek in media stream (in ms)
+ * @set_volume: Set the volume of the player
+ * @set_mute: Set the player mute state
+ * @get_pos: Get current position in stream (in ms)
+ * @get_cover: Get the image cover data of current playing media
+ *
+ * Subclasses must override at least the get_info virtual method. Others can be
+ * kept undefined but functionalities will be reduced.
+ */
 struct _MeloPlayerClass {
   GObjectClass parent_class;
 
-  /* Player infos */
   const MeloPlayerInfo *(*get_info) (MeloPlayer *player);
 
-  /* Control callbacks */
   gboolean (*add) (MeloPlayer *player, const gchar *path, const gchar *name,
                    MeloTags *tags);
   gboolean (*load) (MeloPlayer *player, const gchar *path, const gchar *name,
@@ -88,11 +129,19 @@ struct _MeloPlayerClass {
   gdouble (*set_volume) (MeloPlayer *player, gdouble volume);
   gboolean (*set_mute) (MeloPlayer *player, gboolean mute);
 
-  /* Status callbacks */
   gint (*get_pos) (MeloPlayer *player);
   gboolean (*get_cover) (MeloPlayer *player, GBytes **cover, gchar **type);
 };
 
+/**
+ * MeloPlayerInfo:
+ * @name: the display name of the #MeloPlayer
+ * @playlist_id: the ID of the #MeloPlaylist attached to the player
+ *
+ * #MeloPlayerInfo provides all details on a #MeloPlayer instance as its name,
+ * description, capabilities, ... It is important to define this structure in
+ * order to give a correct feedback for user.
+ */
 struct _MeloPlayerInfo {
   const gchar *name;
   const gchar *playlist_id;
@@ -105,6 +154,27 @@ struct _MeloPlayerInfo {
   } control;
 };
 
+/**
+ * MeloPlayerStatus:
+ * @state: current state of the player, see #MeloPlayerState
+ * @buffer_percent: buffering percentage when @state is
+ *    MELO_PLAYER_STATE_BUFFERING or MELO_PLAYER_STATE_PAUSED_BUFFERING
+ * @pos: current position of the stream (in ms)
+ * @duration: duration of the current media (in ms)
+ * @has_prev: a media is available before the current one in playlist
+ * @has_next: a media is available after the current one in playlist
+ * @volume: current volume
+ * @mute: current mute state
+ *
+ * #MeloPlayerStatus handles all details about the current status of the
+ * player and the media its playing. Some other informations are provided by the
+ * #MeloPlayerStatus which are:
+ *  - a #MeloTags of the current media which can be retrieved with
+ *    melo_player_status_get_tags()
+ *
+ * All the data handled by the #MeloPlayerStatus can also be retrieved directly
+ * from the #MeloPlayer instance.
+ */
 struct _MeloPlayerStatus {
   MeloPlayerState state;
   gint buffer_percent;
