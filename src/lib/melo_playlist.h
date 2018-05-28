@@ -36,7 +36,9 @@ G_BEGIN_DECLS
 #define MELO_IS_PLAYLIST_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE ((klass), MELO_TYPE_PLAYLIST))
 #define MELO_PLAYLIST_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), MELO_TYPE_PLAYLIST, MeloPlaylistClass))
 
+#ifndef __GTK_DOC_IGNORE__
 typedef struct _MeloPlayer MeloPlayer;
+#endif
 typedef struct _MeloPlaylist MeloPlaylist;
 typedef struct _MeloPlaylistClass MeloPlaylistClass;
 typedef struct _MeloPlaylistPrivate MeloPlaylistPrivate;
@@ -44,6 +46,11 @@ typedef struct _MeloPlaylistPrivate MeloPlaylistPrivate;
 typedef struct _MeloPlaylistList MeloPlaylistList;
 typedef struct _MeloPlaylistItem MeloPlaylistItem;
 
+/**
+ * MeloPlaylist:
+ *
+ * The opaque #MeloPlaylist data structure.
+ */
 struct _MeloPlaylist {
   GObject parent_instance;
 
@@ -54,6 +61,30 @@ struct _MeloPlaylist {
   MeloPlaylistPrivate *priv;
 };
 
+/**
+ * MeloPlaylistClass:
+ * @parent_class: Object parent class
+ * @get_list: Provide the list of media in the playlist
+ * @get_tags: Provide the #MeloTags of one media in the playlist
+ * @add: Add a new media to the playlist
+ * @get_prev: Get the media in the playlist before the current playing
+ * @get_next: Get the media in the playlist to play after the current playing
+ * @has_prev: Check if a media can be played in playlist before the current
+ *    playing
+ * @has_next: Check if a media can be played in playlist after the current
+ *    playing
+ * @play: Play a media in playlist with the associated #MeloPlayer
+ * @sort: Sort one or more media(s) in the playlist
+ * @move: Move one or more media(s) in the playlist
+ * @move_to: Move one or more media(s) in the playlist before one item
+ * @remove: Remove one media from the playlist
+ * @empty: Empty the whole media
+ * @get_cover: Provide the image cover data of a media in the playlist
+ *
+ * Subclasses must override at least the @ virtual method to implement a
+ * read-only playlist (associated #MeloPlayer only add media, like webradio
+ * player).
+ */
 struct _MeloPlaylistClass {
   GObjectClass parent_class;
 
@@ -83,11 +114,32 @@ struct _MeloPlaylistClass {
                          GBytes **cover, gchar **type);
 };
 
+/**
+ * MeloPlaylistList:
+ * @current: the media ID of the current playing media
+ * @items: a #GList of #MeloPlaylistItem
+ *
+ * A #MeloPlaylistList contains the current media list of a #MeloPlaylist
+ * presented with a #GList of #MeloPlaylistItem and the current media playing
+ * in associated #MeloPlayer, identified with @current.
+ */
 struct _MeloPlaylistList {
   gchar *current;
   GList *items;
 };
 
+/**
+ * MeloPlaylistItem:
+ * @id: the ID of the media, used to identify this specific media
+ * @name: the display name for the media, can be %NULL
+ * @path: the path to use with the associated #MeloPlayer in order to play the
+ *    media, can be %NULL
+ * @tags: the #MeloTags of the media, can be %NULL
+ * @can_play: set to %TRUE if the media can be played
+ * @can_remove: set to %TRUE if the media can be removed from the playlist
+ *
+ * A #MeloPlaylistItem handles all details about one media in the playlist.
+ */
 struct _MeloPlaylistItem {
   gchar *id;
   gchar *name;
