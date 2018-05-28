@@ -21,10 +21,18 @@
 
 #include "melo_playlist_jsonrpc.h"
 
+/**
+ * SECTION:melo_playlist_jsonrpc
+ * @title: MeloPlaylistJsonRPC
+ * @short_description: Basic JSON-RPC methods for Melo Play list
+ *
+ * Helper which implements all basic JSON-RPC methods for #MeloPlaylist.
+ */
+
 typedef enum {
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NONE = 0,
-  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME = 1,
-  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME = 2,
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_ID = 1,
+  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME = 2,
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_CMDS = 4,
   MELO_PLAYLIST_JSONRPC_LIST_FIELDS_TAGS = 8,
 
@@ -78,10 +86,10 @@ melo_playlist_jsonrpc_get_list_fields (JsonObject *obj)
     } else if (!g_strcmp0 (field, "full")) {
       fields = MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL;
       break;
-    } else if (!g_strcmp0 (field, "name"))
+    } else if (!g_strcmp0 (field, "id"))
+      fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_ID;
+    else if (!g_strcmp0 (field, "name"))
       fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME;
-    else if (!g_strcmp0 (field, "full_name"))
-      fields |= MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME;
     else if (!g_strcmp0 (field, "cmds"))
       fields |=  MELO_PLAYLIST_JSONRPC_LIST_FIELDS_CMDS;
     else if (!g_strcmp0 (field, "tags"))
@@ -104,10 +112,10 @@ melo_playlist_jsonrpc_list_to_array (const GList *list,
   for (l = list; l != NULL; l = l->next) {
     MeloPlaylistItem *item = (MeloPlaylistItem *) l->data;
     JsonObject *obj = json_object_new ();
+    if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_ID)
+      json_object_set_string_member (obj, "id", item->id);
     if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_NAME)
       json_object_set_string_member (obj, "name", item->name);
-    if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_FULL_NAME)
-      json_object_set_string_member (obj, "full_name", item->full_name);
     if (fields & MELO_PLAYLIST_JSONRPC_LIST_FIELDS_CMDS) {
       json_object_set_boolean_member (obj, "can_play", item->can_play);
       json_object_set_boolean_member (obj, "can_remove", item->can_remove);
@@ -202,7 +210,7 @@ melo_playlist_jsonrpc_get_tags (const gchar *method,
   MeloPlaylist *plist;
   JsonArray *array;
   JsonObject *obj;
-  const gchar *name;
+  const gchar *id;
 
   /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);
@@ -216,8 +224,8 @@ melo_playlist_jsonrpc_get_tags (const gchar *method,
     return;
   }
 
-  /* Get name */
-  name = json_object_get_string_member (obj, "name");
+  /* Get media ID */
+  id = json_object_get_string_member (obj, "media_id");
 
   /* Get fields */
   if (json_object_has_member (obj, "fields")) {
@@ -228,7 +236,7 @@ melo_playlist_jsonrpc_get_tags (const gchar *method,
   }
 
   /* Get tags from playlist */
-  tags = melo_playlist_get_tags (plist, name, fields);
+  tags = melo_playlist_get_tags (plist, id, fields);
   json_object_unref (obj);
   g_object_unref (plist);
 
@@ -247,7 +255,7 @@ melo_playlist_jsonrpc_item_action (const gchar *method,
                                   JsonNode **result, JsonNode **error,
                                   gpointer user_data)
 {
-  const gchar *name;
+  const gchar *id;
   MeloPlaylist *plist;
   JsonObject *obj;
   gboolean ret = FALSE;
@@ -264,14 +272,14 @@ melo_playlist_jsonrpc_item_action (const gchar *method,
     return;
   }
 
-  /* Get name */
-  name = json_object_get_string_member (obj, "name");
+  /* Get media ID */
+  id = json_object_get_string_member (obj, "media_id");
 
   /* Do action on item */
   if (!g_strcmp0 (method, "playlist.play"))
-    ret = melo_playlist_play (plist, name);
+    ret = melo_playlist_play (plist, id);
   else if (!g_strcmp0 (method, "playlist.remove"))
-    ret = melo_playlist_remove (plist, name);
+    ret = melo_playlist_remove (plist, id);
   json_object_unref (obj);
   g_object_unref (plist);
 
@@ -290,7 +298,7 @@ melo_playlist_jsonrpc_sort (const gchar *method,
                             JsonNode **result, JsonNode **error,
                             gpointer user_data)
 {
-  const gchar *name = NULL;
+  const gchar *id = NULL;
   gboolean ret = FALSE;
   MeloPlaylist *plist;
   MeloSort sort;
@@ -314,14 +322,14 @@ melo_playlist_jsonrpc_sort (const gchar *method,
   if (!melo_sort_is_valid (sort))
     goto end;
 
-  /* Get optional name and count */
-  if (json_object_has_member (obj, "name"))
-    name = json_object_get_string_member (obj, "name");
+  /* Get optional media ID and count */
+  if (json_object_has_member (obj, "media_id"))
+    id = json_object_get_string_member (obj, "media_id");
   if (json_object_has_member (obj, "count"))
     count = json_object_get_int_member (obj, "count");
 
   /* Sort playlist */
-  ret = melo_playlist_sort (plist, name, count, sort);
+  ret = melo_playlist_sort (plist, id, count, sort);
 
 end:
   json_object_unref (obj);
@@ -342,7 +350,7 @@ melo_playlist_jsonrpc_move (const gchar *method,
                             JsonNode **result, JsonNode **error,
                             gpointer user_data)
 {
-  const gchar *name;
+  const gchar *id;
   MeloPlaylist *plist;
   JsonObject *obj;
   gboolean ret = FALSE;
@@ -360,8 +368,8 @@ melo_playlist_jsonrpc_move (const gchar *method,
     return;
   }
 
-  /* Get name */
-  name = json_object_get_string_member (obj, "name");
+  /* Get media ID */
+  id = json_object_get_string_member (obj, "media_id");
   if (json_object_has_member (obj, "count"))
     count = json_object_get_int_member (obj, "count");
   else
@@ -373,13 +381,13 @@ melo_playlist_jsonrpc_move (const gchar *method,
 
     /* Move item up / down */
     up = json_object_get_int_member (obj, "up");
-    ret = melo_playlist_move (plist, name, up, count);
+    ret = melo_playlist_move (plist, id, up, count);
   } else if (!g_strcmp0 (method, "playlist.move_to")) {
     const gchar *before;
 
     /* Move item before another item */
     before = json_object_get_string_member (obj, "before");
-    ret = melo_playlist_move_to (plist, name, before, count);
+    ret = melo_playlist_move_to (plist, id, before, count);
   }
   json_object_unref (obj);
   g_object_unref (plist);
@@ -399,7 +407,7 @@ melo_playlist_jsonrpc_empty (const gchar *method,
                              JsonNode **result, JsonNode **error,
                              gpointer user_data)
 {
-  const gchar *name;
+  const gchar *id;
   MeloPlaylist *plist;
   JsonObject *obj;
   gboolean ret = FALSE;
@@ -451,7 +459,7 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
     .method = "get_tags",
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
-              "  {\"name\": \"name\", \"type\": \"string\"},"
+              "  {\"name\": \"media_id\", \"type\": \"string\"},"
               "  {"
               "    \"name\": \"fields\", \"type\": \"array\","
               "    \"required\": false"
@@ -465,7 +473,7 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
     .method = "play",
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
-              "  {\"name\": \"name\", \"type\": \"string\"}"
+              "  {\"name\": \"media_id\", \"type\": \"string\"}"
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_playlist_jsonrpc_item_action,
@@ -477,7 +485,7 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
               "  {\"name\": \"id\", \"type\": \"string\"},"
               "  {\"name\": \"sort\", \"type\": \"string\"},"
               "  {"
-              "    \"name\": \"name\", \"type\": \"string\","
+              "    \"name\": \"media_id\", \"type\": \"string\","
               "    \"required\": false"
               "  },"
               "  {"
@@ -493,7 +501,7 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
     .method = "move",
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
-              "  {\"name\": \"name\", \"type\": \"string\"},"
+              "  {\"name\": \"media_id\", \"type\": \"string\"},"
               "  {\"name\": \"up\", \"type\": \"integer\"},"
               "  {"
               "    \"name\": \"count\", \"type\": \"integer\","
@@ -508,7 +516,7 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
     .method = "move_to",
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
-              "  {\"name\": \"name\", \"type\": \"string\"},"
+              "  {\"name\": \"media_id\", \"type\": \"string\"},"
               "  {\"name\": \"before\", \"type\": \"string\"},"
               "  {"
               "    \"name\": \"count\", \"type\": \"integer\","
@@ -523,7 +531,7 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
     .method = "remove",
     .params = "["
               "  {\"name\": \"id\", \"type\": \"string\"},"
-              "  {\"name\": \"name\", \"type\": \"string\"}"
+              "  {\"name\": \"media_id\", \"type\": \"string\"}"
               "]",
     .result = "{\"type\":\"object\"}",
     .callback = melo_playlist_jsonrpc_item_action,
@@ -540,7 +548,11 @@ static MeloJSONRPCMethod melo_playlist_jsonrpc_methods[] = {
   },
 };
 
-/* Register / Unregister methods */
+/**
+ * melo_playlist_jsonrpc_register_methods:
+ *
+ * Register all JSON-RPC methods for #MeloPlaylist.
+ */
 void
 melo_playlist_jsonrpc_register_methods (void)
 {
@@ -548,6 +560,11 @@ melo_playlist_jsonrpc_register_methods (void)
                                  G_N_ELEMENTS (melo_playlist_jsonrpc_methods));
 }
 
+/**
+ * melo_playlist_jsonrpc_unregister_methods:
+ *
+ * Unregister all JSON-RPC methods for #MeloPlaylist.
+ */
 void
 melo_playlist_jsonrpc_unregister_methods (void)
 {

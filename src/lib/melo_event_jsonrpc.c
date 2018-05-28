@@ -23,6 +23,14 @@
 
 #include "melo_event_jsonrpc.h"
 
+/**
+ * SECTION:melo_event_jsonrpc
+ * @title: MeloEventJsonRPC
+ * @short_description: Basic JSON-RPC methods for Melo Event
+ *
+ * Helper which implements all basic JSON-RPC methods for #MeloEvent.
+ */
+
 typedef void (*MeloEventJsonrpcParser) (JsonObject *obj, gpointer data);
 typedef const gchar *(*MeloEventJsonrpcString) (guint event);
 
@@ -161,8 +169,20 @@ static MeloEventJsonrpcString melo_event_jsonrpc_strings[] = {
   [MELO_EVENT_TYPE_PLAYLIST] = NULL,
 };
 
+/**
+ * melo_event_jsonrpc_event_to_object:
+ * @type: the event type
+ * @event: the event (depending on @type)
+ * @id: the ID of the Melo object (depending on @type)
+ * @data: the data associated to the event (depending on @event)
+ *
+ * Generate a #JsonObject from a specific #MeloEventType and event ID.
+ *
+ * Returns: (transfer full): a new #JsonObject with all event specific data, or
+ * %NULL on error.
+ */
 JsonObject *
-melo_event_jsonrpc_evnet_to_object (MeloEventType type, guint event,
+melo_event_jsonrpc_event_to_object (MeloEventType type, guint event,
                                     const gchar *id, gpointer data)
 {
   const gchar *event_string = NULL;

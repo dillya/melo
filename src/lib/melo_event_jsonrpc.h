@@ -25,7 +25,7 @@
 #include "melo_event.h"
 #include "melo_jsonrpc.h"
 
-JsonObject *melo_event_jsonrpc_evnet_to_object (MeloEventType type, guint event,
+JsonObject *melo_event_jsonrpc_event_to_object (MeloEventType type, guint event,
                                                 const gchar *id, gpointer data);
 
 #endif /* __MELO_EVENT_JSONRPC_H__ */

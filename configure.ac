@@ -28,6 +28,14 @@ LT_INIT([disable-static])
 dnl Check for header files
 AC_HEADER_STDC
 
+dnl Check for gtk-doc
+GTK_DOC_CHECK([1.14],[--flavour no-tmpl])
+#m4_ifdef([GTK_DOC_CHECK], [
+#  GTK_DOC_CHECK([1.14],[--flavour no-tmpl])
+#],[
+#  AM_CONDITIONAL([ENABLE_GTK_DOC], false)
+#])
+
 dnl Library requirements
 GLIB_REQ=2.40.0
 JSON_GLIB_REQ=1.0.2
@@ -143,16 +151,17 @@ AC_SUBST(MELO_CFLAGS)
 AC_SUBST(MELO_LIBS)
 
 AC_CONFIG_FILES(
-Makefile
-src/Makefile
-src/lib/Makefile
-src/lib/libmelo.pc
-src/modules/Makefile
-src/modules/file/Makefile
-src/modules/radio/Makefile
-src/modules/upnp/Makefile
-tests/Makefile
-www/Makefile
+  Makefile
+  doc/Makefile
+  src/Makefile
+  src/lib/Makefile
+  src/lib/libmelo.pc
+  src/modules/Makefile
+  src/modules/file/Makefile
+  src/modules/radio/Makefile
+  src/modules/upnp/Makefile
+  tests/Makefile
+  www/Makefile
 )
 AC_OUTPUT
 

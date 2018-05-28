@@ -22,6 +22,38 @@
 #include "melo_event.h"
 #include "melo_player.h"
 
+/**
+ * SECTION:melo_player
+ * @title: MeloPlayer
+ * @short_description: Base class for Melo Player
+ *
+ * #MeloPlayer is the main class to handle media playing with a full control
+ * interface.
+ *
+ * The #MeloPlayerState and #MeloPlayerStatus are provided to give maximum
+ * informations on current media handled by the player.
+ * In addition to playing a single media, the #MeloPlayer can be associated
+ * with a #MeloPlaylist which handles a complete play list of media. This
+ * association should be done just after instantiation and before associating
+ * the player instance with a #MeloBrowser or registering into a #MeloModule.
+ *
+ * A complete safe status handling (with #MeloTags) is available with
+ * #MeloPlayer through all status helpers. Actually, the #MeloPlayer subclass
+ * does not need to handle a #MeloPlayerStatus instance since the base class
+ * already embed one instance and offers many safe-thread helpers to change the
+ * values. It is highly recommended to use the internal status.
+ * Moreover, the event system of Melo (see #MeloEvent) is supported internally
+ * to generate automatically all player events when using the status helpers.
+ *
+ * The path provided in melo_player_add(), melo_player_load() and
+ * melo_player_play() has no rules but it is recommended to use a path using
+ * same schema than URI.
+ *
+ * Every instance of #MeloPlayer is automatically stored in a global list in
+ * order to get a #MeloPlayer from any place with only the ID provided during
+ * instantiation with melo_player_new().
+ */
+
 /* Internal player list */
 G_LOCK_DEFINE_STATIC (melo_player_mutex);
 static GHashTable *melo_player_hash = NULL;
@@ -113,13 +145,23 @@ melo_player_class_init (MeloPlayerClass *klass)
   object_class->set_property = melo_player_set_property;
   object_class->get_property = melo_player_get_property;
 
-  /* Install ID property */
+  /**
+   * MeloPlayer:id:
+   *
+   * The ID of the player. This must be set during the construct and it can
+   * be only read after instantiation.
+   */
   g_object_class_install_property (object_class, PROP_ID,
       g_param_spec_string ("id", "ID", "Player ID", NULL,
                            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                            G_PARAM_STATIC_STRINGS));
 
-  /* Install name property */
+  /**
+   * MeloPlayer:name:
+   *
+   * The name of the player. This must be set during the construct and it can
+   * be only read after instantiation.
+   */
   g_object_class_install_property (object_class, PROP_NAME,
       g_param_spec_string ("name", "Name", "Player name", NULL,
                            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
@@ -141,12 +183,28 @@ melo_player_init (MeloPlayer *self)
   g_mutex_init (&priv->mutex);
 }
 
+/**
+ * melo_player_get_id:
+ * @player: the player
+ *
+ * Get the #MeloPlayer ID.
+ *
+ * Returns: the ID of the #MeloPlayer.
+ */
 const gchar *
 melo_player_get_id (MeloPlayer *player)
 {
   return player->priv->id;
 }
 
+/**
+ * melo_player_get_name:
+ * @player: the player
+ *
+ * Get the #MeloPlayer name.
+ *
+ * Returns: the name of the #MeloPlayer.
+ */
 const gchar *
 melo_player_get_name (MeloPlayer *player)
 {
@@ -191,6 +249,14 @@ melo_player_get_property (GObject *object, guint property_id, GValue *value,
   }
 }
 
+/**
+ * melo_player_get_info:
+ * @player: the player
+ *
+ * Get the details of the #MeloPlayer.
+ *
+ * Returns: a #MeloPlayerInfo or %NULL if get_info callback is not defined.
+ */
 const MeloPlayerInfo *
 melo_player_get_info (MeloPlayer *player)
 {
@@ -224,6 +290,15 @@ melo_player_get_info (MeloPlayer *player)
   return &priv->info;
 }
 
+/**
+ * melo_player_get_player_by_id:
+ * @id: the #MeloPlayer ID to retrieve
+ *
+ * Get an instance of the #MeloPlayer with its ID.
+ *
+ * Returns: (transfer full): the #MeloPlayer instance or %NULL if not found.
+ * Use g_object_unref() after usage.
+ */
 MeloPlayer *
 melo_player_get_player_by_id (const gchar *id)
 {
@@ -245,6 +320,15 @@ melo_player_get_player_by_id (const gchar *id)
   return play;
 }
 
+/**
+ * melo_player_get_list:
+ *
+ * Get a #GList of all #MeloPlayer instance registered.
+ *
+ * Returns: (transfer full): a #GList of all #MeloPlayer instance. You must
+ * free list and its data when you are done with it. You can use
+ * g_list_free_full() with g_object_unref() to do this.
+ */
 GList *
 melo_player_get_list ()
 {
@@ -263,6 +347,18 @@ melo_player_get_list ()
   return list;
 }
 
+/**
+ * melo_player_new:
+ * @type: the type ID of the #MeloPlayer subtype to instantiate
+ * @id: the #MeloPlayer ID to use for the new instance
+ * @name: the #MeloPlayer name to use for the new instance
+ *
+ * Instantiate a new #MeloPlayer subtype with the @id and @name provided. The
+ * new player instance is stored in a global list to be retrieved in a list
+ * with melo_player_get_list() or by its ID with melo_player_get_player_by_id().
+ *
+ * Returns: (transfer full): the new #MeloPlayer instance or %NULL if failed.
+ */
 MeloPlayer *
 melo_player_new (GType type, const gchar *id, const gchar *name)
 {
@@ -305,6 +401,19 @@ failed:
   return NULL;
 }
 
+/**
+ * melo_player_set_playlist:
+ * @player: the player
+ * @playlist: the #MeloPlaylist to associate with
+ *
+ * Associate a #MeloPlaylist to this player in order to handle the play list
+ * media.
+ * This function should be called just after instantiation of the #MeloPlayer
+ * and just before association of the player with a #meloBrowser or registration
+ * in a #MeloModule.
+ *
+ * This functions takes a reference on the #MeloPlaylist.
+ */
 void
 melo_player_set_playlist (MeloPlayer *player, MeloPlaylist *playlist)
 {
@@ -314,6 +423,15 @@ melo_player_set_playlist (MeloPlayer *player, MeloPlaylist *playlist)
   player->playlist = g_object_ref (playlist);
 }
 
+/**
+ * melo_player_get_playlist:
+ * @player: the player
+ *
+ * Get the associated #MeloPlaylist instance.
+ *
+ * Returns: (transfer full): an instance of the #MeloPlaylist associated with
+ * the current player. After usage, use g_object_unref().
+*/
 MeloPlaylist *
 melo_player_get_playlist (MeloPlayer *player)
 {
@@ -322,6 +440,19 @@ melo_player_get_playlist (MeloPlayer *player)
   return g_object_ref (player->playlist);
 }
 
+/**
+ * melo_player_add:
+ * @player: the player
+ * @path: path (or URI) of the media to add
+ * @name: display name of the media
+ * @tags: a #MeloTags with tags of the media
+ *
+ * Add a media pointed by @path to the player. A reference of the #MeloTags is
+ * taken internally, so if @tags is not needed after this call, the
+ * melo_tags_unref() should be called.
+ *
+ * Returns: %TRUE if media has been successfully done; %FALSE otherwise.
+ */
 gboolean
 melo_player_add (MeloPlayer *player, const gchar *path, const gchar *name,
                  MeloTags *tags)
@@ -333,6 +464,23 @@ melo_player_add (MeloPlayer *player, const gchar *path, const gchar *name,
   return pclass->add (player, path, name, tags);
 }
 
+/**
+ * melo_player_load:
+ * @player: the player
+ * @path: path (or URI) of the media to load
+ * @name: display name of the media
+ * @tags: a #MeloTags with tags of the media
+ * @insert: insert the media into the playlist
+ * @stopped: set the player state to stopped
+ *
+ * Load a media pointed by @path to the player. A reference of the #MeloTags is
+ * taken internally, so if @tags is not needed after this call, the
+ * melo_tags_unref() should be called.
+ * By default the player state is set to MELO_PLAYER_STATE_PAUSED_LOADING, but
+ * if @stopped is %TRUE, the player state is set to MELO_PLAYER_STATE_STOPPED.
+ *
+ * Returns: %TRUE if media has been successfully done; %FALSE otherwise.
+ */
 gboolean
 melo_player_load (MeloPlayer *player, const gchar *path,
                   const gchar *name, MeloTags *tags, gboolean insert,
@@ -345,6 +493,20 @@ melo_player_load (MeloPlayer *player, const gchar *path,
   return pclass->load (player, path, name, tags, insert, stopped);
 }
 
+/**
+ * melo_player_play:
+ * @player: the player
+ * @path: path (or URI) of the media to play
+ * @name: display name of the media
+ * @tags: a #MeloTags with tags of the media
+ * @insert: insert the media into the playlist
+ *
+ * Play a media pointed by @path to the player. A reference of the #MeloTags is
+ * taken internally, so if @tags is not needed after this call, the
+ * melo_tags_unref() should be called.
+ *
+ * Returns: %TRUE if media has been successfully done; %FALSE otherwise.
+ */
 gboolean
 melo_player_play (MeloPlayer *player, const gchar *path, const gchar *name,
                   MeloTags *tags, gboolean insert)
@@ -356,6 +518,16 @@ melo_player_play (MeloPlayer *player, const gchar *path, const gchar *name,
   return pclass->play (player, path, name, tags, insert);
 }
 
+/**
+ * melo_player_set_state:
+ * @player: the player
+ * @state: the #MeloPlayerState to apply
+ *
+ * Apply a new #MeloPlayerState to the player. If this state is unreachable, a
+ * different state will be returned.
+ *
+ * Returns: the #MeloPlayerState applied, which could differ from @state.
+ */
 MeloPlayerState
 melo_player_set_state (MeloPlayer *player, MeloPlayerState state)
 {
@@ -374,6 +546,15 @@ melo_player_set_state (MeloPlayer *player, MeloPlayerState state)
   return state;
 }
 
+/**
+ * melo_player_prev:
+ * @player: the player
+ *
+ * Play previous media in playlist. This function is available only if the
+ * playlist is supported by the #MeloPlayer instance.
+ *
+ * Returns: %TRUE if successful, %FALSE otherwise.
+ */
 gboolean
 melo_player_prev (MeloPlayer *player)
 {
@@ -384,6 +565,15 @@ melo_player_prev (MeloPlayer *player)
   return pclass->prev (player);
 }
 
+/**
+ * melo_player_next:
+ * @player: the player
+ *
+ * Play next media in playlist. This function is available only if the playlist
+ * is supported by the #MeloPlayer instance.
+ *
+ * Returns: %TRUE if successful, %FALSE otherwise.
+ */
 gboolean
 melo_player_next (MeloPlayer *player)
 {
@@ -394,6 +584,15 @@ melo_player_next (MeloPlayer *player)
   return pclass->next (player);
 }
 
+/**
+ * melo_player_set_pos:
+ * @player: the player
+ * @pos: the new position (in ms)
+ *
+ * Seek current stream to @pos position (in ms).
+ *
+ * Returns: the effective position which could differ from @pos.
+ */
 gint
 melo_player_set_pos (MeloPlayer *player, gint pos)
 {
@@ -404,6 +603,15 @@ melo_player_set_pos (MeloPlayer *player, gint pos)
   return pclass->set_pos (player, pos);
 }
 
+/**
+ * melo_player_set_volume:
+ * @player: the player
+ * @volume: the new volume
+ *
+ * Set the player volume.
+ *
+ * Returns: the effective volume which could differ from @volume.
+ */
 gdouble
 melo_player_set_volume (MeloPlayer *player, gdouble volume)
 {
@@ -422,6 +630,15 @@ melo_player_set_volume (MeloPlayer *player, gdouble volume)
   return volume;
 }
 
+/**
+ * melo_player_set_mute:
+ * @player: the player
+ * @mute: the new mute state
+ *
+ * Set the player mute state.
+ *
+ * Returns: the effective mute state which could differ from @mute.
+ */
 gboolean
 melo_player_set_mute (MeloPlayer *player, gboolean mute)
 {
@@ -440,6 +657,22 @@ melo_player_set_mute (MeloPlayer *player, gboolean mute)
   return mute;
 }
 
+/**
+ * melo_player_get_status:
+ * @player: the player
+ * @timestamp: the base timestamp
+ *
+ * Get the current player status stored in a #MeloPlayerStatus. If the
+ * @timestamp is more recent than last status update, %NULL will be returned.
+ * It prevents copying same data each call when this function is called
+ * periodically by a timer.
+ * To use correctly the @timestamp value, for the first call, it should be set
+ * to zero, than it should be the same value as returned in the
+ * #MeloPlayerStatus.
+ *
+ * Returns: (transfer full): a reference to a #MeloPlayerStatus containing the
+ * last player status. After use, call melo_player_status_unref().
+ */
 MeloPlayerStatus *
 melo_player_get_status (MeloPlayer *player, gint64 *timestamp)
 {
@@ -464,6 +697,14 @@ melo_player_get_status (MeloPlayer *player, gint64 *timestamp)
   return status;
 }
 
+/**
+ * melo_player_get_state:
+ * @player: the player
+ *
+ * Get the current player state.
+ *
+ * Returns: a #MeloPlayerState containing current player state.
+ */
 MeloPlayerState
 melo_player_get_state (MeloPlayer *player)
 {
@@ -478,6 +719,15 @@ melo_player_get_state (MeloPlayer *player)
   return state;
 }
 
+/**
+ * melo_player_get_media_name:
+ * @player: the player
+ *
+ * Get the display name of the current media loaded in the player.
+ *
+ * Returns: (transfer full): a string containing the display name of the current
+ * media loaded. After use, call g_free().
+ */
 gchar *
 melo_player_get_media_name (MeloPlayer *player)
 {
@@ -492,6 +742,14 @@ melo_player_get_media_name (MeloPlayer *player)
   return name;
 }
 
+/**
+ * melo_player_get_pos:
+ * @player: the player
+ *
+ * Get the current stream position (in ms).
+ *
+ * Returns: the current stream position (in ms).
+ */
 gint
 melo_player_get_pos (MeloPlayer *player)
 {
@@ -502,6 +760,14 @@ melo_player_get_pos (MeloPlayer *player)
   return pclass->get_pos (player);
 }
 
+/**
+ * melo_player_get_volume:
+ * @player: the player
+ *
+ * Get the current player volume.
+ *
+ * Returns: the current volume.
+ */
 gdouble
 melo_player_get_volume (MeloPlayer *player)
 {
@@ -516,6 +782,14 @@ melo_player_get_volume (MeloPlayer *player)
   return volume;
 }
 
+/**
+ * melo_player_get_mute:
+ * @player: the player
+ *
+ * Get the current player mute state.
+ *
+ * Returns: the current mute state.
+ */
 gboolean
 melo_player_get_mute (MeloPlayer *player)
 {
@@ -530,6 +804,15 @@ melo_player_get_mute (MeloPlayer *player)
   return mute;
 }
 
+/**
+ * melo_player_get_tags:
+ * @player: the player
+ *
+ * Get the tags as #MeloTags  of the current media loaded in the player.
+ *
+ * Returns: (transfer full): a reference of the #MeloTags of the current media
+ * loaded. After use, call melo_tags_unref().
+ */
 MeloTags *
 melo_player_get_tags (MeloPlayer *player)
 {
@@ -544,6 +827,17 @@ melo_player_get_tags (MeloPlayer *player)
   return tags;
 }
 
+/**
+ * melo_player_get_cover:
+ * @player: the player
+ * @cover: a pointer to a #GBytes which is set with image cover data
+ * @type: a pointer to a string which is set with image mime type
+ *
+ * Get the image cover data and type of the current media playing.
+ *
+ * Returns: %TRUE if @cover and @type have been set with image data, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_player_get_cover (MeloPlayer *player, GBytes **cover, gchar **type)
 {
@@ -603,6 +897,20 @@ melo_player_updated (MeloPlayerPrivate *priv)
   priv->last_update = g_get_monotonic_time ();
 }
 
+/**
+ * melo_player_reset_status:
+ * @player: the player
+ * @state: the new state to use
+ * @name: the new display name to use, can be %NULL
+ * @tags: the new #MeloTags to use, can be %NULL
+ *
+ * Reset the internal #MeloPlayerStatus with fresh values as @state, @name and
+ * @tags. Other values are set to 0 or %NULL. It is very useful when a new media
+ * is loaded in player.
+ * This function should be only called by the #MeloPlayer subclass.
+ *
+ * Returns: %TRUE if the status has been reset, %FALSE otherwise.
+ */
 gboolean
 melo_player_reset_status (MeloPlayer *player, MeloPlayerState state,
                           const gchar *name, MeloTags *tags)
@@ -634,6 +942,14 @@ melo_player_reset_status (MeloPlayer *player, MeloPlayerState state,
   return TRUE;
 }
 
+/**
+ * melo_player_set_status_state:
+ * @player: the player
+ * @state: the new state to use
+ *
+ * Set the new state of the internal #MeloPlayerStatus.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_state (MeloPlayer *player, MeloPlayerState state)
 {
@@ -649,6 +965,15 @@ melo_player_set_status_state (MeloPlayer *player, MeloPlayerState state)
   melo_player_updated (priv);
 }
 
+/**
+ * melo_player_set_status_buffering:
+ * @player: the player
+ * @state: the new state to use
+ * @percent: the new buffering percentage to use
+ *
+ * Set the new state and buffering percentage of the internal #MeloPlayerStatus.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_buffering (MeloPlayer *player, MeloPlayerState state,
                                   guint percent)
@@ -666,6 +991,15 @@ melo_player_set_status_buffering (MeloPlayer *player, MeloPlayerState state,
   melo_player_updated (priv);
 }
 
+/**
+ * melo_player_set_status_pos:
+ * @player: the player
+ * @pos: the new stream position to use
+ *
+ * Set the new stream position of the internal #MeloPlayerStatus. It doesn't
+ * perform any seek in the stream!
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_pos (MeloPlayer *player, gint pos)
 {
@@ -681,6 +1015,14 @@ melo_player_set_status_pos (MeloPlayer *player, gint pos)
   melo_player_updated (priv);
 }
 
+/**
+ * melo_player_set_status_duration:
+ * @player: the player
+ * @duration: the new duration to use (in ms)
+ *
+ * Set the new duration (in ms) of the internal #MeloPlayerStatus.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_duration (MeloPlayer *player, gint duration)
 {
@@ -696,6 +1038,16 @@ melo_player_set_status_duration (MeloPlayer *player, gint duration)
   melo_player_updated (priv);
 }
 
+/**
+ * melo_player_set_status_playlist:
+ * @player: the player
+ * @has_prev: %TRUE if a media is before in playlist
+ * @has_next: %TRUE if a media is after in playlist
+ *
+ * Set the new has previous / next media in playlist status of the internal
+ * #MeloPlayerStatus.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_playlist (MeloPlayer *player, gboolean has_prev,
                                  gboolean has_next)
@@ -713,6 +1065,14 @@ melo_player_set_status_playlist (MeloPlayer *player, gboolean has_prev,
   melo_player_updated (priv);
 }
 
+/**
+ * melo_player_set_status_volume:
+ * @player: the player
+ * @volume: the new volume to use
+ *
+ * Set the new volume of the internal #MeloPlayerStatus.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_volume (MeloPlayer *player, gdouble volume)
 {
@@ -728,6 +1088,14 @@ melo_player_set_status_volume (MeloPlayer *player, gdouble volume)
   melo_player_updated (priv);
 }
 
+/**
+ * melo_player_set_status_mute:
+ * @player: the player
+ * @mute: the new mute state to use
+ *
+ * Set the new mute state of the internal #MeloPlayerStatus.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_mute (MeloPlayer *player, gboolean mute)
 {
@@ -759,6 +1127,14 @@ melo_player_status_set_name (MeloPlayerStatus *status, const gchar *name)
   g_mutex_unlock (&priv->mutex);
 }
 
+/**
+ * melo_player_set_status_name:
+ * @player: the player
+ * @name: the new display name to use, can be %NULL
+ *
+ * Set the new media display name of the internal #MeloPlayerStatus.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_name (MeloPlayer *player, const gchar *name)
 {
@@ -792,6 +1168,14 @@ melo_player_status_set_error (MeloPlayerStatus *status, const gchar *error)
   g_mutex_unlock (&priv->mutex);
 }
 
+/**
+ * melo_player_set_status_error:
+ * @player: the player
+ * @error: the new error string to use, can be %NULL
+ *
+ * Set the new error string of the internal #MeloPlayerStatus.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_error (MeloPlayer *player, const gchar *error)
 {
@@ -829,6 +1213,15 @@ melo_player_status_take_tags (MeloPlayerStatus *status, MeloTags *tags)
   g_mutex_unlock (&priv->mutex);
 }
 
+/**
+ * melo_player_take_status_tags:
+ * @player: the player
+ * @tags: the new #MeloTags to use, can be %NULL
+ *
+ * Set the new #MeloTags of the internal #MeloPlayerStatus. It takes ownership
+ * of @tags reference.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_take_status_tags (MeloPlayer *player, MeloTags *tags)
 {
@@ -844,6 +1237,15 @@ melo_player_take_status_tags (MeloPlayer *player, MeloTags *tags)
   melo_player_updated (priv);
 }
 
+/**
+ * melo_player_set_status_tags:
+ * @player: the player
+ * @tags: the new #MeloTags to use, can be %NULL
+ *
+ * Set the new #MeloTags of the internal #MeloPlayerStatus. A new reference of
+ * @tags is used.
+ * This function should be only called by the #MeloPlayer subclass.
+ */
 void
 melo_player_set_status_tags (MeloPlayer *player, MeloTags *tags)
 {
@@ -854,7 +1256,14 @@ melo_player_set_status_tags (MeloPlayer *player, MeloTags *tags)
   melo_player_take_status_tags (player, tags);
 }
 
-/* Player status functions */
+/**
+ * melo_player_status_ref:
+ * @status: the player status
+ *
+ * Increment the reference counter of the #MeloPlayerStatus.
+ *
+ * Returns: (transfer full): a pointer of the #MeloPlayerStatus.
+ */
 MeloPlayerStatus *
 melo_player_status_ref (MeloPlayerStatus *status)
 {
@@ -862,6 +1271,13 @@ melo_player_status_ref (MeloPlayerStatus *status)
   return status;
 }
 
+/**
+ * melo_player_status_unref:
+ * @status: the player status
+ *
+ * Decrement the reference counter of the #MeloPlayerStatus. If it reaches zero,
+ * the #MeloPlayerStatus is freed.
+ */
 void
 melo_player_status_unref (MeloPlayerStatus *status)
 {
@@ -879,6 +1295,15 @@ melo_player_status_unref (MeloPlayerStatus *status)
   g_slice_free (MeloPlayerStatus, status);
 }
 
+/**
+ * melo_player_status_get_error:
+ * @status: the player status
+ *
+ * Get a copy of the current error string.
+ *
+ * Returns: (transfer full): a copy of the error string which must be freed with
+ * g_free() after usage.
+ */
 gchar *
 melo_player_status_get_error (const MeloPlayerStatus *status)
 {
@@ -897,6 +1322,15 @@ melo_player_status_get_error (const MeloPlayerStatus *status)
   return error;
 }
 
+/**
+ * melo_player_status_get_name:
+ * @status: the player status
+ *
+ * Get a copy of the current media name string.
+ *
+ * Returns: (transfer full): a copy of the media name string which must be freed
+ * with g_free() after usage.
+ */
 gchar *
 melo_player_status_get_name (const MeloPlayerStatus *status)
 {
@@ -915,6 +1349,15 @@ melo_player_status_get_name (const MeloPlayerStatus *status)
   return name;
 }
 
+/**
+ * melo_player_status_get_tags:
+ * @status: the player status
+ *
+ * Get the current #MeloTags stored in the status.
+ *
+ * Returns: (transfer full): a new reference of the current #MeloTags. After
+ * use, the melo_tags_unref() must be called.
+ */
 MeloTags *
 melo_player_status_get_tags (const MeloPlayerStatus *status)
 {
@@ -934,6 +1377,14 @@ melo_player_status_get_tags (const MeloPlayerStatus *status)
   return tags;
 }
 
+/**
+ * melo_player_status_lock:
+ * @status: the player status
+ *
+ * Lock the #MeloPlayerStatus in order to read sensitive values such as the
+ * strings (see melo_player_status_lock_get_name() and
+ * melo_player_status_lock_get_error()).
+ */
 void
 melo_player_status_lock (const MeloPlayerStatus *status)
 {
@@ -941,6 +1392,12 @@ melo_player_status_lock (const MeloPlayerStatus *status)
   g_mutex_lock (&status->priv->mutex);
 }
 
+/**
+ * melo_player_status_unlock:
+ * @status: the player status
+ *
+ * Unlock the #MeloPlayerStatus in order free exclusive access of the values.
+ */
 void
 melo_player_status_unlock (const MeloPlayerStatus *status)
 {
@@ -948,11 +1405,30 @@ melo_player_status_unlock (const MeloPlayerStatus *status)
   g_mutex_unlock (&status->priv->mutex);
 }
 
+/**
+ * melo_player_status_lock_get_name:
+ * @status: the player status
+ *
+ * Get the current media name string.
+ * It should be called after melo_player_status_lock() call.
+ *
+ * Returns: the media name string in the #MeloPlayerStatus.
+ */
 const gchar *
 melo_player_status_lock_get_name (const MeloPlayerStatus *status)
 {
   return status->priv->name;
 }
+
+/**
+ * melo_player_status_lock_get_error:
+ * @status: the player status
+ *
+ * Get the current error string.
+ * It should be called after melo_player_status_lock() call.
+ *
+ * Returns: the error string in the #MeloPlayerStatus.
+ */
 const gchar *
 melo_player_status_lock_get_error (const MeloPlayerStatus *status)
 {
@@ -971,6 +1447,14 @@ static const gchar *melo_player_state_str[] = {
   [MELO_PLAYER_STATE_ERROR] = "error",
 };
 
+/**
+ * melo_player_state_to_string:
+ * @state: the player state
+ *
+ * Convert a #MeloPlayerState to a string.
+ *
+ * Returns: a string with the translated #MeloPlayerStatei, %NULL otherwise.
+*/
 const gchar *
 melo_player_state_to_string (MeloPlayerState state)
 {
@@ -979,6 +1463,15 @@ melo_player_state_to_string (MeloPlayerState state)
   return melo_player_state_str[state];
 }
 
+/**
+ * melo_player_state_to_string:
+ * @state: a string with player state
+ *
+ * Convert a string to a #MeloPlayerState.
+ *
+ * Returns: a #MeloPlayerState or MELO_PLAYER_STATE_NONE if no correspondence
+ * has been found.
+*/
 MeloPlayerState
 melo_player_state_from_string (const gchar *sstate)
 {

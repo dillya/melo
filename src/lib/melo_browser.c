@@ -21,6 +21,37 @@
 
 #include "melo_browser.h"
 
+/**
+ * SECTION:melo_browser
+ * @title: MeloBrowser
+ * @short_description: Base class for Melo Browser
+ *
+ * #MeloBrowser is the main class to handle media / library / file system
+ * browsing interface to find which media to listen with Melo. It provides two
+ * ways to get list of medias: melo_browser_get_list() to get a list from a
+ * specific path and melo_browser_search() to get a list from a keywords input.
+ * Each function uses the same #MeloBrowserList structire to provide the media
+ * list to explore.
+ *
+ * For each media in a list, handled by #MeloBrowserItem, many details are
+ * provided as its display name, type, available actions, tags, ...
+ * The type and actions are customizable if the standard types and actions
+ * offered by Melo are not enough.
+ * Moreover, for media tags handled by #MeloTags in every #MeloBrowserItem, some
+ * caching methods are possible to increase the speed of the list generation.
+ * For more details, please see #MeloBrowserTagsMode.
+ *
+ * In case of path navigation, the path can follow any logic but it is
+ * recommanded to follow the URI schema in order to simplify developer and user
+ * life.
+ * The path is also used to specify on which item we want to do an action with
+ * melo_browser_action().
+ *
+ * Every instance of #MeloBrowser is automatically stored in a global list in
+ * order to get a #MeloBrowser from any place with only the ID provided during
+ * instantiation with melo_browser_new().
+ */
+
 /* Internal browser list */
 G_LOCK_DEFINE_STATIC (melo_browser_mutex);
 static GHashTable *melo_browser_hash = NULL;
@@ -80,7 +111,12 @@ melo_browser_class_init (MeloBrowserClass *klass)
   object_class->set_property = melo_browser_set_property;
   object_class->get_property = melo_browser_get_property;
 
-  /* Install ID property */
+  /**
+   * MeloBrowser:id:
+   *
+   * The ID of the browser. This must be set during the construct and it can
+   * be only read after instantiation.
+   */
   g_object_class_install_property (object_class, PROP_ID,
       g_param_spec_string ("id", "ID", "Browser ID", NULL,
                            G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
@@ -96,6 +132,14 @@ melo_browser_init (MeloBrowser *self)
   priv->id = NULL;
 }
 
+/**
+ * melo_browser_get_id:
+ * @browser: the browser
+ *
+ * Get the #MeloBrowser ID.
+ *
+ * Returns: the ID of the #MeloBrowser.
+ */
 const gchar *
 melo_browser_get_id (MeloBrowser *browser)
 {
@@ -133,6 +177,14 @@ melo_browser_get_property (GObject *object, guint property_id, GValue *value,
   }
 }
 
+/**
+ * melo_browser_get_info:
+ * @browser: the browser
+ *
+ * Get the details of the #MeloBrowser.
+ *
+ * Returns: a #MeloBrowserInfo or %NULL if get_info callback is not defined.
+ */
 const MeloBrowserInfo *
 melo_browser_get_info (MeloBrowser *browser)
 {
@@ -144,6 +196,15 @@ melo_browser_get_info (MeloBrowser *browser)
   return bclass->get_info (browser);
 }
 
+/**
+ * melo_browser_get_browser_by_id:
+ * @id: the #MeloBrowser ID to retrieve
+ *
+ * Get an instance of the #MeloBrowser with its ID.
+ *
+ * Returns: (transfer full): the #MeloBrowser instance or %NULL if not found.
+ * Use g_object_unref() after usage.
+ */
 MeloBrowser *
 melo_browser_get_browser_by_id (const gchar *id)
 {
@@ -165,6 +226,17 @@ melo_browser_get_browser_by_id (const gchar *id)
   return bro;
 }
 
+/**
+ * melo_browser_new:
+ * @type: the type ID of the #MeloBrowser subtype to instantiate
+ * @id: the #MeloBrowser ID to use for the new instance
+ *
+ * Instantiate a new #MeloBrowser subtype with the @id provided. The new browser
+ * instance is stored in a global list to be retrieved by its ID with
+ * melo_browser_get_browser_by_id().
+ *
+ * Returns: (transfer full): the new #MeloBrowser instance or %NULL if failed.
+ */
 MeloBrowser *
 melo_browser_new (GType type, const gchar *id)
 {
@@ -204,6 +276,15 @@ failed:
   return NULL;
 }
 
+/**
+ * melo_browser_set_player:
+ * @browser: the browser
+ * @player: the #MeloPlayer instance to associate with
+ *
+ * Associate the player to the current browser. It allows to use later the
+ * melo_browser_get_player() to know the associated #MeloPlayer at any place.
+ * This function takes a reference to the player.
+ */
 void
 melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player)
 {
@@ -213,6 +294,15 @@ melo_browser_set_player (MeloBrowser *browser, MeloPlayer *player)
   browser->player = g_object_ref (player);
 }
 
+/**
+ * melo_browser_get_player:
+ * @browser: the browser
+ *
+ * Get the current player associated to the browser.
+ *
+ * Returns: (transfer full): the attached #MeloPlayer instance. Use
+ * g_object_unref() after usage.
+ */
 MeloPlayer *
 melo_browser_get_player (MeloBrowser *browser)
 {
@@ -221,6 +311,19 @@ melo_browser_get_player (MeloBrowser *browser)
   return g_object_ref (browser->player);
 }
 
+/**
+ * melo_browser_get_list:
+ * @browser: the browser
+ * @path: the path to get content list
+ * @params: parameters to generate list
+ *
+ * Get the list of items contained by @path. The @params is used to specify some
+ * additional filters or preferences to generate the list.
+ *
+ * Returns: (transfer full): a #MeloBrowserList with all data related to current
+ * path and item list. %NULL if an error has occurred.
+ * Use melo_browser_list_free() after usage.
+ */
 MeloBrowserList *
 melo_browser_get_list (MeloBrowser *browser, const gchar *path,
                        const MeloBrowserGetListParams *params)
@@ -232,6 +335,20 @@ melo_browser_get_list (MeloBrowser *browser, const gchar *path,
   return bclass->get_list (browser, path, params);
 }
 
+/**
+ * melo_browser_search:
+ * @browser: the browser
+ * @input: the input keywords to use
+ * @params: parameters to generate list
+ *
+ * Get the list of items which satisfy the keywords contained by @input. The
+ * @params is used to specify some additional filters or preferences to generate
+ * the list.
+ *
+ * Returns: (transfer full): a #MeloBrowserList with all data related to current
+ * research and item list. %NULL if an error has occurred.
+ * Use melo_browser_list_free() after usage.
+ */
 MeloBrowserList *
 melo_browser_search (MeloBrowser *browser, const gchar *input,
                      const MeloBrowserSearchParams *params)
@@ -243,6 +360,18 @@ melo_browser_search (MeloBrowser *browser, const gchar *input,
   return bclass->search (browser, input, params);
 }
 
+/**
+ * melo_browser_search_hint:
+ * @browser: the browser
+ * @input: the current keywords input
+ *
+ * Provide some completion on the current input to help the user for its
+ * research.
+ *
+ * Returns: (transfer full): a string containing some additional values or %NULL
+ * if no additional data is available for current input. Use g_free() after
+ * usage.
+ */
 gchar *
 melo_browser_search_hint (MeloBrowser *browser, const gchar *input)
 {
@@ -253,6 +382,18 @@ melo_browser_search_hint (MeloBrowser *browser, const gchar *input)
   return bclass->search_hint (browser, input);
 }
 
+/**
+ * melo_browser_get_tags:
+ * @browser: the browser
+ * @path: the item path
+ * @fields: the tag fields to get
+ *
+ * Get the #MeloTags for a specific path. Only the fields selected by @fields
+ * are filled in the returned #MeloTags.
+ *
+ * Return: (transfer full): a #MeloTags containing all tags corresponding to the
+ * item pointed by @path. Use melo_tags_unref() after usage.
+ */
 MeloTags *
 melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
                        MeloTagsFields fields)
@@ -264,6 +405,18 @@ melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
   return bclass->get_tags (browser, path, fields);
 }
 
+/**
+ * melo_browser_action:
+ * @browser: the browser
+ * @path: the item path
+ * @action: the action to perform
+ * @params: the parameters of the action
+ *
+ * Do the action specified by @action on the item pointed by @path.
+ *
+ * Returns: %TRUE if the action has been successfully executed, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_browser_action (MeloBrowser *browser, const gchar *path,
                      MeloBrowserItemAction action,
@@ -276,6 +429,19 @@ melo_browser_action (MeloBrowser *browser, const gchar *path,
   return bclass->action (browser, path, action, params);
 }
 
+/**
+ * melo_browser_get_cover:
+ * @browser: the browser
+ * @path: the item path
+ * @cover: a pointer to a #GBytes which will contain the cover data
+ * @type: a pointer to a string which will contain the image type as mime
+ *
+ * Get the cover for a specific item pointed by @path. When cover is found and
+ * available, the @cover and @type are set (if not %NULL). After use of @cover
+ * and @type, you must free them respectively with g_bytes_unref() and g_free().
+ *
+ * Returns: %TRUE if @cover and @type have been set, %FALSE otherwise.
+ */
 gboolean
 melo_browser_get_cover (MeloBrowser *browser, const gchar *path, GBytes **cover,
                         gchar **type)
@@ -287,6 +453,16 @@ melo_browser_get_cover (MeloBrowser *browser, const gchar *path, GBytes **cover,
   return bclass->get_cover (browser, path, cover, type);
 }
 
+/**
+ * melo_browser_list_new:
+ * @path: the path of the current list
+ *
+ * Create a new #MeloBrowserList which will contain the content detail and list
+ * for a specific path.
+ *
+ * Returns: (transfer full): a new #MeloBrowserList or %NULL if an error
+ * occurred. After usage, it should be freed with melo_browser_list_free().
+ */
 MeloBrowserList *
 melo_browser_list_new (const gchar *path)
 {
@@ -303,6 +479,12 @@ melo_browser_list_new (const gchar *path)
   return list;
 }
 
+/**
+ * melo_browser_list_free:
+ * @list: the list to free
+ *
+ * Free the #MeloBrowserList instance.
+ */
 void
 melo_browser_list_free (MeloBrowserList *list)
 {
@@ -323,6 +505,15 @@ static const gchar *melo_browser_item_type_map[MELO_BROWSER_ITEM_TYPE_COUNT] = {
   [MELO_BROWSER_ITEM_TYPE_CUSTOM] = "custom",
 };
 
+/**
+ * melo_browser_item_type_from_string:
+ * @type: the type to convert
+ *
+ * Convert a string to a #MeloBrowserItemType.
+ *
+ * Returns: the corresponding #MeloBrowserItemType or
+ * MELO_BROWSER_ITEM_TYPE_CUSTOM otherwise.
+ */
 MeloBrowserItemType
 melo_browser_item_type_from_string (const gchar *type)
 {
@@ -335,6 +526,14 @@ melo_browser_item_type_from_string (const gchar *type)
   return MELO_BROWSER_ITEM_TYPE_CUSTOM;
 }
 
+/**
+ * melo_browser_item_type_to_string:
+ * @type: the type to convert
+ *
+ * Convert a #MeloBrowserItemType to a string.
+ *
+ * Returns: a corresponding string or %NULL if no match has been found.
+ */
 const gchar *
 melo_browser_item_type_to_string (MeloBrowserItemType type)
 {
@@ -353,6 +552,15 @@ melo_browser_item_action_map[MELO_BROWSER_ITEM_ACTION_COUNT] = {
   [MELO_BROWSER_ITEM_ACTION_CUSTOM] = "custom",
 };
 
+/**
+ * melo_browser_item_action_from_string:
+ * @act: the action to convert
+ *
+ * Convert a string to a #MeloBrowserItemAction.
+ *
+ * Returns: the corresponding #MeloBrowserItemAction or
+ * MELO_BROWSER_ITEM_ACTION_CUSTOM otherwise.
+ */
 MeloBrowserItemAction
 melo_browser_item_action_from_string (const gchar *act)
 {
@@ -365,6 +573,14 @@ melo_browser_item_action_from_string (const gchar *act)
   return MELO_BROWSER_ITEM_ACTION_CUSTOM;
 }
 
+/**
+ * melo_browser_item_action_to_string:
+ * @act: the action to convert
+ *
+ * Convert a #MeloBrowserItemAction to a string.
+ *
+ * Returns: a corresponding string or %NULL if no match has been found.
+ */
 const gchar *
 melo_browser_item_action_to_string (MeloBrowserItemAction act)
 {
@@ -373,6 +589,18 @@ melo_browser_item_action_to_string (MeloBrowserItemAction act)
   return NULL;
 }
 
+/**
+ * melo_browser_item_new:
+ * @id: the ID of the item to use for path generation and actions. Can be set
+ *    to %NULL and set later with g_strdup().
+ * @type: the type of the item
+ *
+ * Create a new #MeloBrowserItem which will contain detail for one item of a
+ * #MeloBrowserList.
+ *
+ * Returns: (transfer full): a new #MeloBrowserItem or %NULL if an error
+ * occurred. After usage, it should be freed with melo_browser_item_free().
+ */
 MeloBrowserItem *
 melo_browser_item_new (const gchar *id, MeloBrowserItemType type)
 {
@@ -390,12 +618,27 @@ melo_browser_item_new (const gchar *id, MeloBrowserItemType type)
   return item;
 }
 
+/**
+ * melo_browser_item_cmp:
+ * @a: the first item to compare
+ * @b: the second item to compare
+ *
+ * Compare two #MeloBrowserItem, based on their respective IDs.
+ *
+ * Returns: 0 if identical.
+ */
 gint
 melo_browser_item_cmp (const MeloBrowserItem *a, const MeloBrowserItem *b)
 {
   return g_strcmp0 (a->id, b->id);
 }
 
+/**
+ * melo_browser_item_free:
+ * @item: the item to free
+ *
+ * Free the #MeloBrowserItem instance.
+ */
 void
 melo_browser_item_free (MeloBrowserItem *item)
 {

@@ -42,6 +42,11 @@ typedef struct _MeloModulePrivate MeloModulePrivate;
 
 typedef struct _MeloModuleInfo MeloModuleInfo;
 
+/**
+ * MeloModule:
+ *
+ * The opaque #MeloModule data structure.
+ */
 struct _MeloModule {
   GObject parent_instance;
 
@@ -49,12 +54,29 @@ struct _MeloModule {
   MeloModulePrivate *priv;
 };
 
+/**
+ * MeloModuleClass:
+ * @parent_class: Object parent class
+ * @get_info: Provide the #MeloModuleInfo defined by the #MeloModule
+ *
+ * Subclasses must override at least the @get_info virtual method.
+ */
 struct _MeloModuleClass {
   GObjectClass parent_class;
 
   const MeloModuleInfo *(*get_info) (MeloModule *module);
 };
 
+/**
+ * MeloModuleInfo:
+ * @name: the display name of the #MeloModule
+ * @description: the description of the features offered by the #MeloModule
+ * @config_id: ID of the #MeloConfig attached, can be NULL
+ *
+ * MeloModuleInfo provides all details on a #MeloModule instance as its name,
+ * description, #MeloConfig attached, ... It is important to define this
+ * structure in order to give a correct feedback for user.
+ */
 struct _MeloModuleInfo {
   const gchar *name;
   const gchar *description;
@@ -63,6 +85,7 @@ struct _MeloModuleInfo {
 
 GType melo_module_get_type (void);
 
+/* Get ID / details */
 const gchar *melo_module_get_id (MeloModule *module);
 const MeloModuleInfo *melo_module_get_info (MeloModule *module);
 

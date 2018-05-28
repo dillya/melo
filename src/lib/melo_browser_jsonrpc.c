@@ -21,6 +21,14 @@
 
 #include "melo_browser_jsonrpc.h"
 
+/**
+ * SECTION:melo_browser_jsonrpc
+ * @title: MeloBrowserJsonRPC
+ * @short_description: Basic JSON-RPC methods for Melo Browser
+ *
+ * Helper which implements all basic JSON-RPC methods for #MeloBrowser.
+ */
+
 typedef enum {
   MELO_BROWSER_JSONRPC_LIST_FIELDS_NONE = 0,
   MELO_BROWSER_JSONRPC_LIST_FIELDS_ID = 1,
@@ -64,6 +72,16 @@ melo_browser_jsonrpc_get_browser (JsonObject *obj, JsonNode **error)
   return NULL;
 }
 
+/**
+ * melo_browser_jsonrpc_get_info_fields:
+ * @obj: the #JsonObject to parse
+ * @name: the name of the #JsonArray in @obj containing the fields
+ *
+ * Generate a #MeloBrowserJSONRPCInfoFields from a #JsonObject passed in @obj,
+ * in order to know which fields of #MeloBrowserInfo are requested.
+ *
+ * Returns: a #MeloBrowserJSONRPCInfoFields generated from the object.
+ */
 MeloBrowserJSONRPCInfoFields
 melo_browser_jsonrpc_get_info_fields (JsonObject *obj, const gchar *name)
 {
@@ -108,6 +126,18 @@ melo_browser_jsonrpc_get_info_fields (JsonObject *obj, const gchar *name)
   return fields;
 }
 
+/**
+ * melo_browser_jsonrpc_info_to_object:
+ * @id: the ID of the #MeloBrowser from which getting the #MeloBrowserInfo
+ * @info: the #MeloBrowserInfo associated to the #MeloBrowser
+ * @fields: the fields to fill in the #JsonObject from the @info
+ *
+ * Generate a #JsonObject which contains the translated details on the
+ * #MeloBrowser pointed by @id.
+ *
+ * Returns: (transfer full): a new #JsonObject containing request details or
+ * %NULL if an error occurred.
+ */
 JsonObject *
 melo_browser_jsonrpc_info_to_object (const gchar *id,
                                      const MeloBrowserInfo *info,
@@ -716,7 +746,11 @@ static MeloJSONRPCMethod melo_browser_jsonrpc_methods[] = {
   },
 };
 
-/* Register / Unregister methods */
+/**
+ * melo_browser_jsonrpc_register_methods:
+ *
+ * Register all JSON-RPC methods for #MeloBrowser.
+ */
 void
 melo_browser_jsonrpc_register_methods (void)
 {
@@ -724,6 +758,11 @@ melo_browser_jsonrpc_register_methods (void)
                                  G_N_ELEMENTS (melo_browser_jsonrpc_methods));
 }
 
+/**
+ * melo_browser_jsonrpc_unregister_methods:
+ *
+ * Unregister all JSON-RPC methods for #MeloBrowser.
+ */
 void
 melo_browser_jsonrpc_unregister_methods (void)
 {

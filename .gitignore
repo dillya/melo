@@ -12,11 +12,14 @@ config.status
 config.sub
 configure
 depcomp
+doc
+gtk-doc.make
 install-sh
 libtool
 ltmain.sh
 missing
 stamp-h1
+test-driver
 melo
 .deps
 .libs
