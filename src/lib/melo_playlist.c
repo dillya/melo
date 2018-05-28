@@ -215,14 +215,14 @@ melo_playlist_get_list (MeloPlaylist *playlist, MeloTagsFields tags_fields)
 }
 
 MeloTags *
-melo_playlist_get_tags (MeloPlaylist *playlist, const gchar *name,
+melo_playlist_get_tags (MeloPlaylist *playlist, const gchar *id,
                         MeloTagsFields fields)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->get_tags, NULL);
 
-  return pclass->get_tags (playlist, name, fields);
+  return pclass->get_tags (playlist, id, fields);
 }
 
 gboolean
@@ -237,25 +237,25 @@ melo_playlist_add (MeloPlaylist *playlist, const gchar *path, const gchar *name,
 }
 
 gchar *
-melo_playlist_get_prev (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
+melo_playlist_get_prev (MeloPlaylist *playlist, gchar **id, MeloTags **tags,
                         gboolean set)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->get_prev, NULL);
 
-  return pclass->get_prev (playlist, name, tags, set);
+  return pclass->get_prev (playlist, id, tags, set);
 }
 
 gchar *
-melo_playlist_get_next (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
+melo_playlist_get_next (MeloPlaylist *playlist, gchar **id, MeloTags **tags,
                         gboolean set)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->get_next, NULL);
 
-  return pclass->get_next (playlist, name, tags, set);
+  return pclass->get_next (playlist, id, tags, set);
 }
 
 gboolean
@@ -279,56 +279,56 @@ melo_playlist_has_next (MeloPlaylist *playlist)
 }
 
 gboolean
-melo_playlist_play (MeloPlaylist *playlist, const gchar *path)
+melo_playlist_play (MeloPlaylist *playlist, const gchar *id)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->play, FALSE);
 
-  return pclass->play (playlist, path);
+  return pclass->play (playlist, id);
 }
 
 gboolean
-melo_playlist_sort (MeloPlaylist *playlist, const gchar *name, guint count,
+melo_playlist_sort (MeloPlaylist *playlist, const gchar *id, guint count,
                     MeloSort sort)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->sort, FALSE);
 
-  return pclass->sort (playlist, name, count, sort);
+  return pclass->sort (playlist, id, count, sort);
 }
 
 gboolean
-melo_playlist_move (MeloPlaylist *playlist, const gchar *name, gint up,
+melo_playlist_move (MeloPlaylist *playlist, const gchar *id, gint up,
                     gint count)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->move, FALSE);
 
-  return pclass->move (playlist, name, up, count);
+  return pclass->move (playlist, id, up, count);
 }
 
 gboolean
-melo_playlist_move_to (MeloPlaylist *playlist, const gchar *name,
+melo_playlist_move_to (MeloPlaylist *playlist, const gchar *id,
                        const gchar *before, gint count)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->move_to, FALSE);
 
-  return pclass->move_to (playlist, name, before, count);
+  return pclass->move_to (playlist, id, before, count);
 }
 
 gboolean
-melo_playlist_remove (MeloPlaylist *playlist, const gchar *path)
+melo_playlist_remove (MeloPlaylist *playlist, const gchar *id)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->remove, FALSE);
 
-  return pclass->remove (playlist, path);
+  return pclass->remove (playlist, id);
 }
 
 void
@@ -341,14 +341,14 @@ melo_playlist_empty (MeloPlaylist *playlist)
 }
 
 gboolean
-melo_playlist_get_cover (MeloPlaylist *playlist, const gchar *path,
+melo_playlist_get_cover (MeloPlaylist *playlist, const gchar *id,
                          GBytes **cover, gchar **type)
 {
   MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
 
   g_return_val_if_fail (pclass->get_cover, FALSE);
 
-  return pclass->get_cover (playlist, path, cover, type);
+  return pclass->get_cover (playlist, id, cover, type);
 }
 
 MeloPlaylistList *
@@ -366,8 +366,8 @@ melo_playlist_list_free (MeloPlaylistList *list)
 }
 
 MeloPlaylistItem *
-melo_playlist_item_new (const gchar *name, const gchar *full_name,
-                        const gchar *path, MeloTags *tags)
+melo_playlist_item_new (const gchar *id, const gchar *name, const gchar *path,
+                        MeloTags *tags)
 {
   MeloPlaylistItem *item;
 
@@ -377,8 +377,8 @@ melo_playlist_item_new (const gchar *name, const gchar *full_name,
     return NULL;
 
   /* Set name and type */
+  item->id = g_strdup (id);
   item->name = g_strdup (name);
-  item->full_name = g_strdup (full_name);
   item->path = g_strdup (path);
   if (tags)
     item->tags = melo_tags_ref (tags);
@@ -400,8 +400,8 @@ melo_playlist_item_unref (MeloPlaylistItem *item)
   if (--item->ref_count)
     return;
 
+  g_free (item->id);
   g_free (item->name);
-  g_free (item->full_name);
   g_free (item->path);
   if (item->tags)
     melo_tags_unref (item->tags);
@@ -422,7 +422,7 @@ melo_playlist_item_cmp_##type##_desc (gconstpointer a, gconstpointer b) \
   return melo_sort_cmp_##type (i1->field, i2->field); \
 }
 
-DELCARE_PLAYLIST_ITEM_CMP_FUNC (file, name)
+DELCARE_PLAYLIST_ITEM_CMP_FUNC (file, id)
 DELCARE_PLAYLIST_ITEM_CMP_FUNC (title, tags->title)
 DELCARE_PLAYLIST_ITEM_CMP_FUNC (artist, tags->artist)
 DELCARE_PLAYLIST_ITEM_CMP_FUNC (album, tags->album)

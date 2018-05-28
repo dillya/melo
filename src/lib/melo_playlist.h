@@ -59,27 +59,27 @@ struct _MeloPlaylistClass {
 
   MeloPlaylistList *(*get_list) (MeloPlaylist *playlist,
                                  MeloTagsFields tags_fields);
-  MeloTags *(*get_tags) (MeloPlaylist *playlist, const gchar *name,
+  MeloTags *(*get_tags) (MeloPlaylist *playlist, const gchar *id,
                          MeloTagsFields fields);
   gboolean (*add) (MeloPlaylist *playlist, const gchar *path, const gchar *name,
                    MeloTags *tags, gboolean is_current);
-  gchar *(*get_prev) (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
+  gchar *(*get_prev) (MeloPlaylist *playlist, gchar **id, MeloTags **tags,
                       gboolean set);
-  gchar *(*get_next) (MeloPlaylist *playlist, gchar **name, MeloTags **tags,
+  gchar *(*get_next) (MeloPlaylist *playlist, gchar **id, MeloTags **tags,
                       gboolean set);
   gboolean (*has_prev) (MeloPlaylist *playlist);
   gboolean (*has_next) (MeloPlaylist *playlist);
-  gboolean (*play) (MeloPlaylist *playlist, const gchar *name);
-  gboolean (*sort) (MeloPlaylist *playlist, const gchar *name, guint count,
+  gboolean (*play) (MeloPlaylist *playlist, const gchar *id);
+  gboolean (*sort) (MeloPlaylist *playlist, const gchar *id, guint count,
                     MeloSort sort);
-  gboolean (*move) (MeloPlaylist *playlist, const gchar *name, gint up,
+  gboolean (*move) (MeloPlaylist *playlist, const gchar *id, gint up,
                     gint count);
-  gboolean (*move_to) (MeloPlaylist *playlist, const gchar *name,
+  gboolean (*move_to) (MeloPlaylist *playlist, const gchar *id,
                        const gchar *before, gint count);
-  gboolean (*remove) (MeloPlaylist *playlist, const gchar *name);
+  gboolean (*remove) (MeloPlaylist *playlist, const gchar *id);
   void (*empty) (MeloPlaylist *playlist);
 
-  gboolean (*get_cover) (MeloPlaylist *playlist, const gchar *path,
+  gboolean (*get_cover) (MeloPlaylist *playlist, const gchar *id,
                          GBytes **cover, gchar **type);
 };
 
@@ -89,13 +89,14 @@ struct _MeloPlaylistList {
 };
 
 struct _MeloPlaylistItem {
+  gchar *id;
   gchar *name;
-  gchar *full_name;
   gchar *path;
   MeloTags *tags;
   gboolean can_play;
   gboolean can_remove;
 
+  /*< private >*/
   gint ref_count;
 };
 
@@ -110,35 +111,35 @@ MeloPlayer *melo_playlist_get_player (MeloPlaylist *playlist);
 
 MeloPlaylistList *melo_playlist_get_list (MeloPlaylist *playlist,
                                           MeloTagsFields tags_fields);
-MeloTags *melo_playlist_get_tags (MeloPlaylist *playlist, const gchar *name,
+MeloTags *melo_playlist_get_tags (MeloPlaylist *playlist, const gchar *id,
                                   MeloTagsFields fields);
 gboolean melo_playlist_add (MeloPlaylist *playlist, const gchar *path,
                             const gchar *name, MeloTags *tags,
                             gboolean is_current);
-gchar *melo_playlist_get_prev (MeloPlaylist *playlist, gchar **name,
+gchar *melo_playlist_get_prev (MeloPlaylist *playlist, gchar **id,
                                MeloTags **tags, gboolean set);
-gchar *melo_playlist_get_next (MeloPlaylist *playlist, gchar **name,
+gchar *melo_playlist_get_next (MeloPlaylist *playlist, gchar **id,
                                MeloTags **tags, gboolean set);
 gboolean melo_playlist_has_prev (MeloPlaylist *playlist);
 gboolean melo_playlist_has_next (MeloPlaylist *playlist);
-gboolean melo_playlist_play (MeloPlaylist *playlist, const gchar *name);
-gboolean melo_playlist_sort (MeloPlaylist *playlist, const gchar *name,
+gboolean melo_playlist_play (MeloPlaylist *playlist, const gchar *id);
+gboolean melo_playlist_sort (MeloPlaylist *playlist, const gchar *id,
                              guint count, MeloSort sort);
-gboolean melo_playlist_move (MeloPlaylist *playlist, const gchar *name, gint up,
+gboolean melo_playlist_move (MeloPlaylist *playlist, const gchar *id, gint up,
                              gint count);
-gboolean melo_playlist_move_to (MeloPlaylist *playlist, const gchar *name,
+gboolean melo_playlist_move_to (MeloPlaylist *playlist, const gchar *id,
                                 const gchar *before, gint count);
-gboolean melo_playlist_remove (MeloPlaylist *playlist, const gchar *name);
+gboolean melo_playlist_remove (MeloPlaylist *playlist, const gchar *id);
 void melo_playlist_empty (MeloPlaylist *playlist);
 
-gboolean melo_playlist_get_cover (MeloPlaylist *playlist, const gchar *path,
+gboolean melo_playlist_get_cover (MeloPlaylist *playlist, const gchar *id,
                                   GBytes **cover, gchar **type);
 
 MeloPlaylistList *melo_playlist_list_new (void);
 void melo_playlist_list_free (MeloPlaylistList *list);
 
-MeloPlaylistItem *melo_playlist_item_new (const gchar *name,
-                                          const gchar *full_name,
+MeloPlaylistItem *melo_playlist_item_new (const gchar *id,
+                                          const gchar *name,
                                           const gchar *path, MeloTags *tags);
 MeloPlaylistItem *melo_playlist_item_ref (MeloPlaylistItem *item);
 void melo_playlist_item_unref (MeloPlaylistItem *item);

@@ -24,41 +24,41 @@
 #include "melo_player.h"
 #include "melo_playlist_simple.h"
 
-#define MELO_PLAYLIST_SIMPLE_NAME_EXT_SIZE 10
+#define MELO_PLAYLIST_SIMPLE_ID_EXT_SIZE 10
 
 static MeloPlaylistList *melo_playlist_simple_get_list (MeloPlaylist *playlist,
                                                     MeloTagsFields tags_fields);
 static MeloTags *melo_playlist_simple_get_tags (MeloPlaylist *playlist,
-                                                const gchar *name,
+                                                const gchar *id,
                                                 MeloTagsFields fields);
 static gboolean melo_playlist_simple_add (MeloPlaylist *playlist,
                                           const gchar *path, const gchar *name,
                                           MeloTags *tags, gboolean is_current);
 static gchar *melo_playlist_simple_get_prev (MeloPlaylist *playlist,
-                                             gchar **name, MeloTags **tags,
+                                             gchar **id, MeloTags **tags,
                                              gboolean set);
 static gchar *melo_playlist_simple_get_next (MeloPlaylist *playlist,
-                                             gchar **name, MeloTags **tags,
+                                             gchar **id, MeloTags **tags,
                                              gboolean set);
 static gboolean melo_playlist_simple_has_prev (MeloPlaylist *playlist);
 static gboolean melo_playlist_simple_has_next (MeloPlaylist *playlist);
 static gboolean melo_playlist_simple_play (MeloPlaylist *playlist,
-                                           const gchar *name);
+                                           const gchar *id);
 static gboolean melo_playlist_simple_sort (MeloPlaylist *playlist,
-                                           const gchar *name, guint count,
+                                           const gchar *id, guint count,
                                            MeloSort sort);
 static gboolean melo_playlist_simple_move (MeloPlaylist *playlist,
-                                           const gchar *name, gint up,
+                                           const gchar *id, gint up,
                                            gint count);
 static gboolean melo_playlist_simple_move_to (MeloPlaylist *playlist,
-                                              const gchar *name,
+                                              const gchar *id,
                                               const gchar *before, gint count);
 static gboolean melo_playlist_simple_remove (MeloPlaylist *playlist,
-                                             const gchar *name);
+                                             const gchar *id);
 static void melo_playlist_simple_empty (MeloPlaylist *playlist);
 
 static gboolean melo_playlist_simple_get_cover (MeloPlaylist *playlist,
-                                                const gchar *path,
+                                                const gchar *id,
                                                 GBytes **data, gchar **type);
 
 static void melo_playlist_simple_set_property (GObject *object,
@@ -80,7 +80,7 @@ enum {
 struct _MeloPlaylistSimplePrivate {
   GMutex mutex;
   GList *playlist;
-  GHashTable *names;
+  GHashTable *ids;
   GList *current;
   gboolean playable;
   gboolean removable;
@@ -100,8 +100,8 @@ melo_playlist_simple_finalize (GObject *gobject)
   g_mutex_clear (&priv->mutex);
 
   /* Free hash table */
-  g_hash_table_remove_all (priv->names);
-  g_hash_table_unref (priv->names);
+  g_hash_table_remove_all (priv->ids);
+  g_hash_table_unref (priv->ids);
 
   /* Free playlist */
   g_list_free_full (priv->playlist, (GDestroyNotify) melo_playlist_item_unref);
@@ -172,8 +172,8 @@ melo_playlist_simple_init (MeloPlaylistSimple *self)
   /* Init mutex */
   g_mutex_init (&priv->mutex);
 
-  /* Init Hash table for names */
-  priv->names = g_hash_table_new (g_str_hash, g_str_equal);
+  /* Init Hash table for IDs */
+  priv->ids = g_hash_table_new (g_str_hash, g_str_equal);
 }
 
 static void
@@ -241,7 +241,7 @@ melo_playlist_simple_get_list (MeloPlaylist *playlist,
   list->items = g_list_copy_deep (priv->playlist,
                                   (GCopyFunc) melo_playlist_item_ref, NULL);
   if (priv->current)
-    list->current = g_strdup (((MeloPlaylistItem *) priv->current->data)->name);
+    list->current = g_strdup (((MeloPlaylistItem *) priv->current->data)->id);
 
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
@@ -250,7 +250,7 @@ melo_playlist_simple_get_list (MeloPlaylist *playlist,
 }
 
 static MeloTags *
-melo_playlist_simple_get_tags (MeloPlaylist *playlist, const gchar *name,
+melo_playlist_simple_get_tags (MeloPlaylist *playlist, const gchar *id,
                                MeloTagsFields fields)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
@@ -262,7 +262,7 @@ melo_playlist_simple_get_tags (MeloPlaylist *playlist, const gchar *name,
   g_mutex_lock (&priv->mutex);
 
   /* Find media in hash table */
-  element = g_hash_table_lookup (priv->names, name);
+  element = g_hash_table_lookup (priv->ids, id);
   if (element) {
     MeloPlaylistItem *item;
 
@@ -299,37 +299,37 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *path,
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
   MeloPlaylistItem *item;
   gint len, i;
-  gchar *final_name;
+  gchar *id;
 
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
-  /* Use path when name is not provided */
+  /* Use path when media ID is not provided */
   if (!name)
     name = path;
 
-  /* Generate a new name if current doesn't exists */
+  /* Generate a new media ID if current doesn't exists */
   len = strlen (name);
-  final_name = g_strndup (name, len + MELO_PLAYLIST_SIMPLE_NAME_EXT_SIZE);
-  for (i = 1; i > 0 && g_hash_table_lookup (priv->names, final_name); i++)
-    g_snprintf (final_name + len, MELO_PLAYLIST_SIMPLE_NAME_EXT_SIZE, "_%d", i);
+  id = g_strndup (name, len + MELO_PLAYLIST_SIMPLE_ID_EXT_SIZE);
+  for (i = 1; i > 0 && g_hash_table_lookup (priv->ids, id); i++)
+    g_snprintf (id + len, MELO_PLAYLIST_SIMPLE_ID_EXT_SIZE, "_%d", i);
   if (i < 0) {
     g_mutex_unlock (&priv->mutex);
-    g_free (final_name);
+    g_free (id);
     return FALSE;
   }
 
   /* Add a new simple to playlist */
   item = melo_playlist_item_new (NULL, name, path, tags);
-  item->name = final_name;
+  item->id = id;
   item->can_play = priv->playable;
   item->can_remove = priv->removable;
   priv->playlist = g_list_prepend (priv->playlist, item);
-  g_hash_table_insert (priv->names, final_name, priv->playlist);
+  g_hash_table_insert (priv->ids, id, priv->playlist);
 
   /* Use playlist cover URL if cover data are available */
   if (priv->override_cover_url && tags && melo_tags_has_cover (tags))
-    melo_tags_set_cover_url (tags, G_OBJECT (playlist), final_name, NULL);
+    melo_tags_set_cover_url (tags, G_OBJECT (playlist), id, NULL);
 
   /* Set as current */
   if (is_current)
@@ -345,7 +345,7 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *path,
 }
 
 static gchar *
-melo_playlist_simple_get_prev (MeloPlaylist *playlist, gchar **name,
+melo_playlist_simple_get_prev (MeloPlaylist *playlist, gchar **id,
                                MeloTags **tags, gboolean set)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
@@ -360,8 +360,8 @@ melo_playlist_simple_get_prev (MeloPlaylist *playlist, gchar **name,
   if (priv->current && priv->current->next) {
     item = (MeloPlaylistItem *) priv->current->next->data;
     path = g_strdup (item->path);
-    if (name)
-      *name = g_strdup (item->name);
+    if (id)
+      *id = g_strdup (item->id);
     if (tags && item->tags)
       *tags = melo_tags_ref (item->tags);
     if (set) {
@@ -377,7 +377,7 @@ melo_playlist_simple_get_prev (MeloPlaylist *playlist, gchar **name,
 }
 
 static gchar *
-melo_playlist_simple_get_next (MeloPlaylist *playlist, gchar **name,
+melo_playlist_simple_get_next (MeloPlaylist *playlist, gchar **id,
                                MeloTags **tags, gboolean set)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
@@ -392,8 +392,8 @@ melo_playlist_simple_get_next (MeloPlaylist *playlist, gchar **name,
   if (priv->current && priv->current->prev) {
     item = (MeloPlaylistItem *) priv->current->prev->data;
     path = g_strdup (item->path);
-    if (name)
-      *name = g_strdup (item->name);
+    if (id)
+      *id = g_strdup (item->id);
     if (tags && item->tags)
       *tags = melo_tags_ref (item->tags);
     if (set) {
@@ -447,7 +447,7 @@ melo_playlist_simple_has_next (MeloPlaylist *playlist)
 }
 
 static gboolean
-melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
+melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *id)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
@@ -462,7 +462,7 @@ melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
   g_mutex_lock (&priv->mutex);
 
   /* Find media in hash table */
-  element = g_hash_table_lookup (priv->names, name);
+  element = g_hash_table_lookup (priv->ids, id);
   if (element) {
     item = (MeloPlaylistItem *) element->data;
     melo_playlist_item_ref (item);
@@ -481,7 +481,7 @@ melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
 
   /* Play media if player is available */
   if (playlist->player)
-    melo_player_play (playlist->player, item->path, item->name, item->tags,
+    melo_player_play (playlist->player, item->path, item->id, item->tags,
                       FALSE);
   melo_playlist_item_unref (item);
 
@@ -489,8 +489,8 @@ melo_playlist_simple_play (MeloPlaylist *playlist, const gchar *name)
 }
 
 static gboolean
-melo_playlist_simple_sort (MeloPlaylist *playlist, const gchar *name,
-                           guint count, MeloSort sort)
+melo_playlist_simple_sort (MeloPlaylist *playlist, const gchar *id, guint count,
+                           MeloSort sort)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
@@ -500,8 +500,8 @@ melo_playlist_simple_sort (MeloPlaylist *playlist, const gchar *name,
   g_mutex_lock (&priv->mutex);
 
   /* Find media in list */
-  if (name) {
-    tail = g_hash_table_lookup (priv->names, name);
+  if (id) {
+    tail = g_hash_table_lookup (priv->ids, id);
     if (!tail)
       goto failed;
     tail = tail->next;
@@ -585,7 +585,7 @@ melo_playlist_simple_move_list (GList *list, GList *start, GList *end,
 }
 
 static gboolean
-melo_playlist_simple_move (MeloPlaylist *playlist, const gchar *name, gint up,
+melo_playlist_simple_move (MeloPlaylist *playlist, const gchar *id, gint up,
                            gint count)
 {
   MeloPlaylistSimplePrivate *priv = (MELO_PLAYLIST_SIMPLE (playlist))->priv;
@@ -603,7 +603,7 @@ melo_playlist_simple_move (MeloPlaylist *playlist, const gchar *name, gint up,
   g_mutex_lock (&priv->mutex);
 
   /* Find media in hash table */
-  start = g_hash_table_lookup (priv->names, name);
+  start = g_hash_table_lookup (priv->ids, id);
   if (!start)
     goto failed;
   end = g_list_nth (start, --count);
@@ -633,7 +633,7 @@ failed:
 }
 
 static gboolean
-melo_playlist_simple_move_to (MeloPlaylist *playlist, const gchar *name,
+melo_playlist_simple_move_to (MeloPlaylist *playlist, const gchar *id,
                               const gchar *before, gint count)
 {
   MeloPlaylistSimplePrivate *priv = (MELO_PLAYLIST_SIMPLE (playlist))->priv;
@@ -644,14 +644,14 @@ melo_playlist_simple_move_to (MeloPlaylist *playlist, const gchar *name,
     return FALSE;
 
   /* Do not move */
-  if (!count || !g_strcmp0 (name, before))
+  if (!count || !g_strcmp0 (id, before))
     return TRUE;
 
   /* Lock playlist */
   g_mutex_lock (&priv->mutex);
 
   /* Find media in hash table */
-  start = g_hash_table_lookup (priv->names, name);
+  start = g_hash_table_lookup (priv->ids, id);
   if (!start)
     goto failed;
   end = g_list_nth (start, --count);
@@ -660,7 +660,7 @@ melo_playlist_simple_move_to (MeloPlaylist *playlist, const gchar *name,
 
   /* Get media before which we add our medias */
   if (before) {
-    after = g_hash_table_lookup (priv->names, before);
+    after = g_hash_table_lookup (priv->ids, before);
     if (!after)
       goto failed;
   }
@@ -680,7 +680,7 @@ failed:
 }
 
 static gboolean
-melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
+melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *id)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
   MeloPlaylistSimplePrivate *priv = plsimple->priv;
@@ -695,7 +695,7 @@ melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
   g_mutex_lock (&priv->mutex);
 
   /* Find media in hash table */
-  element = g_hash_table_lookup (priv->names, name);
+  element = g_hash_table_lookup (priv->ids, id);
   if (!element) {
     g_mutex_unlock (&priv->mutex);
     return FALSE;
@@ -711,7 +711,7 @@ melo_playlist_simple_remove (MeloPlaylist *playlist, const gchar *name)
 
   /* Remove from list and hash table */
   priv->playlist = g_list_remove (priv->playlist, item);
-  g_hash_table_remove (priv->names, name);
+  g_hash_table_remove (priv->ids, id);
   melo_playlist_item_unref (item);
 
   /* Update player status */
@@ -741,7 +741,7 @@ melo_playlist_simple_empty (MeloPlaylist *playlist)
 
   /* Remove and free all items */
   g_list_free_full (priv->playlist, (GDestroyNotify) melo_playlist_item_unref);
-  g_hash_table_remove_all (priv->names);
+  g_hash_table_remove_all (priv->ids);
   priv->playlist = NULL;
 
   /* Update player status */
@@ -752,7 +752,7 @@ melo_playlist_simple_empty (MeloPlaylist *playlist)
 }
 
 static gboolean
-melo_playlist_simple_get_cover (MeloPlaylist *playlist, const gchar *path,
+melo_playlist_simple_get_cover (MeloPlaylist *playlist, const gchar *id,
                                 GBytes **data, gchar **type)
 {
   MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
@@ -764,7 +764,7 @@ melo_playlist_simple_get_cover (MeloPlaylist *playlist, const gchar *path,
   g_mutex_lock (&priv->mutex);
 
   /* Find media in hash table */
-  element = g_hash_table_lookup (priv->names, path);
+  element = g_hash_table_lookup (priv->ids, id);
   if (!element) {
     g_mutex_unlock (&priv->mutex);
     return FALSE;
