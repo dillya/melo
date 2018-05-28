@@ -156,7 +156,7 @@ struct _MeloBrowserInfo {
  * @count: number of items in the list
  * @prev_token: token used to iterate backward in list for the current path
  * @next_token: token used to iterate forward in list for the current path
- * @items: a #Glist of #MeloBrowserItem
+ * @items: a #GList of #MeloBrowserItem
  *
  * A list can be restricted to a specific number of item at each call. In this
  * case, the @count will be set lower than the requested count. Then, the user

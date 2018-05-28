@@ -1256,7 +1256,6 @@ melo_player_set_status_tags (MeloPlayer *player, MeloTags *tags)
   melo_player_take_status_tags (player, tags);
 }
 
-
 /**
  * melo_player_status_ref:
  * @status: the player status
