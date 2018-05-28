@@ -24,6 +24,28 @@
 #include "melo_player.h"
 #include "melo_playlist_simple.h"
 
+/**
+ * SECTION:melo_playlist_simple
+ * @title: MeloPlaylistSimple
+ * @short_description: Simple Melo Playlist implementation
+ *
+ * #MeloPlaylistSimple is a basic implementation of a #MeloPlaylist with most
+ * common needs for playlist handling.
+ * It uses a simple internal #GList of #MeloPlaylistItem to handle the media
+ * list and provide the list through melo_playlist_get_list() faster.
+ *
+ * The default behavior can be controlled with #MeloPlaylistSimple:playable and
+ * #MeloPlaylistSimple:removable which respectively indicates if a media can be
+ * played (with the associated #MeloPlayer) or if a media can be removed from
+ * the playlist.
+ *
+ * In addition, a #MeloPlaylistSimple:override-cover-url property is available
+ * to override the cover URL of the #MeloTags provided during call of
+ * melo_playlist_add(), in order to remove dependency on the #MeloTags origin (a
+ * #MeloBrowser or a #MeloPlayer). If enabled, a copy of the image cover data is
+ * done.
+ */
+
 #define MELO_PLAYLIST_SIMPLE_ID_EXT_SIZE 10
 
 static MeloPlaylistList *melo_playlist_simple_get_list (MeloPlaylist *playlist,
@@ -137,21 +159,37 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   oclass->set_property = melo_playlist_simple_set_property;
   oclass->get_property = melo_playlist_simple_get_property;
 
-  /* Install playable property */
+  /**
+   * MeloPlaylistSimple:playable:
+   *
+   * If set to %TRUE the medias in playlist can be played, which means
+   * melo_playlist_play() can be used on any media of the playlist.
+   */
   g_object_class_install_property (oclass, PROP_PLAYABLE,
       g_param_spec_boolean ("playable", "Playable",
                            "Playlist element can be played", FALSE,
                             G_PARAM_READWRITE | G_PARAM_STATIC_NAME |
                             G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB));
 
-  /* Install removable property */
+  /**
+   * MeloPlaylistSimple:removable:
+   *
+   * If set to %TRUE the medias in playlist can be removed, which means
+   * melo_playlist_remove() can be used on any media of the playlist.
+   */
   g_object_class_install_property (oclass, PROP_REMOVABLE,
       g_param_spec_boolean ("removable", "Removable",
                            "Playlist element can be removed", FALSE,
                             G_PARAM_READWRITE | G_PARAM_STATIC_NAME |
                             G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB));
 
-  /* Install override cover URL property */
+  /**
+   * MeloPlaylistSimple:override-cover-url:
+   *
+   * If set to %TRUE the cover URL of media #MeloTags are overrided during
+   * melo_playlist_add() call in order to do no depends on the #MeloBrowser or
+   * #MeloPlayer origins (a copy of the cover data will be performed).
+   */
   g_object_class_install_property (oclass, PROP_OVERRIDE_COVER_URL,
       g_param_spec_boolean ("override-cover-url", "Override cover URL",
                            "Override cover URL in MeloTags at add", FALSE,

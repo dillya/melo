@@ -37,6 +37,11 @@ typedef struct _MeloPlaylistSimple MeloPlaylistSimple;
 typedef struct _MeloPlaylistSimpleClass MeloPlaylistSimpleClass;
 typedef struct _MeloPlaylistSimplePrivate MeloPlaylistSimplePrivate;
 
+/**
+ * MeloPlaylistSimple:
+ *
+ * The opaque #MeloPlaylistSimple data structure.
+ */
 struct _MeloPlaylistSimple {
   MeloPlaylist parent_instance;
 
@@ -44,14 +49,17 @@ struct _MeloPlaylistSimple {
   MeloPlaylistSimplePrivate *priv;
 };
 
+/**
+ * MeloPlaylistSimpleClass:
+ * @parent_class: MeloPlaylist parent class
+ *
+ * The opaque #MeloPlaylistSimpleClass data structure.
+ */
 struct _MeloPlaylistSimpleClass {
   MeloPlaylistClass parent_class;
 };
 
 GType melo_playlist_simple_get_type (void);
-
-void melo_playlist_simple_override_cover_url (MeloPlaylistSimple *plsimple,
-                                              gboolean override_url);
 
 G_END_DECLS
 
