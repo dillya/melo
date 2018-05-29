@@ -119,9 +119,9 @@ struct _MeloBrowserClass {
  * @go_add_support: the melo_browser_action() with MELO_BROWSER_ITEM_ACTION_ADD
  *   can be called with 'go'
  * @go_input_text: text to display in 'go' input, can be %NULL
- * @go_button_list_text: text to display in 'go' list button, can be %NUL
- * @go_button_play_text: text to display in 'go' play button, can be %NUL
- * @go_button_add_text: text to display in 'go' add button, can be %NUL
+ * @go_button_list_text: text to display in 'go' list button, can be %NULL
+ * @go_button_play_text: text to display in 'go' play button, can be %NULL
+ * @go_button_add_text: text to display in 'go' add button, can be %NULL
  * @tags_support: tags are supported (must implement melo_browser_get_tags())
  * @tags_cache_support: caching of #MeloTags is supported, which means that
  *   tags already cached will be retrieved fast, especially in case of a
