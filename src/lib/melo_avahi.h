@@ -40,6 +40,11 @@ typedef struct _MeloAvahiPrivate MeloAvahiPrivate;
 typedef struct AvahiStringList AvahiStringList;
 typedef struct _MeloAvahiService MeloAvahiService;
 
+/**
+ * MeloAvahi:
+ *
+ * The opaque #MeloAvahi data structure.
+ */
 struct _MeloAvahi {
   GObject parent_instance;
 
@@ -47,10 +52,28 @@ struct _MeloAvahi {
   MeloAvahiPrivate *priv;
 };
 
+/**
+ * MeloAvahiClass:
+ * @parent_class: Object parent class
+ *
+ * The #MeloAvahiClass data structure.
+ */
 struct _MeloAvahiClass {
   GObjectClass parent_class;
 };
 
+/**
+ * MeloAvahiService:
+ * @name: the service name
+ * @type: the type of service (protocol like "_http._tcp")
+ * @port: the service port number
+ * @txt: the service TXT record
+ * @ip: the service IPv4 address
+ * @iface: the network interface on which service is listening
+ *
+ * A #MeloAvahiService describe a Zeroconf / mDNS service registered on the
+ * network.
+ */
 struct _MeloAvahiService {
   gchar *name;
   gchar *type;
