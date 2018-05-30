@@ -38,12 +38,6 @@
  * #MeloPlaylistSimple:removable which respectively indicates if a media can be
  * played (with the associated #MeloPlayer) or if a media can be removed from
  * the playlist.
- *
- * In addition, a #MeloPlaylistSimple:override-cover-url property is available
- * to override the cover URL of the #MeloTags provided during call of
- * melo_playlist_add(), in order to remove dependency on the #MeloTags origin (a
- * #MeloBrowser or a #MeloPlayer). If enabled, a copy of the image cover data is
- * done.
  */
 
 #define MELO_PLAYLIST_SIMPLE_ID_EXT_SIZE 10
@@ -79,10 +73,6 @@ static gboolean melo_playlist_simple_remove (MeloPlaylist *playlist,
                                              const gchar *id);
 static void melo_playlist_simple_empty (MeloPlaylist *playlist);
 
-static gboolean melo_playlist_simple_get_cover (MeloPlaylist *playlist,
-                                                const gchar *id,
-                                                GBytes **data, gchar **type);
-
 static void melo_playlist_simple_set_property (GObject *object,
                                                guint property_id,
                                                const GValue *value,
@@ -95,7 +85,6 @@ enum {
   PROP_0,
   PROP_PLAYABLE,
   PROP_REMOVABLE,
-  PROP_OVERRIDE_COVER_URL,
   PROP_LAST
 };
 
@@ -106,7 +95,6 @@ struct _MeloPlaylistSimplePrivate {
   GList *current;
   gboolean playable;
   gboolean removable;
-  gboolean override_cover_url;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloPlaylistSimple, melo_playlist_simple, MELO_TYPE_PLAYLIST)
@@ -152,8 +140,6 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   plclass->remove = melo_playlist_simple_remove;
   plclass->empty = melo_playlist_simple_empty;
 
-  plclass->get_cover = melo_playlist_simple_get_cover;
-
   /* Add custom finalize() function */
   oclass->finalize = melo_playlist_simple_finalize;
   oclass->set_property = melo_playlist_simple_set_property;
@@ -180,19 +166,6 @@ melo_playlist_simple_class_init (MeloPlaylistSimpleClass *klass)
   g_object_class_install_property (oclass, PROP_REMOVABLE,
       g_param_spec_boolean ("removable", "Removable",
                            "Playlist element can be removed", FALSE,
-                            G_PARAM_READWRITE | G_PARAM_STATIC_NAME |
-                            G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB));
-
-  /**
-   * MeloPlaylistSimple:override-cover-url:
-   *
-   * If set to %TRUE the cover URL of media #MeloTags are overrided during
-   * melo_playlist_add() call in order to do no depends on the #MeloBrowser or
-   * #MeloPlayer origins (a copy of the cover data will be performed).
-   */
-  g_object_class_install_property (oclass, PROP_OVERRIDE_COVER_URL,
-      g_param_spec_boolean ("override-cover-url", "Override cover URL",
-                           "Override cover URL in MeloTags at add", FALSE,
                             G_PARAM_READWRITE | G_PARAM_STATIC_NAME |
                             G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB));
 }
@@ -228,9 +201,6 @@ melo_playlist_simple_set_property (GObject *object, guint property_id,
     case PROP_REMOVABLE:
       priv->removable = g_value_get_boolean (value);
       break;
-    case PROP_OVERRIDE_COVER_URL:
-      priv->override_cover_url = g_value_get_boolean (value);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
   }
@@ -250,10 +220,6 @@ melo_playlist_simple_get_property (GObject *object, guint property_id,
     case PROP_REMOVABLE:
       g_value_set_boolean (value, priv->removable);
       break;
-    case PROP_OVERRIDE_COVER_URL:
-      g_value_set_boolean (value, priv->override_cover_url);
-      break;
-
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
   }
@@ -364,10 +330,6 @@ melo_playlist_simple_add (MeloPlaylist *playlist, const gchar *path,
   item->can_remove = priv->removable;
   priv->playlist = g_list_prepend (priv->playlist, item);
   g_hash_table_insert (priv->ids, id, priv->playlist);
-
-  /* Use playlist cover URL if cover data are available */
-  if (priv->override_cover_url && tags && melo_tags_has_cover (tags))
-    melo_tags_set_cover_url (tags, G_OBJECT (playlist), id, NULL);
 
   /* Set as current */
   if (is_current)
@@ -787,34 +749,4 @@ melo_playlist_simple_empty (MeloPlaylist *playlist)
 
   /* Unlock playlist */
   g_mutex_unlock (&priv->mutex);
-}
-
-static gboolean
-melo_playlist_simple_get_cover (MeloPlaylist *playlist, const gchar *id,
-                                GBytes **data, gchar **type)
-{
-  MeloPlaylistSimple *plsimple = MELO_PLAYLIST_SIMPLE (playlist);
-  MeloPlaylistSimplePrivate *priv = plsimple->priv;
-  MeloPlaylistItem *item;
-  GList *element;
-
-  /* Lock playlist */
-  g_mutex_lock (&priv->mutex);
-
-  /* Find media in hash table */
-  element = g_hash_table_lookup (priv->ids, id);
-  if (!element) {
-    g_mutex_unlock (&priv->mutex);
-    return FALSE;
-  }
-
-  /* Get tags from item */
-  item = (MeloPlaylistItem *) element->data;
-  if (item->tags)
-    *data = melo_tags_get_cover (item->tags, type);
-
-  /* Unlock playlist */
-  g_mutex_unlock (&priv->mutex);
-
-  return TRUE;
 }

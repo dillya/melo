@@ -93,9 +93,6 @@ melo_radio_init (MeloRadio *self)
   if (!priv->radios || !priv->player || !priv->player)
     return;
 
-  /* Setup playlist with cover URL override */
-  g_object_set (G_OBJECT (priv->playlist), "override-cover-url", TRUE, NULL);
-
   /* Catch new browser registration */
   g_signal_connect (self, "register-browser",
                     (GCallback) melo_radio_register_browser, NULL);

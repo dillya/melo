@@ -78,7 +78,6 @@ struct _MeloBrowser {
  * @search_hint: Help user by completing its input
  * @get_tags: Provide a #MeloTags containing details on an item
  * @action: Do an action on an item
- * @get_cover: Get image cover for a specific item
  *
  * Subclasses must override at least the get_info virtual method. Others can be
  * kept undefined but functionalities will be reduced.
@@ -97,9 +96,6 @@ struct _MeloBrowserClass {
   gboolean (*action) (MeloBrowser *browser, const gchar *path,
                       MeloBrowserItemAction action,
                       const MeloBrowserActionParams *params);
-
-  gboolean (*get_cover) (MeloBrowser *browser, const gchar *path,
-                         GBytes **cover, gchar **type);
 };
 
 /**
@@ -392,9 +388,6 @@ MeloTags *melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
 gboolean melo_browser_action (MeloBrowser *browser, const gchar *path,
                               MeloBrowserItemAction action,
                               const MeloBrowserActionParams *params);
-
-gboolean melo_browser_get_cover (MeloBrowser *browser, const gchar *path,
-                                 GBytes **cover, gchar **type);
 
 MeloBrowserList *melo_browser_list_new (const gchar *path);
 void melo_browser_list_free (MeloBrowserList *list);

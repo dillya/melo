@@ -79,7 +79,6 @@ struct _MeloPlaylist {
  * @move_to: Move one or more media(s) in the playlist before one item
  * @remove: Remove one media from the playlist
  * @empty: Empty the whole media
- * @get_cover: Provide the image cover data of a media in the playlist
  *
  * Subclasses must override at least the @ virtual method to implement a
  * read-only playlist (associated #MeloPlayer only add media, like webradio
@@ -109,9 +108,6 @@ struct _MeloPlaylistClass {
                        const gchar *before, gint count);
   gboolean (*remove) (MeloPlaylist *playlist, const gchar *id);
   void (*empty) (MeloPlaylist *playlist);
-
-  gboolean (*get_cover) (MeloPlaylist *playlist, const gchar *id,
-                         GBytes **cover, gchar **type);
 };
 
 /**
@@ -183,9 +179,6 @@ gboolean melo_playlist_move_to (MeloPlaylist *playlist, const gchar *id,
                                 const gchar *before, gint count);
 gboolean melo_playlist_remove (MeloPlaylist *playlist, const gchar *id);
 void melo_playlist_empty (MeloPlaylist *playlist);
-
-gboolean melo_playlist_get_cover (MeloPlaylist *playlist, const gchar *id,
-                                  GBytes **cover, gchar **type);
 
 MeloPlaylistList *melo_playlist_list_new (void);
 void melo_playlist_list_free (MeloPlaylistList *list);

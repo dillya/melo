@@ -40,6 +40,7 @@ dnl Library requirements
 GLIB_REQ=2.40.0
 JSON_GLIB_REQ=1.0.2
 GSTREAMER_REQ=1.10.4
+LIBSOUP_REQ=2.40.0
 AVAHI_GOBJECT_REQ=0.6.31
 
 dnl Check library dependencies
@@ -51,6 +52,7 @@ PKG_CHECK_MODULES([LIBMELO_DEPS],
   gstreamer-1.0 >= $GSTREAMER_REQ
   gstreamer-tag-1.0 >= $GSTREAMER_REQ
   gstreamer-pbutils-1.0 >= $GSTREAMER_REQ
+  libsoup-2.4 >= $LIBSOUP_REQ
   avahi-gobject >= $AVAHI_GOBJECT_REQ)
 
 dnl disable modules if not needed

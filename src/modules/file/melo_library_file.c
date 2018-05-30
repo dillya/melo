@@ -59,10 +59,6 @@ static gboolean melo_library_file_action (MeloBrowser *browser,
                                          MeloBrowserItemAction action,
                                          const MeloBrowserActionParams *params);
 
-static gboolean melo_library_file_get_cover (MeloBrowser *browser,
-                                             const gchar *path, GBytes **data,
-                                             gchar **type);
-
 struct _MeloLibraryFilePrivate {
   GMutex mutex;
   MeloFileDB *fdb;
@@ -101,8 +97,6 @@ melo_library_file_class_init (MeloLibraryFileClass *klass)
   bclass->search = melo_library_file_search;
   bclass->get_tags = melo_library_file_get_tags;
   bclass->action = melo_library_file_action;
-
-  bclass->get_cover = melo_library_file_get_cover;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_library_file_finalize;
@@ -534,32 +528,4 @@ melo_library_file_action (MeloBrowser *browser, const gchar *path,
   }
 
   return FALSE;
-}
-
-static gboolean
-melo_library_file_get_cover (MeloBrowser *browser, const gchar *path,
-                             GBytes **data, gchar **type)
-{
-  MeloLibraryFilePrivate *priv = (MELO_LIBRARY_FILE (browser))->priv;
-
-  GMappedFile *file;
-  gchar *fpath;
-
-  /* Generate cover file path */
-  fpath = g_strdup_printf ("%s/%s", melo_file_db_get_cover_path (priv->fdb),
-                           path);
-
-  /* File doesn't not exist */
-  if (!g_file_test (fpath, G_FILE_TEST_EXISTS)) {
-    g_free (fpath);
-    return FALSE;
-  }
-
-  /* Map file and create a GBytes */
-  file = g_mapped_file_new (fpath, FALSE, NULL);
-  *data = g_mapped_file_get_bytes (file);
-  g_mapped_file_unref (file);
-  g_free (fpath);
-
-  return TRUE;
 }

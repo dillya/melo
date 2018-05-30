@@ -357,5 +357,8 @@ end:
   /* Free context */
   g_free (context.name);
 
+  /* Flush image cover cache */
+  melo_tags_flush_cover_cache ();
+
   return 0;
 }

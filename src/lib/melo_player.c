@@ -827,37 +827,6 @@ melo_player_get_tags (MeloPlayer *player)
   return tags;
 }
 
-/**
- * melo_player_get_cover:
- * @player: the player
- * @cover: a pointer to a #GBytes which is set with image cover data
- * @type: a pointer to a string which is set with image mime type
- *
- * Get the image cover data and type of the current media playing.
- *
- * Returns: %TRUE if @cover and @type have been set with image data, %FALSE
- * otherwise.
- */
-gboolean
-melo_player_get_cover (MeloPlayer *player, GBytes **cover, gchar **type)
-{
-  MeloPlayerClass *pclass = MELO_PLAYER_GET_CLASS (player);
-  MeloTags *tags;
-
-  /* Use specific cover getter implementation */
-  if (pclass->get_cover)
-    return pclass->get_cover (player, cover, type);
-
-  /* Fall back to standard cover getter */
-  tags = melo_player_get_tags (player);
-  if (tags) {
-    *cover = melo_tags_get_cover (tags, type);
-    melo_tags_unref (tags);
-  }
-
-  return TRUE;
-}
-
 static MeloPlayerStatus *
 melo_player_status_new (MeloPlayerState state, const gchar *name,
                         MeloTags *tags)

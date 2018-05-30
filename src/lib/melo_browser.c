@@ -430,30 +430,6 @@ melo_browser_action (MeloBrowser *browser, const gchar *path,
 }
 
 /**
- * melo_browser_get_cover:
- * @browser: the browser
- * @path: the item path
- * @cover: a pointer to a #GBytes which will contain the cover data
- * @type: a pointer to a string which will contain the image type as mime
- *
- * Get the cover for a specific item pointed by @path. When cover is found and
- * available, the @cover and @type are set (if not %NULL). After use of @cover
- * and @type, you must free them respectively with g_bytes_unref() and g_free().
- *
- * Returns: %TRUE if @cover and @type have been set, %FALSE otherwise.
- */
-gboolean
-melo_browser_get_cover (MeloBrowser *browser, const gchar *path, GBytes **cover,
-                        gchar **type)
-{
-  MeloBrowserClass *bclass = MELO_BROWSER_GET_CLASS (browser);
-
-  g_return_val_if_fail (bclass->get_cover, FALSE);
-
-  return bclass->get_cover (browser, path, cover, type);
-}
-
-/**
  * melo_browser_list_new:
  * @path: the path of the current list
  *

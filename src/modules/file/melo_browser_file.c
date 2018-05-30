@@ -59,10 +59,6 @@ static gboolean melo_browser_file_action (MeloBrowser *browser,
                                          MeloBrowserItemAction action,
                                          const MeloBrowserActionParams *params);
 
-static gboolean melo_browser_file_get_cover (MeloBrowser *browser,
-                                             const gchar *path, GBytes **data,
-                                             gchar **type);
-
 struct _MeloBrowserFilePrivate {
   gchar *local_path;
   GVolumeMonitor *monitor;
@@ -119,8 +115,6 @@ melo_browser_file_class_init (MeloBrowserFileClass *klass)
   bclass->get_list = melo_browser_file_get_list;
   bclass->get_tags = melo_browser_file_get_tags;
   bclass->action = melo_browser_file_action;
-
-  bclass->get_cover = melo_browser_file_get_cover;
 
   /* Add custom finalize() function */
   oclass->finalize = melo_browser_file_finalize;
@@ -299,27 +293,21 @@ melo_browser_file_discover_tags (MeloBrowserFile *bfile,
   MeloBrowserFilePrivate *priv = bfile->priv;
   const GstTagList *gtags;
   MeloTags *tags = NULL;
-  gchar *cover_file = NULL;
 
   /* Get GstTagLsit */
   gtags = gst_discoverer_info_get_tags (info);
 
   /* Convert to MeloTags */
   if (gtags)
-    tags = melo_tags_new_from_gst_tag_list (gtags, MELO_TAGS_FIELDS_FULL);
+    tags = melo_tags_new_from_gst_tag_list (gtags, MELO_TAGS_FIELDS_FULL,
+                                            MELO_TAGS_COVER_PERSIST_DISK);
 
   /* Add file to database if tags are available */
   if (priv->fdb && tags) {
     if (path)
-      melo_file_db_add_tags (priv->fdb, path, file, 0, tags, &cover_file);
+      melo_file_db_add_tags (priv->fdb, path, file, 0, tags);
     else
-      melo_file_db_add_tags2 (priv->fdb, path_id, file, 0, tags, &cover_file);
-
-    /* Add cover URL */
-    if (cover_file) {
-      melo_tags_set_cover_url (tags, G_OBJECT (bfile), cover_file, NULL);
-      g_free (cover_file);
-    }
+      melo_file_db_add_tags2 (priv->fdb, path_id, file, 0, tags);
   }
 
   return tags;
@@ -1155,31 +1143,4 @@ melo_browser_file_action (MeloBrowser *browser, const gchar *path,
   }
 
   return FALSE;
-}
-
-static gboolean
-melo_browser_file_get_cover (MeloBrowser *browser, const gchar *path,
-                             GBytes **data, gchar **type)
-{
-  MeloBrowserFilePrivate *priv = (MELO_BROWSER_FILE (browser))->priv;
-  GMappedFile *file;
-  gchar *fpath;
-
-  /* Generate cover file path */
-  fpath = g_strdup_printf ("%s/%s", melo_file_db_get_cover_path (priv->fdb),
-                           path);
-
-  /* File doesn't not exist */
-  if (!g_file_test (fpath, G_FILE_TEST_EXISTS)) {
-    g_free (fpath);
-    return FALSE;
-  }
-
-  /* Map file and create a GBytes */
-  file = g_mapped_file_new (fpath, FALSE, NULL);
-  *data = g_mapped_file_get_bytes (file);
-  g_mapped_file_unref (file);
-  g_free (fpath);
-
-  return TRUE;
 }
