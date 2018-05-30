@@ -35,7 +35,6 @@ melo_httpd_cover_thread_handler (gpointer data, gpointer user_data)
   SoupBuffer *buffer;
   SoupURI *uri;
   GBytes *cover = NULL;
-  gchar *type = NULL;
   const char *cover_data;
   const gchar *url;
   gsize size;
@@ -43,21 +42,19 @@ melo_httpd_cover_thread_handler (gpointer data, gpointer user_data)
   /* Get URL from request */
   uri = soup_message_get_uri (msg);
   url = soup_uri_get_path (uri);
-  if (url && *url == '/')
-    url++;
+
+  /* Check URL and move to ID */
+  if (!url || strncmp (url, "/cover/", 7))
+    goto error;
+  url += 7;
 
   /* Get cover data from its URL */
-  if (!url || !melo_tags_get_cover_from_url (url, &cover, &type) || !cover) {
-    g_free (type);
-    soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
-    soup_server_unpause_message (server, msg);
-    return;
-  }
+  cover = melo_tags_get_cover_by_id (url);
+  if (!cover)
+    goto error;
 
   /* Set response status */
   soup_message_set_status (msg, SOUP_STATUS_OK);
-  if (type)
-    soup_message_headers_set_content_type (msg->response_headers, type, NULL);
 
   /* Create a soup buffer */
   cover_data = g_bytes_get_data (cover, &size);
@@ -69,6 +66,11 @@ melo_httpd_cover_thread_handler (gpointer data, gpointer user_data)
   soup_buffer_free (buffer);
 
   /* Set response */
+  soup_server_unpause_message (server, msg);
+  return;
+
+error:
+  soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
   soup_server_unpause_message (server, msg);
 }
 

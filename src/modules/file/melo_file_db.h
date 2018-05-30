@@ -85,18 +85,17 @@ typedef enum {
 
 GType melo_file_db_get_type (void);
 
-MeloFileDB *melo_file_db_new (const gchar *file, const gchar *cover_path);
-const gchar *melo_file_db_get_cover_path (MeloFileDB *db);
+MeloFileDB *melo_file_db_new (const gchar *file);
 
 gboolean melo_file_db_get_path_id (MeloFileDB *db, const gchar *path,
                                    gboolean add, gint *path_id);
 
 gboolean melo_file_db_add_tags (MeloFileDB *db, const gchar *path,
                                 const gchar *filename, gint timestamp,
-                                MeloTags *tags, gchar **cover_out_file);
+                                MeloTags *tags);
 gboolean melo_file_db_add_tags2 (MeloFileDB *db, gint path_id,
                                  const gchar *filename, gint timestamp,
-                                 MeloTags *tags, gchar **cover_out_file);
+                                 MeloTags *tags);
 
 /* Get tags for one or more types */
 MeloTags *melo_file_db_get_tags (MeloFileDB *db, GObject *obj,

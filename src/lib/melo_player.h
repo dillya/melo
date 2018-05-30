@@ -106,7 +106,6 @@ struct _MeloPlayer {
  * @set_volume: Set the volume of the player
  * @set_mute: Set the player mute state
  * @get_pos: Get current position in stream (in ms)
- * @get_cover: Get the image cover data of current playing media
  *
  * Subclasses must override at least the get_info virtual method. Others can be
  * kept undefined but functionalities will be reduced.
@@ -130,7 +129,6 @@ struct _MeloPlayerClass {
   gboolean (*set_mute) (MeloPlayer *player, gboolean mute);
 
   gint (*get_pos) (MeloPlayer *player);
-  gboolean (*get_cover) (MeloPlayer *player, GBytes **cover, gchar **type);
 };
 
 /**
@@ -227,8 +225,6 @@ gint melo_player_get_pos (MeloPlayer *player);
 gdouble melo_player_get_volume (MeloPlayer *player);
 gboolean melo_player_get_mute (MeloPlayer *player);
 MeloTags *melo_player_get_tags (MeloPlayer *player);
-gboolean melo_player_get_cover (MeloPlayer *player, GBytes **cover,
-                                gchar **type);
 
 /* Protected functions for Player status update */
 gboolean melo_player_reset_status (MeloPlayer *player, MeloPlayerState state,

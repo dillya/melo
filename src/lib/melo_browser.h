@@ -78,7 +78,6 @@ struct _MeloBrowser {
  * @search_hint: Help user by completing its input
  * @get_tags: Provide a #MeloTags containing details on an item
  * @action: Do an action on an item
- * @get_cover: Get image cover for a specific item
  *
  * Subclasses must override at least the get_info virtual method. Others can be
  * kept undefined but functionalities will be reduced.
@@ -97,9 +96,6 @@ struct _MeloBrowserClass {
   gboolean (*action) (MeloBrowser *browser, const gchar *path,
                       MeloBrowserItemAction action,
                       const MeloBrowserActionParams *params);
-
-  gboolean (*get_cover) (MeloBrowser *browser, const gchar *path,
-                         GBytes **cover, gchar **type);
 };
 
 /**
@@ -119,9 +115,9 @@ struct _MeloBrowserClass {
  * @go_add_support: the melo_browser_action() with MELO_BROWSER_ITEM_ACTION_ADD
  *   can be called with 'go'
  * @go_input_text: text to display in 'go' input, can be %NULL
- * @go_button_list_text: text to display in 'go' list button, can be %NUL
- * @go_button_play_text: text to display in 'go' play button, can be %NUL
- * @go_button_add_text: text to display in 'go' add button, can be %NUL
+ * @go_button_list_text: text to display in 'go' list button, can be %NULL
+ * @go_button_play_text: text to display in 'go' play button, can be %NULL
+ * @go_button_add_text: text to display in 'go' add button, can be %NULL
  * @tags_support: tags are supported (must implement melo_browser_get_tags())
  * @tags_cache_support: caching of #MeloTags is supported, which means that
  *   tags already cached will be retrieved fast, especially in case of a
@@ -392,9 +388,6 @@ MeloTags *melo_browser_get_tags (MeloBrowser *browser, const gchar *path,
 gboolean melo_browser_action (MeloBrowser *browser, const gchar *path,
                               MeloBrowserItemAction action,
                               const MeloBrowserActionParams *params);
-
-gboolean melo_browser_get_cover (MeloBrowser *browser, const gchar *path,
-                                 GBytes **cover, gchar **type);
 
 MeloBrowserList *melo_browser_list_new (const gchar *path);
 void melo_browser_list_free (MeloBrowserList *list);

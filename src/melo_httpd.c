@@ -72,9 +72,6 @@ melo_httpd_finalize (GObject *gobject)
   MeloHTTPDPrivate *priv =
                          melo_httpd_get_instance_private (MELO_HTTPD (gobject));
 
-  /* Free cover URL base */
-  melo_tags_set_cover_url_base (NULL);
-
   /* Free avahi client */
   if (priv->avahi)
     g_object_unref (priv->avahi);
@@ -243,9 +240,6 @@ melo_httpd_start (MeloHTTPD *httpd, guint port, guint sport, const gchar *name)
   /* Add an handler for covers */
   soup_server_add_handler (server, "/cover", melo_httpd_cover_handler,
                            priv->cover_pool, NULL);
-
-  /* Set cover URL base */
-  melo_tags_set_cover_url_base ("cover");
 
   /* Add avahi service(s) */
   if (priv->avahi) {

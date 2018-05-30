@@ -28,6 +28,16 @@
 
 #include "melo_avahi.h"
 
+/**
+ * SECTION:melo_avahi
+ * @title: MeloAvahi
+ * @short_description: An Avahi client to manage Zeroconf services
+ *
+ * #MeloAvahi is intended to help Zeroconf / mDNS service registration for
+ * any sub-module of Melo. It also do discovering in order to list a specific
+ * service type on the network.
+ */
+
 /* Common avahi client */
 G_LOCK_DEFINE_STATIC (melo_avahi_mutex);
 GaClient *melo_avahi_client;
@@ -112,6 +122,14 @@ melo_avahi_init (MeloAvahi *self)
   G_UNLOCK (melo_avahi_mutex);
 }
 
+/**
+ * melo_avahi_new:
+ *
+ * Instantiate a new #MeloAvahi.
+ *
+ * Returns: (transfer full): the new #MeloAvahi instance or %NULL if failed.
+ * After use, call g_object_unref().
+ */
 MeloAvahi *
 melo_avahi_new (void)
 {
@@ -185,6 +203,16 @@ melo_avahi_service_cmp (const MeloAvahiService *a, const MeloAvahiService *b)
          a->iface != b->iface;
 }
 
+/**
+ * melo_avahi_service_get_txt:
+ * @s: an avahi service
+ * @key: the key to find in the txt record of the service
+ *
+ * Extract the value associated to @key in the TXT record of the service @s.
+ *
+ * Returns: (transfer full): a string containing the value associated to @key or
+ * %NULL if @key has not been found in TXT record. After use, call g_free().
+ */
 gchar *
 melo_avahi_service_get_txt (const MeloAvahiService *s, const gchar *key)
 {
@@ -201,6 +229,15 @@ melo_avahi_service_get_txt (const MeloAvahiService *s, const gchar *key)
   return g_strndup (l->text + len, l->size - len);
 }
 
+/**
+ * melo_avahi_service_copy:
+ * @s: the avahi service
+ *
+ * Provide a deep copy of a #MeloAvahiService.
+ *
+ * Returns: (transfer full): a copy of the #MeloAvahiService in @s. Must be
+ * freed after usage with melo_avahi_service_free().
+ */
 MeloAvahiService *
 melo_avahi_service_copy (const MeloAvahiService *s)
 {
@@ -222,6 +259,12 @@ melo_avahi_service_copy (const MeloAvahiService *s)
   return service;
 }
 
+/**
+ * melo_avahi_service_free:
+ * @s: the avahi service
+ *
+ * Free a #MeloAvahiService instance.
+ */
 void
 melo_avahi_service_free (MeloAvahiService *s)
 {
@@ -231,6 +274,25 @@ melo_avahi_service_free (MeloAvahiService *s)
   g_slice_free (MeloAvahiService, s);
 }
 
+/**
+ * melo_avahi_add_service:
+ * @avahi: the avahi object
+ * @name: the service name
+ * @type: the type of service (protocol like "_http._tcp")
+ * @port: the service port number
+ * @...: the string list to add to TXT record as "key=value". Must be terminated
+ *    with a %NULL pointer
+ *
+ * Add a new service to Avahi in order to broadcast the service through
+ * Zeroconf / mDNS.
+ * The service is handled by the Avahi object and is removed automatically when
+ * last reference of the #MeloAvahi is unreferenced with g_object_unref().
+ * The returned #MeloAvahiService is used to update to remove the service with
+ * respectively melo_avahi_update_service() and melo_avahi_remove_service().
+ *
+ * Returns: (transfer none): a pointer to the #MeloAvahiService created to
+ * handle the new service.
+ */
 const MeloAvahiService *
 melo_avahi_add_service (MeloAvahi *avahi, const gchar *name, const gchar *type,
                         gint port, ...)
@@ -272,6 +334,23 @@ melo_avahi_add_service (MeloAvahi *avahi, const gchar *name, const gchar *type,
   return s;
 }
 
+/**
+ * melo_avahi_update_service:
+ * @avahi: the avahi object
+ * @service: the avahi service
+ * @name: the new service name or %NULL
+ * @type: the new type of service or %NULL
+ * @port: the new service port number or 0
+ * @update_txt: set to %TRUE is the TXT record must be updated
+ * @...: the new string list to add to TXT record as "key=value". Must be
+ *    terminated with a %NULL pointer. The previous TXT record is freed
+ *
+ * Update a registered service with some new values such as the name, the type,
+ * the port or the TXT record.
+ *
+ * Returns: %TRUE if the service has been updated successfully, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_avahi_update_service (MeloAvahi *avahi, const MeloAvahiService *service,
                            const gchar *name, const gchar *type, gint port,
@@ -313,6 +392,13 @@ melo_avahi_update_service (MeloAvahi *avahi, const MeloAvahiService *service,
   return melo_avahi_update_group (melo_avahi_client->avahi_client, priv);
 }
 
+/**
+ * melo_avahi_remove_service:
+ * @avahi: the avahi object
+ * @service: the avahi service
+ *
+ * Unregister and remove a service from Zeroconf / mDNS.
+ */
 void
 melo_avahi_remove_service (MeloAvahi *avahi, const MeloAvahiService *service)
 {
@@ -443,6 +529,20 @@ melo_avahi_browser_callback (AvahiServiceBrowser *ab, AvahiIfIndex interface,
   }
 }
 
+/**
+ * melo_avahi_add_browser:
+ * @avahi: the avahi object
+ * @type: the service type to monitor
+ *
+ * Add a new service browser to monitor all services of type @type on the
+ * network.
+ * After browser has been created, the melo_avahi_list_services() will provide
+ * a list with the available services with @type, in addition to other services
+ * already monitored by the #MeloAvahi object.
+ * To remove a browser, call melo_avahi_remove_browser().
+ *
+ * Returns: %TRUE if the new browser has been created, %FALSE otherwise.
+ */
 gboolean
 melo_avahi_add_browser (MeloAvahi *avahi, const gchar *type)
 {
@@ -491,6 +591,18 @@ melo_avahi_service_list_copy (gconstpointer src, gpointer data)
   return melo_avahi_service_copy ((MeloAvahiService *) src);
 }
 
+/**
+ * melo_avahi_list_services:
+ * @avahi: the avahi object
+ *
+ * Provide a #GList of #MeloAvahiService corresponding to all services
+ * available on the network with a service type for which a browser has been
+ * added with melo_avahi_add_browser().
+ *
+ * Returns: (transfer full): a #GList of #MeloAvahiService available. You must
+ * free list and its data when you are done with it. You can use
+ * g_list_free_full() with melo_avahi_service_free() to do this.
+ */
 GList *
 melo_avahi_list_services (MeloAvahi *avahi)
 {
@@ -499,6 +611,13 @@ melo_avahi_list_services (MeloAvahi *avahi)
   return g_list_copy_deep (priv->bservices, melo_avahi_service_list_copy, NULL);
 }
 
+/**
+ * melo_avahi_remove_browser:
+ * @avahi: the avahi object
+ * @type: the service type to monitor
+ *
+ * Remove the browser which monitors all services of type @type.
+ */
 void
 melo_avahi_remove_browser (MeloAvahi *avahi, const gchar *type)
 {

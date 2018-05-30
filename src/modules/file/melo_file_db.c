@@ -23,8 +23,8 @@
 
 #include "melo_file_db.h"
 
-#define MELO_FILE_DB_VERSION 5
-#define MELO_FILE_DB_VERSION_STR "5"
+#define MELO_FILE_DB_VERSION 6
+#define MELO_FILE_DB_VERSION_STR "6"
 
 /* Table creation */
 #define MELO_FILE_DB_CREATE \
@@ -87,7 +87,6 @@ static const gchar *melo_sort_to_file_db_string[MELO_SORT_COUNT] = {
 struct _MeloFileDBPrivate {
   GMutex mutex;
   sqlite3 *db;
-  gchar *cover_path;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MeloFileDB, melo_file_db, G_TYPE_OBJECT)
@@ -100,9 +99,6 @@ melo_file_db_finalize (GObject *gobject)
 {
   MeloFileDB *fdb = MELO_FILE_DB (gobject);
   MeloFileDBPrivate *priv = melo_file_db_get_instance_private (fdb);
-
-  /* Free cover path */
-  g_free (priv->cover_path);
 
   /* Close database file */
   melo_file_db_close (fdb);
@@ -135,7 +131,7 @@ melo_file_db_init (MeloFileDB *self)
 }
 
 MeloFileDB *
-melo_file_db_new (const gchar *file, const gchar *cover_path)
+melo_file_db_new (const gchar *file)
 {
   MeloFileDB *fdb;
 
@@ -150,17 +146,7 @@ melo_file_db_new (const gchar *file, const gchar *cover_path)
     return NULL;
   }
 
-  /* Copy cover path and create it */
-  fdb->priv->cover_path = g_strdup (cover_path);
-  g_mkdir_with_parents (fdb->priv->cover_path, 0700);
-
   return fdb;
-}
-
-const gchar *
-melo_file_db_get_cover_path (MeloFileDB *db)
-{
-  return db->priv->cover_path;
 }
 
 static gboolean
@@ -289,9 +275,9 @@ melo_file_db_get_path_id (MeloFileDB *db, const gchar *path, gboolean add,
 
 gboolean
 melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
-                        gint timestamp, MeloTags *tags, gchar **cover_out_file)
+                        gint timestamp, MeloTags *tags)
 {
-  const gchar *title, *artist, *album, *genre;
+  const gchar *title, *artist, *album, *genre, *cover;
   MeloFileDBPrivate *priv = db->priv;
   sqlite3_stmt *req;
   guint track = 0, tracks = 0;
@@ -301,7 +287,6 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
   gint genre_id;
   gint date = 0;
   gboolean ret;
-  gchar *cover_file = NULL;
   char *sql, *sql_fts;
 
   /* Lock database access */
@@ -330,43 +315,13 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
   artist = tags && tags->artist ? tags->artist : "Unknown";
   album = tags && tags->album ? tags->album : "Unknown";
   genre = tags && tags->genre ? tags->genre : "Unknown";
+  cover = tags && tags->cover ? tags->cover : NULL;
 
   /* Get values from tags */
   if (tags) {
-    GBytes *cover;
-
-    /* Get numbers from tags */
     date = tags->date;
     track = tags->track;
     tracks = tags->tracks;
-
-    /* Get cover art */
-    cover = melo_tags_get_cover (tags, NULL);
-    if (cover) {
-      gchar *cover_path;
-      gchar *type;
-      gchar *md5;
-
-      /* Calculate md5 of cover art */
-      md5 = g_compute_checksum_for_bytes (G_CHECKSUM_MD5, cover);
-
-      /* Get cover type */
-      type = melo_tags_get_cover_type (tags);
-
-      /* Generate file name */
-      cover_file = g_strdup_printf ("%s.%s", md5,
-                                 g_strcmp0 (type, "image/png") ? "png" : "jpg");
-      g_free (type);
-      g_free (md5);
-
-      /* Create file if not exist */
-      cover_path = g_strdup_printf ("%s/%s", priv->cover_path, cover_file);
-      if (!g_file_test (cover_path, G_FILE_TEST_EXISTS))
-        g_file_set_contents (cover_path, g_bytes_get_data (cover, NULL),
-                             g_bytes_get_size (cover), NULL);
-      g_free (cover_path);
-      g_bytes_unref (cover);
-    }
   }
 
   /* Find artist ID */
@@ -432,7 +387,7 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
                            "timestamp) "
                            "VALUES (%Q,%d,%d,%d,%d,%d,%d,%Q,'%q',%d,%d)",
                            title, artist_id, album_id, genre_id, date, track,
-                           tracks, cover_file, filename, path_id, timestamp);
+                           tracks, cover, filename, path_id, timestamp);
     sql_fts = sqlite3_mprintf ("INSERT INTO song_fts (file,title) "
                                "VALUES ('%q',%Q)", filename, title);
   } else {
@@ -442,7 +397,7 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
                            "timestamp = '%d' "
                            "WHERE rowid = %d",
                            title, artist_id, album_id, genre_id, date, track,
-                           tracks, cover_file, timestamp, row_id);
+                           tracks, cover, timestamp, row_id);
     sql_fts = sqlite3_mprintf ("UPDATE song_fts SET title=%Q WHERE rowid = %d",
                                title, row_id);
   }
@@ -453,12 +408,6 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
   sqlite3_exec (priv->db, sql_fts, NULL, NULL, NULL);
   sqlite3_free (sql_fts);
 
-  /* Get cover file */
-  if (cover_out_file)
-    *cover_out_file = cover_file;
-  else
-    g_free (cover_file);
-
   /* Unlock database access */
   g_mutex_unlock (&priv->mutex);
 
@@ -467,7 +416,7 @@ melo_file_db_add_tags2 (MeloFileDB *db, gint path_id, const gchar *filename,
 
 gboolean
 melo_file_db_add_tags (MeloFileDB *db, const gchar *path, const gchar *filename,
-                       gint timestamp, MeloTags *tags, gchar **cover_out_file)
+                       gint timestamp, MeloTags *tags)
 {
   gint path_id;
 
@@ -476,8 +425,7 @@ melo_file_db_add_tags (MeloFileDB *db, const gchar *path, const gchar *filename,
     return FALSE;
 
   /* Add tags to database */
-  return melo_file_db_add_tags2 (db, path_id, filename, timestamp, tags,
-                                 cover_out_file);
+  return melo_file_db_add_tags2 (db, path_id, filename, timestamp, tags);
 }
 
 #define MELO_FILE_DB_COND_SIZE 256
@@ -512,11 +460,6 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   if (!conds)
     return FALSE;
 
-  /* Handle exclusive tags cover */
-  if (tags_fields & MELO_TAGS_FIELDS_COVER_EX &&
-      tags_fields & MELO_TAGS_FIELDS_COVER_URL)
-    tags_fields &= ~MELO_TAGS_FIELDS_COVER;
-
   /* Generate columns for request */
   cols = g_stpcpy (columns, "m.rowid,");
   if (type == MELO_FILE_DB_TYPE_FILE) {
@@ -545,8 +488,6 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
     cols = g_stpcpy (cols, "track,");
   if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
     cols = g_stpcpy (cols, "tracks,");
-  if (tags_fields & MELO_TAGS_FIELDS_COVER_URL)
-    cols = g_stpcpy (cols, "m.cover,");
   if (tags_fields & MELO_TAGS_FIELDS_COVER)
     cols = g_stpcpy (cols, "m.cover,");
   cols[-1] = '\0';
@@ -773,35 +714,8 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
       tags->track = sqlite3_column_int (req, i++);
     if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
       tags->tracks = sqlite3_column_int (req, i++);
-    if (tags_fields & MELO_TAGS_FIELDS_COVER_URL)
-      melo_tags_set_cover_url (tags, obj, sqlite3_column_text (req, i++), NULL);
-    if (tags_fields & MELO_TAGS_FIELDS_COVER) {
-      const gchar *filename;
-
-      /* Get cover filename */
-      filename = sqlite3_column_text (req, i++);
-      if (filename) {
-        GMappedFile *file;
-        GBytes *cover = NULL;
-        const gchar *type;
-        gchar *path;
-
-        /* Open cover file and read data */
-        path = g_strdup_printf ("%s/%s", priv->cover_path, filename);
-        if (g_file_test (path, G_FILE_TEST_EXISTS)) {
-          file = g_mapped_file_new (path, FALSE, NULL);
-          cover = g_mapped_file_get_bytes (file);
-          g_mapped_file_unref (file);
-        }
-        g_free (path);
-
-        /* Add cover type */
-        type = NULL;
-
-        /* Add cover to MeloTags */
-        melo_tags_take_cover (tags, cover, type);
-      }
-    }
+    if (tags_fields & MELO_TAGS_FIELDS_COVER)
+      tags->cover = g_strdup (sqlite3_column_text (req, i++));
 
     /* Set utags */
     if (utags && !*utags)
@@ -826,8 +740,7 @@ error:
 static MeloTagsFields
 melo_file_db_type_get_tags_fields_filter (MeloFileDBType type)
 {
-  MeloTagsFields filter = MELO_TAGS_FIELDS_COVER | MELO_TAGS_FIELDS_COVER_URL |
-                          MELO_TAGS_FIELDS_COVER_EX;
+  MeloTagsFields filter = MELO_TAGS_FIELDS_COVER;
 
   if (type <= MELO_FILE_DB_TYPE_SONG)
     return MELO_TAGS_FIELDS_FULL;

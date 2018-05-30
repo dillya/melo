@@ -194,7 +194,8 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       gst_message_parse_tag (msg, &tags);
 
       /* Fill MeloTags with GstTagList */
-      mtags = melo_tags_new_from_gst_tag_list (tags, MELO_TAGS_FIELDS_FULL);
+      mtags = melo_tags_new_from_gst_tag_list (tags, MELO_TAGS_FIELDS_FULL,
+                                               MELO_TAGS_COVER_PERSIST_NONE);
 
       /* Merge with old tags */
       otags = melo_player_get_tags (player);
@@ -204,8 +205,6 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       }
 
       /* Set tags to status */
-      if (melo_tags_has_cover (mtags))
-        melo_tags_set_cover_url (mtags, G_OBJECT (pfile), NULL, NULL);
       melo_player_take_status_tags (player, mtags);
 
       /* Free tag list */

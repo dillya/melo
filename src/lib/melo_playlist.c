@@ -561,29 +561,6 @@ melo_playlist_empty (MeloPlaylist *playlist)
 }
 
 /**
- * melo_playlist_get_cover:
- * @playlist: the playlist
- * @id: the media ID
- * @cover: a pointer to a #GBytes which is set with image cover data
- * @type: a pointer to a string which is set with image mime type
- *
- * Get the image cover data and type of the media identified by @id.
- *
- * Returns: %TRUE if @cover and @type have been set with image data, %FALSE
- * otherwise.
- */
-gboolean
-melo_playlist_get_cover (MeloPlaylist *playlist, const gchar *id,
-                         GBytes **cover, gchar **type)
-{
-  MeloPlaylistClass *pclass = MELO_PLAYLIST_GET_CLASS (playlist);
-
-  g_return_val_if_fail (pclass->get_cover, FALSE);
-
-  return pclass->get_cover (playlist, id, cover, type);
-}
-
-/**
  * melo_playlist_list_new:
  *
  * Create a new #MeloPlaylistList which will contain the content detail and list

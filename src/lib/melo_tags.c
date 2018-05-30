@@ -21,26 +21,73 @@
 
 #include <string.h>
 
+#include <libsoup/soup.h>
+
 #include <gst/tag/tag.h>
 
 #include "melo_tags.h"
-#include "melo_browser.h"
 
-/* Cover URL base */
-G_LOCK_DEFINE_STATIC (melo_tags_mutex);
-static gchar *melo_tags_cover_url_base = NULL;
+/**
+ * SECTION:melo_tags
+ * @title: MeloTags
+ * @short_description: Main structure to handle media tags
+ *
+ * #MeloTags provides a full set of function to store all tags related to a
+ * media into a dedicated structure of type #MeloTags.
+ *
+ * #MeloTags comes with a powerful internal cache to handle cover image of
+ * one or more medias. Each cover data associated to a #MeloTags with
+ * melo_tags_set_cover_by_data() or cover URL associated to a #MeloTags with
+ * melo_tags_set_cover_by_url() is automatically stored in an internal cache
+ * which keeps image cover data until tags is unreferenced or end of program.
+ * A unique ID is generated from the data or URL provided in order to prevent
+ * storing duplicate covers.
+ *
+ * A cover can be set as:
+ *  - 'non-persistent' with MELO_TAGS_COVER_PERSIST_NONE which means it will be
+ *    freed during free of the last dependant MeloTags,
+ *  - 'semi-persistent' with MELO_TAGS_COVER_PERSIST_EXIT which means it will be
+ *    kept internally until end of the program,
+ *  - 'persistent' with MELO_TAGS_COVER_PERSIST_DISK which means it will be
+ *    stored on disk and will be available at next startup of the application.
+ *
+ * A cover can then be retrieved from a #MeloTags with melo_tags_get_cover() or
+ * with its unique ID with melo_tags_get_cover_by_id().
+ *
+ * Many convert functions are also provided to fill a #MeloTags from a
+ * #GstTagList with melo_tags_new_from_gst_tag_list() or to fill a #JsonObject
+ * from a #MeloTags with melo_tags_add_to_json_object().
+ */
 
-struct _MeloTagsPrivate {
-  GMutex mutex;
-  gint64 timestamp;
+/* Internal cover cache */
+static GHashTable *melo_tags_cover_hash = NULL;
+static GHashTable *melo_tags_cover_url_hash = NULL;
+static SoupSession *melo_tags_cover_session = NULL;
+static gchar *melo_tags_cover_path = NULL;
+
+typedef struct _MeloTagsCover {
+  GBytes *data;
   gint ref_count;
+} MeloTagsCover;
 
-  /* Cover data */
-  GBytes *cover;
-  gchar *cover_url;
-  gchar *cover_type;
-};
+typedef struct _MeloTagsCoverURL {
+  gchar *url;
+  gchar *id;
+  guint64 timestamp;
+  MeloTagsCoverPersist persist;
+  gint ref_count;
+} MeloTagsCoverURL;
 
+static gchar *melo_tags_cover_ref (const gchar *id);
+
+/**
+ * melo_tags_new:
+ *
+ * Create a new #MeloTags instance.
+ *
+ * Returns: (transfer full): a pointer to a new #MeloTags reference. It must be
+ * freed after usage with melo_tags_unref().
+ */
 MeloTags *
 melo_tags_new (void)
 {
@@ -51,18 +98,8 @@ melo_tags_new (void)
   if (!tags)
     return NULL;
 
-  /* Allocate private */
-  tags->priv = g_slice_new0 (MeloTagsPrivate);
-  if (!tags->priv) {
-    g_slice_free (MeloTags, tags);
-    return NULL;
-  }
-
-  /* Init private mutex */
-  g_mutex_init (&tags->priv->mutex);
-
   /* Set reference counter to 1 */
-  tags->priv->ref_count = 1;
+  tags->ref_count = 1;
 
   /* Set initial timestamp */
   melo_tags_update (tags);
@@ -70,23 +107,50 @@ melo_tags_new (void)
   return tags;
 }
 
+/**
+ * melo_tags_update:
+ * @tags: the tags
+ *
+ * Update the internal timestamp to now, which allows to follow updates of the
+ * #MeloTags data.
+ */
 void
 melo_tags_update (MeloTags *tags)
 {
-  tags->priv->timestamp = g_get_monotonic_time ();
+  tags->timestamp = g_get_monotonic_time ();
 }
 
+/**
+ * melo_tags_updated:
+ * @tags: the tags
+ * @timestamp: a timestamp (in us)
+ *
+ * Compare the provided timestamp in @timestamp with the internal timestamp. If
+ * the internal value is older than @timestamp, the #MeloTags has not changed
+ * since @timestamp.
+ *
+ * Returns: %TRUE if the #MeloTags has been updated since @timestamp, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_tags_updated (MeloTags *tags, gint64 timestamp)
 {
-  return tags->priv->timestamp > timestamp;
+  return tags->timestamp > timestamp;
 }
 
+/**
+ * melo_tags_copy:
+ * @tags: the tags
+ *
+ * Do a deep copy of the #MeloTags provided by @tags.It will be completely
+ * independent from the original.
+ *
+ * Returns: (transfer full): a new #MeloTags with the same data than @tags.
+ * After use, call melo_tags_unref().
+ */
 MeloTags *
 melo_tags_copy (MeloTags *tags)
 {
-  MeloTagsPrivate *priv = tags->priv;
-  MeloTagsPrivate *npriv;
   MeloTags *ntags;
 
   /* Create a new MeloTags */
@@ -102,369 +166,572 @@ melo_tags_copy (MeloTags *tags)
   ntags->date = tags->date;
   ntags->track = tags->track;
   ntags->tracks = tags->tracks;
-  npriv = ntags->priv;
-
-  /* Lock cover access */
-  g_mutex_lock (&priv->mutex);
-
-  /* Copy cover values */
-  if (priv->cover)
-    npriv->cover = g_bytes_ref (priv->cover);
-  npriv->cover_url = g_strdup (priv->cover_url);
-  npriv->cover_type = g_strdup (priv->cover_type);
-
-  /* Unlock cover access */
-  g_mutex_unlock (&priv->mutex);
+  ntags->cover = melo_tags_cover_ref (tags->cover);
 
   return ntags;
 }
 
+/**
+ * melo_tags_merge:
+ * @tags: the tags
+ * @ref_tags: the reference tags
+ *
+ * Copy @ref_tags data for all unset data in @tags.
+ */
 void
-melo_tags_merge (MeloTags *tags, MeloTags *old_tags)
+melo_tags_merge (MeloTags *tags, MeloTags *ref_tags)
 {
-  MeloTagsPrivate *priv = tags->priv;
-  MeloTagsPrivate *opriv = old_tags->priv;
-
   /* Copy values */
   if (!tags->title)
-    tags->title = g_strdup (old_tags->title);
+    tags->title = g_strdup (ref_tags->title);
   if (!tags->artist)
-    tags->artist = g_strdup (old_tags->artist);
+    tags->artist = g_strdup (ref_tags->artist);
   if (!tags->album)
-    tags->album = g_strdup (old_tags->album);
+    tags->album = g_strdup (ref_tags->album);
   if (!tags->genre)
-    tags->genre = g_strdup (old_tags->genre);
+    tags->genre = g_strdup (ref_tags->genre);
   if (!tags->date)
-    tags->date = old_tags->date;
+    tags->date = ref_tags->date;
   if (!tags->track)
-    tags->track = old_tags->track;
+    tags->track = ref_tags->track;
   if (!tags->tracks)
-    tags->tracks = old_tags->tracks;
-
-  /* Lock cover access */
-  g_mutex_lock (&priv->mutex);
-  g_mutex_lock (&opriv->mutex);
-
-  /* Free previous cover */
-  if (!priv->cover && !priv->cover_url) {
-    g_free (priv->cover_type);
-    g_free (priv->cover_url);
-    if (opriv->cover)
-      priv->cover = g_bytes_ref (opriv->cover);
-    priv->cover_url = g_strdup (opriv->cover_url);
-    priv->cover_type = g_strdup (opriv->cover_type);
-  }
+    tags->tracks = ref_tags->tracks;
+  if (!tags->cover)
+    tags->cover = melo_tags_cover_ref (ref_tags->cover);
 
   /* Update timestamp */
   melo_tags_update (tags);
-
-  /* Unlock cover access */
-  g_mutex_unlock (&opriv->mutex);
-  g_mutex_unlock (&priv->mutex);
 }
 
+/**
+ * melo_tags_ref:
+ * @tags: the tags
+ *
+ * Increment the reference counter of the #MeloTags.
+ *
+ * Returns: (transfer full): a pointer of the #MeloTags.
+ */
 MeloTags *
 melo_tags_ref (MeloTags *tags)
 {
   if (tags)
-    tags->priv->ref_count++;
+    g_atomic_int_inc (&tags->ref_count);
   return tags;
 }
 
-void
-melo_tags_set_cover (MeloTags *tags, GBytes *cover, const gchar *type)
+static MeloTagsCover *
+melo_tags_cover_new (GBytes *data)
 {
-  if (cover)
-    g_bytes_ref (cover);
-  melo_tags_take_cover (tags, cover, type);
-}
+  MeloTagsCover *cover;
 
-void
-melo_tags_take_cover (MeloTags *tags, GBytes *cover, const gchar *type)
-{
-  MeloTagsPrivate *priv = tags->priv;
-
-  /* Lock cover access */
-  g_mutex_lock (&priv->mutex);
-
-  /* Free previous cover */
-  if (priv->cover)
-    g_bytes_unref (priv->cover);
-
-  /* Set cover */
-  priv->cover = cover;
-  if (type) {
-    g_free (priv->cover_type);
-    priv->cover_type = g_strdup (type);
+  /* Create new cover */
+  cover = g_slice_new0 (MeloTagsCover);
+  if (cover) {
+    cover->data = g_bytes_ref (data);
+    cover->ref_count = 1;
   }
 
-  /* Update timestamp */
-  melo_tags_update (tags);
-
-  /* Unlock cover access */
-  g_mutex_unlock (&priv->mutex);
+   return cover;
 }
 
-gboolean
-melo_tags_has_cover (MeloTags *tags)
+static void
+melo_tags_cover_free (MeloTagsCover *cover)
 {
-  return tags->priv->cover ? TRUE : FALSE;
+  g_bytes_unref (cover->data);
+  g_slice_free (MeloTagsCover, cover);
 }
 
-GBytes *
-melo_tags_get_cover (MeloTags *tags, gchar **type)
+static MeloTagsCoverURL *
+melo_tags_cover_url_new (const gchar *url, MeloTagsCoverPersist persist)
 {
-  MeloTagsPrivate *priv = tags->priv;
-  GBytes *cover = NULL;
+  MeloTagsCoverURL *cover_url;
 
-  /* Lock cover access */
-  g_mutex_lock (&priv->mutex);
-
-  /* Get cover */
-  if (priv->cover) {
-    /* Take a reference of cover */
-    cover = g_bytes_ref (priv->cover);
-
-    /* Set cover type */
-    if (type)
-      *type = g_strdup (priv->cover_type);
+  /* Create new cover URL */
+  cover_url = g_slice_new0 (MeloTagsCoverURL);
+  if (cover_url) {
+    cover_url->url = g_strdup (url);
+    cover_url->timestamp = g_get_monotonic_time ();
+    cover_url->persist = persist;
+    cover_url->ref_count = 1;
   }
 
-  /* Unlock cover access */
-  g_mutex_unlock (&priv->mutex);
-
-  return cover;
+   return cover_url;
 }
 
-gboolean
-melo_tags_has_cover_type (MeloTags *tags)
+static void
+melo_tags_cover_url_free (MeloTagsCoverURL *cover_url)
 {
-  return tags->priv->cover_type ? TRUE : FALSE;
+  g_free (cover_url->id);
+  g_free (cover_url->url);
+  g_slice_free (MeloTagsCoverURL, cover_url);
 }
 
-gchar *
-melo_tags_get_cover_type (MeloTags *tags)
+static gchar *
+melo_tags_cover_gen_file_path (const gchar *id)
 {
-  MeloTagsPrivate *priv = tags->priv;
-  gchar *type = NULL;
-
-  /* Lock cover access */
-  g_mutex_lock (&priv->mutex);
-
-  /* Get cover */
-  if (priv->cover)
-      type = g_strdup (priv->cover_type);
-
-  /* Unlock cover access */
-  g_mutex_unlock (&priv->mutex);
-
-  return type;
-}
-
-gboolean
-melo_tags_set_cover_url (MeloTags *tags, GObject *obj, const gchar *path,
-                         const gchar *type)
-{
-  MeloTagsPrivate *priv = tags->priv;
-  const gchar *otype = NULL;
-  const gchar *id = NULL;
-  gchar *url = NULL;
-  gchar del ='/';
-
-  /* Lock object */
-  g_object_ref (obj);
-
-  /* Get ID from object */
-  if (MELO_IS_BROWSER (obj)) {
-    id = melo_browser_get_id (MELO_BROWSER (obj));
-    otype = "browser";
-  } else if (MELO_IS_PLAYER (obj)) {
-    id = melo_player_get_id (MELO_PLAYER (obj));
-    otype = "player";
-    path = "";
-    del = '\0';
-  } else if (MELO_IS_PLAYLIST (obj)) {
-    id = melo_playlist_get_id (MELO_PLAYLIST (obj));
-    otype = "playlist";
+  if (!melo_tags_cover_path) {
+    melo_tags_cover_path = g_strdup_printf ("%s/melo/cover",
+                                            g_get_user_data_dir ());
+    g_mkdir_with_parents (melo_tags_cover_path, 0700);
   }
 
-  /* No ID found */
-  if (!id)
+  return g_strdup_printf ("%s/%s", melo_tags_cover_path, id);
+}
+
+static gchar *
+melo_tags_cover_add_data (GBytes *data, MeloTagsCoverPersist persist)
+{
+  MeloTagsCover *cover;
+  gchar *file, *id;
+
+  /* Generate cover ID from md5 sum */
+  id = g_compute_checksum_for_bytes (G_CHECKSUM_MD5, data);
+
+  /* Generate file name on disk */
+  file = melo_tags_cover_gen_file_path (id);
+
+  /* Generate hash table if doesn't exist */
+  if (!melo_tags_cover_hash)
+    melo_tags_cover_hash = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                         g_free,
+                                         (GDestroyNotify) melo_tags_cover_free);
+
+  /* Check disk persistence */
+  if (g_file_test (file, G_FILE_TEST_EXISTS)) {
+    /* Already on disk */
+    g_free (file);
+    return id;
+  } else if (persist == MELO_TAGS_COVER_PERSIST_DISK) {
+    /* Save image data to disk */
+    g_file_set_contents (file, g_bytes_get_data (data, NULL),
+                         g_bytes_get_size (data), NULL);
+    g_free (file);
+
+    /* Remove any copy from hash table */
+    g_hash_table_remove (melo_tags_cover_hash, id);
+
+    return id;
+  }
+
+  /* Find in cover hash table */
+  cover = g_hash_table_lookup (melo_tags_cover_hash, id);
+  if (cover) {
+    /* Cover is already handled internally */
+    g_atomic_int_inc (&cover->ref_count);
+    goto end;
+  }
+
+  /* Create cover */
+  cover = melo_tags_cover_new (data);
+  if (!cover)
     goto failed;
 
-  G_LOCK (melo_tags_mutex);
-
-  /* Generate cover URL from ID and path */
-  if (!path)
-    url = NULL;
-  else if (melo_tags_cover_url_base)
-    url = g_strdup_printf ("%s/%s/%s%c%s", melo_tags_cover_url_base, otype, id,
-                           del, path);
-  else
-    url = g_strdup_printf ("%s/%s%c%s", otype, id, del, path);
-
-  G_UNLOCK (melo_tags_mutex);
-
-  /* Free object */
-  g_object_unref (obj);
-
-  /* Lock cover access */
-  g_mutex_lock (&priv->mutex);
-
-  /* Set cover URL */
-  g_free (priv->cover_url);
-  priv->cover_url = url;
-
-  /* Update cover type */
-  if (type) {
-    g_free (priv->cover_type);
-    priv->cover_type = g_strdup (type);
-  }
-
-  /* Update timestamp */
-  melo_tags_update (tags);
-
-  /* Unlock cover access */
-  g_mutex_unlock (&priv->mutex);
-
-  return TRUE;
-
-failed:
-  g_object_unref (obj);
-  return FALSE;
-}
-
-void
-melo_tags_copy_cover_url (MeloTags *tags, const gchar *url, const gchar *type)
-{
-  MeloTagsPrivate *priv = tags->priv;
-
-  /* Lock cover access */
-  g_mutex_lock (&priv->mutex);
-
-  /* Set cover URL */
-  g_free (priv->cover_url);
-  priv->cover_url = g_strdup (url);
-
-  /* Update cover type */
-  if (type) {
-    g_free (priv->cover_type);
-    priv->cover_type = g_strdup (type);
-  }
-
-  /* Update timestamp */
-  melo_tags_update (tags);
-
-  /* Unlock cover access */
-  g_mutex_unlock (&priv->mutex);
-}
-
-gboolean
-melo_tags_has_cover_url (MeloTags *tags)
-{
-  return tags->priv->cover_url ? TRUE : FALSE;
-}
-
-gchar *
-melo_tags_get_cover_url (MeloTags *tags)
-{
-  MeloTagsPrivate *priv = tags->priv;
-  gchar *url = NULL;
-
-  /* Lock cover access */
-  g_mutex_lock (&priv->mutex);
-
-  /* Get cover URL */
-  if (priv->cover_url)
-      url = g_strdup (priv->cover_url);
-
-  /* Unlock cover access */
-  g_mutex_unlock (&priv->mutex);
-
-  return url;
-}
-
-void
-melo_tags_set_cover_url_base (const gchar *base)
-{
-  G_LOCK (melo_tags_mutex);
-  g_free (melo_tags_cover_url_base);
-  melo_tags_cover_url_base = g_strdup (base);
-  G_UNLOCK (melo_tags_mutex);
-}
-
-gboolean
-melo_tags_get_cover_from_url (const gchar *url, GBytes **data, gchar **type)
-{
-  gchar *otype, *id, *path;
-  gchar **values = NULL;
-  gboolean ret = FALSE;
-  gint base_len = 0;
-  gint len;
-
-  G_LOCK (melo_tags_mutex);
-
-  /* Check URL base */
-  if (melo_tags_cover_url_base)
-    base_len = strlen (melo_tags_cover_url_base) + 1;
-
-  G_UNLOCK (melo_tags_mutex);
-
-  /* Check string length */
-  len = strlen (url);
-  if (!len || len < base_len)
-    return FALSE;
-
-  /* Split URL (by removing base URL */
-  values = g_strsplit (url + base_len, "/", 3);
-  if (!values || !values[0] || !values[1])
-    goto end;
-
-  /* Get element type, ID and path */
-  otype = values[0];
-  id = values[1];
-  path = values[2];
-
-  /* Get cover from element */
-  if (!g_strcmp0 (otype, "browser") && path) {
-    MeloBrowser *browser;
-
-    /* Get browser from its ID */
-    browser = melo_browser_get_browser_by_id (id);
-    if (browser) {
-      ret = melo_browser_get_cover (browser, path, data, type);
-      g_object_unref (browser);
-    }
-  } else if (!g_strcmp0 (otype, "player")) {
-    MeloPlayer *player;
-
-    /* Get player from its ID */
-    player = melo_player_get_player_by_id (id);
-    if (player) {
-      ret = melo_player_get_cover (player, data, type);
-      g_object_unref (player);
-    }
-  } else if (!g_strcmp0 (otype, "playlist") && path) {
-    MeloPlaylist *playlist;
-
-    /* Get playlist from its ID */
-    playlist = melo_playlist_get_playlist_by_id (id);
-    if (playlist) {
-      ret = melo_playlist_get_cover (playlist, path, data, type);
-      g_object_unref (playlist);
-    }
-  } else
-    goto end;
+  /* Add to hash table (it takes ownership of the ID) */
+  if (!g_hash_table_insert (melo_tags_cover_hash, g_strdup (id), cover))
+    goto failed;
 
 end:
-  /* Free URL values */
-  g_strfreev (values);
+  /* Force persistence until end of execution */
+  if (persist == MELO_TAGS_COVER_PERSIST_EXIT)
+    g_atomic_int_inc (&cover->ref_count);
 
-  return ret;
+  return id;
+
+failed:
+  g_free (id);
+  return NULL;
 }
 
+static gchar *
+melo_tags_cover_add_url (const gchar *url, MeloTagsCoverPersist persist)
+{
+  MeloTagsCoverURL *cover_url;
+  gchar *id, *url_id;
+
+  /* Generate cover ID from md5 sum */
+  id = g_compute_checksum_for_string (G_CHECKSUM_MD5, url, -1);
+  url_id = g_strdup_printf ("@%s", id);
+
+  /* Generate URL hash table if doesn't exist */
+  if (!melo_tags_cover_url_hash)
+    melo_tags_cover_url_hash = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                     g_free,
+                                     (GDestroyNotify) melo_tags_cover_url_free);
+
+  /* Find in cover URL hash table */
+  cover_url = g_hash_table_lookup (melo_tags_cover_url_hash, id);
+  if (cover_url) {
+    /* Persistence is conservative */
+    if (persist > cover_url->persist)
+      cover_url->persist = persist;
+
+    /* Cover URL is already handled internally */
+    g_atomic_int_inc (&cover_url->ref_count);
+    g_free (id);
+    goto end;
+  }
+
+  /* Create cover URL */
+  cover_url = melo_tags_cover_url_new (url, persist);
+  if (!cover_url)
+    goto failed;
+
+  /* Add to hash table (it takes ownership of the ID) */
+  if (!g_hash_table_insert (melo_tags_cover_url_hash, id, cover_url))
+    goto failed;
+
+end:
+  /* Force persistence until end of execution */
+  if (persist == MELO_TAGS_COVER_PERSIST_EXIT)
+    g_atomic_int_inc (&cover_url->ref_count);
+
+  return url_id;
+
+failed:
+  g_free (id);
+  g_free (url_id);
+  return NULL;
+}
+
+/**
+ * melo_tags_set_cover_by_data:
+ * @tags: the tags
+ * @cover: the image data
+ * @persist: cover data persistence option
+ *
+ * Add a cover to a #MeloTags with a #GBytes containing the image data.
+ * A unique ID is generated from the image data provided and stored in an
+ * internal cache for fast access. The cover data can then be retrieved with
+ * melo_tags_get_cover() or melo_tags_get_cover_by_id() until end of the
+ * program.
+ * If @persist is set to MELO_TAGS_COVER_PERSIST_DISK, the cover data is saved
+ * on the disk instead of memory.
+ *
+ * Returns: a string containing the ID of the cover provided or %NULL if an
+ * error occurred. The string stays valid while the #MeloTags @tags exists.
+ */
+const gchar *
+melo_tags_set_cover_by_data (MeloTags *tags, GBytes *cover,
+                             MeloTagsCoverPersist persist)
+{
+  gchar *id;
+
+  /* Add cover to internal cache */
+  id = melo_tags_cover_add_data (cover, persist);
+  if (id) {
+    g_free (tags->cover);
+    tags->cover = id;
+  }
+
+  return id;
+}
+
+/**
+ * melo_tags_set_cover_by_url:
+ * @tags: the tags
+ * @url: the image URL
+ * @persist: cover data persistence option
+ *
+ * Add a cover to a #MeloTags with an URL.
+ * A unique ID is generated from the URL provided and stored in an internal
+ * cache for fast access. The cover data can then be retrieved with
+ * melo_tags_get_cover() or melo_tags_get_cover_by_id() until end of the
+ * program.
+ * For different URL which point to the same image, only one copy of the data
+ * is available into the internal cache, which means you don't care to have
+ * multiple URL with the same image data at end.
+ * If @persist is set to MELO_TAGS_COVER_PERSIST_DISK, the cover data is saved
+ * on the disk instead of memory.
+ *
+ * Returns: a string containing the ID of the cover provided or %NULL if an
+ * error occurred. The string stays valid while the #MeloTags @tags exists.
+ */
+const gchar *
+melo_tags_set_cover_by_url (MeloTags *tags, const gchar *url,
+                            MeloTagsCoverPersist persist)
+{
+  gchar *id;
+
+  /* Add cover URL to internal cache */
+  id = melo_tags_cover_add_url (url, persist);
+  if (id) {
+    g_free (tags->cover);
+    tags->cover = id;
+  }
+
+  return id;
+}
+
+static gchar *
+melo_tags_cover_ref (const gchar *id)
+{
+  MeloTagsCover *cover;
+
+  /* No cover attached */
+  if (!id)
+    return NULL;
+
+  /* Cover coming from an URL */
+  if (*id == '@') {
+    MeloTagsCoverURL *cover_url;
+
+    /* No cover URL hash table */
+    if (!melo_tags_cover_url_hash)
+      return NULL;
+
+    /* Find in cover URL hash table */
+    cover_url = g_hash_table_lookup (melo_tags_cover_url_hash, ++id);
+    if (!cover_url)
+      return NULL;
+
+    /* Add a reference the cover URL data */
+    g_atomic_int_inc (&cover_url->ref_count);
+
+    return g_strdup_printf ("@%s", id);
+  }
+
+  /* No cover hash table */
+  if (!melo_tags_cover_hash)
+    return NULL;
+
+  /* Find cover in hash table */
+  cover = g_hash_table_lookup (melo_tags_cover_hash, id);
+  if (!cover) {
+    gchar *file;
+
+    /* Generate file name on disk */
+    file = melo_tags_cover_gen_file_path (id);
+
+    /* Check file existence */
+    if (!g_file_test (file, G_FILE_TEST_EXISTS))
+      id = NULL;
+    g_free (file);
+
+    return g_strdup (id);
+  }
+
+  /* Add a reference the cover data */
+  g_atomic_int_inc (&cover->ref_count);
+
+  return g_strdup (id);
+}
+
+static void
+melo_tags_cover_unref (const gchar *id)
+{
+  MeloTagsCover *cover;
+
+  /* No cover attached */
+  if (!id)
+    return;
+
+  /* Cover coming from an URL */
+  if (*id == '@') {
+    MeloTagsCoverURL *cover_url;
+
+    /* No cover URL hash table */
+    if (!melo_tags_cover_url_hash)
+      return;
+
+    /* Find in cover URL hash table */
+    cover_url = g_hash_table_lookup (melo_tags_cover_url_hash, ++id);
+    if (!cover_url)
+      return;
+
+    /* Unref the cover URL data */
+    if (g_atomic_int_dec_and_test (&cover_url->ref_count)) {
+      /* Unref the cover data */
+      melo_tags_cover_unref (cover_url->id);
+
+      /* Remove cover from hash table */
+      g_hash_table_remove (melo_tags_cover_url_hash, id);
+    }
+
+    return;
+  }
+
+  /* No cover hash table */
+  if (!melo_tags_cover_hash)
+    return;
+
+  /* Find cover in hash table */
+  cover = g_hash_table_lookup (melo_tags_cover_hash, id);
+  if (!cover)
+    return;
+
+  /* Unref the cover data */
+  if (g_atomic_int_dec_and_test (&cover->ref_count)) {
+    /* Remove cover from hash table */
+    g_hash_table_remove (melo_tags_cover_hash, id);
+  }
+}
+
+/**
+ * melo_tags_get_cover:
+ * @tags: the tags
+ *
+ * Provide a #GBytes containing the image data of the cover.
+ *
+ * Returns: (transfer full): a #GBytes containing the image data of the cover or
+ * %NULL if no cover has been set. After usage, call g_bytes_unref().
+ */
+GBytes *
+melo_tags_get_cover (MeloTags *tags)
+{
+  if (!tags)
+    return NULL;
+
+  return melo_tags_get_cover_by_id (tags->cover);
+}
+
+/**
+ * melo_tags_get_cover_by_id:
+ * @id: the cover ID
+ *
+ * Provide a #GBytes containing the image data of the cover identified by @id.
+ *
+ * Returns: (transfer full): a #GBytes containing the image data of the cover or
+ * %NULL if no cover has been set. After usage, call g_bytes_unref().
+ */
+GBytes *
+melo_tags_get_cover_by_id (const gchar *id)
+{
+  MeloTagsCover *cover = NULL;
+
+  /* No ID provided or no cover hash table */
+  if (!id)
+    return NULL;
+
+  /* Cover coming from an URL */
+  if (*id == '@') {
+    MeloTagsCoverURL *cover_url;
+
+    /* No cover URL hash table */
+    if (!melo_tags_cover_url_hash)
+      return NULL;
+
+    /* Find in cover URL hash table */
+    cover_url = g_hash_table_lookup (melo_tags_cover_url_hash, ++id);
+    if (!cover_url)
+      return NULL;
+
+    /* Update access time */
+    cover_url->timestamp = g_get_monotonic_time ();
+
+    /* Cover has not been downloaded yet */
+    if (!cover_url->id) {
+      SoupMessage *msg;
+      GBytes *data = NULL;
+
+      /* Create a new Soup session */
+      if (!melo_tags_cover_session)
+        melo_tags_cover_session = soup_session_new_with_options (
+                                                SOUP_SESSION_USER_AGENT, "Melo",
+                                                NULL);
+
+      /* Prepare HTTP request */
+      msg = soup_message_new ("GET", cover_url->url);
+      if (msg) {
+        /* Download cover data */
+        if (soup_session_send_message (melo_tags_cover_session, msg) == 200) {
+          GBytes *cover = NULL;
+
+          /* Create cover */
+          g_object_get (msg, "response-body-data", &data, NULL);
+        }
+
+        /* Free message */
+        g_object_unref (msg);
+      }
+
+      /* Add data to internal cache */
+      if (data)
+        cover_url->id = melo_tags_cover_add_data (data, cover_url->persist);
+
+      return data;
+    }
+
+    return melo_tags_get_cover_by_id (cover_url->id);
+  }
+
+  /* Find in cover hash table */
+  if (melo_tags_cover_hash)
+    cover = g_hash_table_lookup (melo_tags_cover_hash, id);
+  if (!cover) {
+    GBytes *data = NULL;
+    gchar *path;
+
+    /* Generate file name on disk */
+    path = melo_tags_cover_gen_file_path (id);
+
+    /* Load image data from disk */
+    if (g_file_test (path, G_FILE_TEST_EXISTS)) {
+      GMappedFile *file;
+
+      /* Map file */
+      file = g_mapped_file_new (path, FALSE, NULL);
+      if (file) {
+        /* Generate GBytes */
+        data = g_mapped_file_get_bytes (file);
+        g_mapped_file_unref (file);
+      }
+    }
+    g_free (path);
+
+
+    return data;
+  }
+
+  return g_bytes_ref (cover->data);
+}
+
+/**
+ * melo_tags_flush_cover_cache:
+ *
+ * Flush the internal image cover cache.
+ * It must be called only by the main context of the application, at end, after
+ * everything has been freed.
+ */
+void
+melo_tags_flush_cover_cache (void)
+{
+  /* Destroy cover URL hash table */
+  if (melo_tags_cover_url_hash) {
+    g_hash_table_destroy (melo_tags_cover_url_hash);
+    melo_tags_cover_url_hash = NULL;
+  }
+
+  /* Destroy cover hash table */
+  if (melo_tags_cover_hash) {
+    g_hash_table_destroy (melo_tags_cover_hash);
+    melo_tags_cover_hash = NULL;
+  }
+
+  /* Free cover path on disk */
+  g_free (melo_tags_cover_path);
+  melo_tags_cover_path = NULL;
+
+  /* Free Soup session */
+  if (melo_tags_cover_session) {
+    g_object_unref (melo_tags_cover_session);
+    melo_tags_cover_session = NULL;
+  }
+}
+
+/**
+ * melo_tags_new_from_gst_tag_list:
+ * @tlist: a #GstTagList containing media tags
+ * @fields: the tags to extract from #GstTagList
+ * @persist: cover data persistence option
+ *
+ * Generate a #MeloTags from a #GstTagList, with specified @fields tags fields.
+ *
+ * Returns: (transfer full): a new #MeloTags containing all extracted media tags
+ * from @tlist or %NULL if an error occurred. After use, call melo_tags_unref().
+ */
 MeloTags *
-melo_tags_new_from_gst_tag_list (const GstTagList *tlist, MeloTagsFields fields)
+melo_tags_new_from_gst_tag_list (const GstTagList *tlist, MeloTagsFields fields,
+                                 MeloTagsCoverPersist persist)
 {
   MeloTags *tags;
 
@@ -551,27 +818,23 @@ melo_tags_new_from_gst_tag_list (const GstTagList *tlist, MeloTagsFields fields)
     /* Copy found image */
     if (final_sample) {
         GstBuffer *buffer;
-        GstCaps *caps;
+        GBytes *cover;
         gpointer data;
         gsize size, dsize;
-        gchar *c;
 
-        /* Get buffer and caps */
+        /* Get buffer and extract data */
         buffer = gst_sample_get_buffer (final_sample);
-        caps = gst_sample_get_caps (final_sample);
-
-        /* Extract data from buffer */
         size = gst_buffer_get_size (buffer);
         gst_buffer_extract_dup (buffer, 0, size, &data, &dsize);
 
-        /* Create a new GBytes with data */
-        tags->priv->cover = g_bytes_new_take (data, dsize);
+        /* Set cover to tags */
+        cover = g_bytes_new_take (data, dsize);
+        if (cover) {
+          melo_tags_set_cover_by_data (tags, cover, persist);
+          g_bytes_unref (cover);
+        }
 
-        /* Copy type string */
-        tags->priv->cover_type = gst_caps_to_string (caps);
-        c = g_strstr_len (tags->priv->cover_type, -1, ",");
-        if (c)
-          *c = '\0';
+        /* Free image */
         gst_sample_unref (final_sample);
     }
   }
@@ -579,6 +842,14 @@ melo_tags_new_from_gst_tag_list (const GstTagList *tlist, MeloTagsFields fields)
   return tags;
 }
 
+/**
+ * melo_tags_get_fields_from_json_array:
+ * @array: a #JsonArray containing a JSON array
+ *
+ * Convert a #JsonArray containing many strings into a #MeloTagsFields.
+ *
+ * Returns: a #MeloTagsFields with all tags fields specified in @array.
+ */
 MeloTagsFields
 melo_tags_get_fields_from_json_array (JsonArray *array)
 {
@@ -598,9 +869,6 @@ melo_tags_get_fields_from_json_array (JsonArray *array)
     } else if (!g_strcmp0 (field, "full")) {
       fields = MELO_TAGS_FIELDS_FULL;
       break;
-    } else if (!g_strcmp0 (field, "full_cover")) {
-      fields = MELO_TAGS_FIELDS_FULL_COVER;
-      break;
     } else if (!g_strcmp0 (field, "title"))
       fields |= MELO_TAGS_FIELDS_TITLE;
     else if (!g_strcmp0 (field, "artist"))
@@ -617,15 +885,22 @@ melo_tags_get_fields_from_json_array (JsonArray *array)
       fields |= MELO_TAGS_FIELDS_TRACKS;
     else if (!g_strcmp0 (field, "cover"))
       fields |= MELO_TAGS_FIELDS_COVER;
-    else if (!g_strcmp0 (field, "cover_url"))
-      fields |= MELO_TAGS_FIELDS_COVER_URL;
   }
 
   return fields;
 }
 
+/**
+ * melo_tags_add_to_json_object:
+ * @tags: the tags
+ * @object: a #JsonObject to fill with #MeloTags data
+ * @fields: the tags to add to the #JsonObject
+ *
+ * Fill the #JsonObject provided with many members containing all data requested
+ * in @fields.
+ */
 void
-melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
+melo_tags_add_to_json_object (MeloTags *tags, JsonObject *object,
                               MeloTagsFields fields)
 {
   /* Nothing to do */
@@ -633,71 +908,38 @@ melo_tags_add_to_json_object (MeloTags *tags, JsonObject *obj,
     return;
 
   /* Set timestamp in any case */
-  json_object_set_int_member (obj, "timestamp", tags->priv->timestamp);
+  json_object_set_int_member (object, "timestamp", tags->timestamp);
 
   /* Fill object */
   if (fields & MELO_TAGS_FIELDS_TITLE)
-    json_object_set_string_member (obj, "title", tags->title);
+    json_object_set_string_member (object, "title", tags->title);
   if (fields & MELO_TAGS_FIELDS_ARTIST)
-    json_object_set_string_member (obj, "artist", tags->artist);
+    json_object_set_string_member (object, "artist", tags->artist);
   if (fields & MELO_TAGS_FIELDS_ALBUM)
-    json_object_set_string_member (obj, "album", tags->album);
+    json_object_set_string_member (object, "album", tags->album);
   if (fields & MELO_TAGS_FIELDS_GENRE)
-    json_object_set_string_member (obj, "genre", tags->genre);
+    json_object_set_string_member (object, "genre", tags->genre);
   if (fields & MELO_TAGS_FIELDS_DATE)
-    json_object_set_int_member (obj, "date", tags->date);
+    json_object_set_int_member (object, "date", tags->date);
   if (fields & MELO_TAGS_FIELDS_TRACK)
-    json_object_set_int_member (obj, "track", tags->track);
+    json_object_set_int_member (object, "track", tags->track);
   if (fields & MELO_TAGS_FIELDS_TRACKS)
-    json_object_set_int_member (obj, "tracks", tags->tracks);
-
-  /* Convert image to base64 */
-  if (fields & MELO_TAGS_FIELDS_COVER) {
-    MeloTagsPrivate *priv = tags->priv;
-
-    /* Lock cover */
-    g_mutex_lock (&priv->mutex);
-
-    /* Get cover only if available and when exclusive cover is not set */
-    if (priv->cover &&
-        (!(fields & MELO_TAGS_FIELDS_COVER_EX) ||
-         !(fields & MELO_TAGS_FIELDS_COVER_URL) || !priv->cover_url)) {
-      const guchar *data;
-      gsize size;
-      gchar *cover;
-
-      /* Get data and encode */
-      data = g_bytes_get_data (priv->cover, &size);
-      cover = g_base64_encode (data, size);
-
-      /* Add to object */
-      json_object_set_string_member (obj, "cover", cover);
-      json_object_set_string_member (obj, "cover_type", priv->cover_type);
-      g_free (cover);
-    }
-
-    /* Unlock cover */
-    g_mutex_unlock (&priv->mutex);
-  }
-
-  /* Add cover URL */
-  if (fields & MELO_TAGS_FIELDS_COVER_URL) {
-    MeloTagsPrivate *priv = tags->priv;
-
-    /* Lock cover */
-    g_mutex_lock (&priv->mutex);
-
-    /* Add to object */
-    if (priv->cover_url) {
-      json_object_set_string_member (obj, "cover_url", priv->cover_url);
-      json_object_set_string_member (obj, "cover_type", priv->cover_type);
-    }
-
-    /* Unlock cover */
-    g_mutex_unlock (&priv->mutex);
-  }
+    json_object_set_int_member (object, "tracks", tags->tracks);
+  if (fields & MELO_TAGS_FIELDS_COVER)
+    json_object_set_string_member (object, "cover", tags->cover);
 }
 
+/**
+ * melo_tags_to_json_object:
+ * @tags: the tags
+ * @fields: the tags to add to the #JsonObject
+ *
+ * Create a new #JsonObject with many members containing all data requested
+ * in @fields.
+ *
+ * Returns: (transfer full): a new #JsonObject filled with #MeloTags data or
+ * %NULL if an error occurred. After use, call json_object_unref().
+ */
 JsonObject *
 melo_tags_to_json_object (MeloTags *tags, MeloTagsFields fields)
 {
@@ -714,6 +956,13 @@ melo_tags_to_json_object (MeloTags *tags, MeloTagsFields fields)
   return obj;
 }
 
+/**
+ * melo_tags_unref:
+ * @tags: the tags
+ *
+ * Decrement the reference counter of the #MeloTags. If it reaches zero, the
+ * #MeloTags is freed.
+ */
 void
 melo_tags_unref (MeloTags *tags)
 {
@@ -721,19 +970,17 @@ melo_tags_unref (MeloTags *tags)
     return;
 
   /* Decrement reference count */
-  tags->priv->ref_count--;
-  if (tags->priv->ref_count)
+  if (!g_atomic_int_dec_and_test (&tags->ref_count))
     return;
+
+  /* Remove cover reference */
+  melo_tags_cover_unref (tags->cover);
 
   /* Free tags */
   g_free (tags->title);
   g_free (tags->artist);
   g_free (tags->album);
   g_free (tags->genre);
-  g_bytes_unref (tags->priv->cover);
-  g_free (tags->priv->cover_url);
-  g_free (tags->priv->cover_type);
-  g_mutex_clear (&tags->priv->mutex);
-  g_slice_free (MeloTagsPrivate, tags->priv);
+  g_free (tags->cover);
   g_slice_free (MeloTags, tags);
 }

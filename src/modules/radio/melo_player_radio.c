@@ -189,15 +189,12 @@ bus_call (GstBus *bus, GstMessage *msg, gpointer data)
       g_mutex_lock (&priv->mutex);
 
       /* Fill MeloTags with GstTagList */
-      mtags = melo_tags_new_from_gst_tag_list (tags, MELO_TAGS_FIELDS_FULL);
+      mtags = melo_tags_new_from_gst_tag_list (tags, MELO_TAGS_FIELDS_FULL,
+                                               MELO_TAGS_COVER_PERSIST_NONE);
 
       /* Merge with browser tags */
       if (priv->btags)
         melo_tags_merge (mtags, priv->btags);
-
-      /* Set cover URL */
-      if (melo_tags_has_cover (mtags))
-        melo_tags_set_cover_url (mtags, G_OBJECT (pradio), NULL, NULL);
 
       /* New title */
       if (mtags->title && g_strcmp0 (priv->title, mtags->title)) {
