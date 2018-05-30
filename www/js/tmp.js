@@ -157,7 +157,7 @@ function melo_browser_list(method, id, path, off, count, token) {
                                                 (token ? token : "") + '",' +
                                                 '["full"],"' + sort + '",' +
                                                 '{"mode":"only_cached",' +
-                                   '"fields":["title","artist","cover_url"]}]'),
+                                   '"fields":["title","artist","cover"]}]'),
                null, function(response, data) {
     if (response.error || !response.result)
       return;
@@ -359,14 +359,12 @@ function melo_browser_get_tags(id, path, item) {
     var img_src = "";
 
     /* Create img src for cover */
-    if (tags.cover_url != null)
-      img_src = "/" + tags.cover_url;
-    else if (tags.cover != null)
-      img_src = "data:" + tags.cover_type + ";base64," + tags.cover;
+    if (tags.cover != null)
+      img_src = tags.cover;
 
     /* Update item */
     item.children("div.tags").html(
-      '<img src="' + img_src + '" alt="cover" class="tags_cover">' +
+      '<img src="/cover/' + img_src + '" alt="cover" class="tags_cover">' +
       '<div>' +
         'Title: <span class="ttitle">' + tags.title  + '</span><br>' +
         'Artist: <span class="artist">' + tags.artist + '</span><br>' +
@@ -385,7 +383,7 @@ function melo_browser_update_tags (id, list) {
   var obj = list.pop (list);
 
   jsonrpc_call("browser.get_tags", JSON.parse('["' + id + '","' + obj[1]+
-                                           '",["title","artist","cover_url"]]'),
+                                           '",["title","artist","cover"]]'),
                [obj, id, list], function(response, data) {
     if (response.error || !response.result)
       return;
@@ -431,7 +429,7 @@ function melo_browser_play_all() {
 function melo_get_playlist_list(id, play) {
   playlist_poll_id = id;
   jsonrpc_call("playlist.get_list", JSON.parse('["' + id + '",["full"],' +
-                                             '["artist","title","cover_url"]]'),
+                                             '["artist","title","cover"]]'),
                null, function(response, data) {
     if (response.error || !response.result)
       return;
@@ -601,14 +599,12 @@ function melo_playlist_get_tags(id, media_id, item) {
     var img_src = "";
 
     /* Create img src for cover */
-    if (tags.cover_url != null)
-      img_src = "/" + tags.cover_url;
-    else if (tags.cover != null)
-      img_src = "data:" + tags.cover_type + ";base64," + tags.cover;
+    if (tags.cover != null)
+      img_src = tags.cover;
 
     /* Update item */
     item.children("div.tags").html(
-      '<img src="' + img_src + '" alt="cover" class="tags_cover">' +
+      '<img src="/cover/' + img_src + '" alt="cover" class="tags_cover">' +
       '<div>' +
         'Title: <span class="ttitle">' + tags.title  + '</span><br>' +
         'Artist: <span class="artist">' + tags.artist + '</span><br>' +

@@ -202,7 +202,7 @@ function melo_player_render_player(result) {
         /* Update tags related */
         if (result.tags) {
             /* Set details according to tags */
-            cover = result.tags.cover_url +'?t=' + result.tags.timestamp;
+            cover = result.tags.cover +'?t=' + result.tags.timestamp;
             if (result.tags.title) {
               title = result.tags.title;
               artist = result.tags.artist || "";
@@ -213,7 +213,7 @@ function melo_player_render_player(result) {
         }
 
         /* Update cover and track */
-        $("#player-cover-img").attr("src", cover);
+        $("#player-cover-img").attr("src", "/cover/" + cover);
         $("#player-track").html(
             '<h2>' + title + '</h2><h3>' + artist + '</h3>');
 
@@ -264,7 +264,7 @@ function melo_player_update_player() {
     melo_jsonrpc_request("player.get_status",
         '{"id": "' + melo_player_current.id + '",' +
         '"fields": ["full"],' +
-        '"tags": ["title","artist","album","cover_url"],' +
+        '"tags": ["title","artist","album","cover"],' +
         '"tags_ts": ' + melo_player_current.ts + '}',
         function(result) {
             melo_player_render_player(result);
@@ -316,14 +316,14 @@ function melo_player_render_list(result) {
 
         /* Process tags */
         if (result[i].status.tags) {
-            /* Get cover URL */
-            if (result[i].status.tags.cover_url)
-                img = result[i].status.tags.cover_url +'?t=' +
+            /* Get cover ID */
+            if (result[i].status.tags.cover)
+                img = result[i].status.tags.cover +'?t=' +
                     result[i].status.tags.timestamp;
         }
 
         /* Update player tab */
-        tab.find("img").attr("src", img);
+        tab.find("img").attr("src", "/cover/" + img);
 
         /* Current player */
         if (result[i].id == melo_player_current.id) {
@@ -365,7 +365,7 @@ function melo_player_render_list(result) {
 function melo_player_update_list() {
     /* Get player list */
     melo_jsonrpc_request("player.get_list",
-        '[["full"],["state","tags"],["cover_url"]]',
+        '[["full"],["state","tags"],["cover"]]',
         function(result) {
             /* Update player list */
             melo_player_render_list(result);
