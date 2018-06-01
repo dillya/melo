@@ -27,7 +27,6 @@
 #include <json-glib/json-glib.h>
 
 typedef struct _MeloTags MeloTags;
-typedef struct _MeloTagsPrivate MeloTagsPrivate;
 typedef enum _MeloTagsFields MeloTagsFields;
 typedef enum _MeloTagsCoverPersist MeloTagsCoverPersist;
 
