@@ -184,7 +184,7 @@ main (int argc, char *argv[])
   if (!melo_config_get_integer (config, "http", "port", &context.port))
     context.port = 8080;
   if (!melo_config_get_integer (config, "http", "sport", &context.sport))
-    context.port = 8443;
+    context.sport = 8443;
 
   /* Initialize main audio sink */
   melo_sink_main_init (context.audio.rate, context.audio.channels);
