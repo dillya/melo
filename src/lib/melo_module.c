@@ -286,7 +286,6 @@ melo_module_get_info (MeloModule *module)
 gboolean
 melo_module_register_browser (MeloModule *module, MeloBrowser *browser)
 {
-  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
   MeloModulePrivate *priv = module->priv;
 
   /* Lock browser list */
@@ -324,7 +323,6 @@ failed:
 void
 melo_module_unregister_browser (MeloModule *module, const char *id)
 {
-  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
   MeloModulePrivate *priv = module->priv;
   MeloBrowser *bro;
 
@@ -391,7 +389,6 @@ melo_module_get_browser_list (MeloModule *module)
 gboolean
 melo_module_register_player (MeloModule *module, MeloPlayer *player)
 {
-  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
   MeloModulePrivate *priv = module->priv;
 
   /* Lock player list */
@@ -429,7 +426,6 @@ failed:
 void
 melo_module_unregister_player (MeloModule *module, const char *id)
 {
-  MeloModuleClass *mclass = MELO_MODULE_GET_CLASS (module);
   MeloModulePrivate *priv = module->priv;
   MeloPlayer *play;
 

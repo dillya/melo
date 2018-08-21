@@ -351,8 +351,6 @@ melo_player_radio_load (MeloPlayer *player, const gchar *path,
                         const gchar *name, MeloTags *tags, gboolean insert,
                         gboolean stopped)
 {
-  MeloPlayerRadioPrivate *priv = (MELO_PLAYER_RADIO (player))->priv;
-
   /* Setup pipeline in paused or stopped state */
   return melo_player_radio_setup (player, path, name, tags, insert,
                                   stopped ? MELO_PLAYER_STATE_STOPPED :
@@ -363,8 +361,6 @@ static gboolean
 melo_player_radio_play (MeloPlayer *player, const gchar *path,
                         const gchar *name, MeloTags *tags, gboolean insert)
 {
-  MeloPlayerRadioPrivate *priv = (MELO_PLAYER_RADIO (player))->priv;
-
   /* Setup pipeline and play */
   return melo_player_radio_setup (player, path, name, tags, insert,
                                   MELO_PLAYER_STATE_LOADING);

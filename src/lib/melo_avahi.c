@@ -226,7 +226,7 @@ melo_avahi_service_get_txt (const MeloAvahiService *s, const gchar *key)
 
   /* Copy string */
   len = strlen (key) + 1;
-  return g_strndup (l->text + len, l->size - len);
+  return g_strndup ((const gchar *) l->text + len, l->size - len);
 }
 
 /**

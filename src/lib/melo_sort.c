@@ -21,11 +21,11 @@
 
 #include "melo_sort.h"
 
-struct {
+static struct {
   MeloSort sort;
   const gchar *name;
   const gchar *name_desc;
-} static const melo_sort_map[] = {
+} const melo_sort_map[] = {
   { MELO_SORT_NONE,         "none",         "none"               },
   { MELO_SORT_SHUFFLE,      "shuffle",      "shuffle"            },
   { MELO_SORT_FILE,         "file",         "file_desc"          },
@@ -45,7 +45,7 @@ const gchar *
 melo_sort_to_string (MeloSort sort)
 {
   MeloSort s =  melo_sort_set_asc (sort);
-  gint i;
+  guint i;
 
   if (!melo_sort_is_valid (sort))
     return NULL;
@@ -61,7 +61,7 @@ melo_sort_to_string (MeloSort sort)
 MeloSort
 melo_sort_from_string (const gchar *name)
 {
-  gint i;
+  guint i;
 
   if (!name)
     return MELO_SORT_NONE;

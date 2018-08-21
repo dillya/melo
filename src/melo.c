@@ -246,7 +246,6 @@ main (int argc, char *argv[])
         "-subj", "/C=US/ST=California/L=San-Francisco/O=Sparod/CN=melo",
         "-days", "3650", "-nodes",  "-out", cert_file, "-keyout", key_file, NULL
       };
-      GError *err = NULL;
       gint status = 0;
 
       /* Generate default SSL certificate */

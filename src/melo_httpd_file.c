@@ -48,7 +48,7 @@ melo_httpd_list_directory (const char *f_path, const char *path)
   GDir *dir;
   const gchar *d_name;
   char *escaped;
-  int i;
+  unsigned int i;
 
   /* Create a new list for entries */
   entries = g_ptr_array_new ();

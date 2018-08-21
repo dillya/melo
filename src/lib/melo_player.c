@@ -885,7 +885,7 @@ melo_player_reset_status (MeloPlayer *player, MeloPlayerState state,
                           const gchar *name, MeloTags *tags)
 {
   MeloPlayerPrivate *priv = player->priv;
-  MeloPlayerStatus *status, *old;
+  MeloPlayerStatus *status;
 
   /* Create a new status */
   status = melo_player_status_new (state, name, tags);

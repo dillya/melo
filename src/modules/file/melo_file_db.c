@@ -442,7 +442,6 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   const gchar *order = "", *order_col = "", *order_sort = "";
   MeloFileDBPrivate *priv = db->priv;
   sqlite3_stmt *req = NULL;
-  MeloTags *tags;
   gboolean join_artist = FALSE;
   gboolean join_album = FALSE;
   gboolean join_genre = FALSE;
@@ -681,7 +680,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
   sqlite3_free (sql);
 
   while (sqlite3_step (req) == SQLITE_ROW) {
-    const gchar *path, *file;
+    const gchar *path = NULL, *file = NULL;
     MeloTags *tags;
     gint id, i = 0;
 
@@ -697,17 +696,17 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
     /* Fill MeloTags */
     id = sqlite3_column_int (req, i++);
     if (type == MELO_FILE_DB_TYPE_FILE)
-      path = sqlite3_column_text (req, i++);
+      path = (const gchar *) sqlite3_column_text (req, i++);
     if (type <= MELO_FILE_DB_TYPE_SONG)
-      file = sqlite3_column_text (req, i++);
+      file = (const gchar *) sqlite3_column_text (req, i++);
     if (tags_fields & MELO_TAGS_FIELDS_TITLE)
-      tags->title = g_strdup (sqlite3_column_text (req, i++));
+      tags->title = g_strdup ((const gchar *) sqlite3_column_text (req, i++));
     if (tags_fields & MELO_TAGS_FIELDS_ARTIST)
-      tags->artist = g_strdup (sqlite3_column_text (req, i++));
+      tags->artist = g_strdup ((const gchar *) sqlite3_column_text (req, i++));
     if (tags_fields & MELO_TAGS_FIELDS_ALBUM)
-      tags->album = g_strdup (sqlite3_column_text (req, i++));
+      tags->album = g_strdup ((const gchar *) sqlite3_column_text (req, i++));
     if (tags_fields & MELO_TAGS_FIELDS_GENRE)
-      tags->genre = g_strdup (sqlite3_column_text (req, i++));
+      tags->genre = g_strdup ((const gchar *) sqlite3_column_text (req, i++));
     if (tags_fields & MELO_TAGS_FIELDS_DATE)
       tags->date = sqlite3_column_int (req, i++);
     if (tags_fields & MELO_TAGS_FIELDS_TRACK)
@@ -715,7 +714,7 @@ melo_file_db_vfind (MeloFileDB *db, MeloFileDBType type, GObject *obj,
     if (tags_fields & MELO_TAGS_FIELDS_TRACKS)
       tags->tracks = sqlite3_column_int (req, i++);
     if (tags_fields & MELO_TAGS_FIELDS_COVER)
-      tags->cover = g_strdup (sqlite3_column_text (req, i++));
+      tags->cover = g_strdup ((const gchar *) sqlite3_column_text (req, i++));
 
     /* Set utags */
     if (utags && !*utags)

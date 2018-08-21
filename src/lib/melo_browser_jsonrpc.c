@@ -408,8 +408,7 @@ melo_browser_jsonrpc_get_list (const gchar *method,
   MeloBrowserList *list;
   MeloBrowser *bro;
   JsonObject *obj;
-  GList *l;
-  const gchar *path, *input;
+  const gchar *path = NULL, *input = NULL;
   const gchar *token = NULL;
   gint offset, count;
 

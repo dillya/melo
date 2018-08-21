@@ -53,7 +53,6 @@ melo_config_upnp_update (MeloConfigContext *context, gpointer user_data)
 {
   MeloUpnp *up = MELO_UPNP (user_data);
   const gchar *old, *new;
-  gint64 port, old_port;
 
   /* Update name */
   if (melo_config_get_updated_string (context, "name", &new, &old) &&

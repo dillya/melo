@@ -265,7 +265,6 @@ on_object_available (GUPnPDIDLLiteParser *parser, GUPnPDIDLLiteObject *object,
                      gpointer user_data)
 {
   MeloPlayerUpnp *up = MELO_PLAYER_UPNP (user_data);
-  MeloPlayerUpnpPrivate *priv = up->priv;
   MeloPlayer *player = MELO_PLAYER (up);
   const gchar *img;
   MeloTags *tags;

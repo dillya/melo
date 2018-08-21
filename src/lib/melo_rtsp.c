@@ -450,8 +450,9 @@ melo_rtsp_handle_client (GSocket *sock, GIOCondition condition,
         if (client->content_length <= client->buffer_len) {
           /* Last chunck */
           if (priv->read_cb)
-            priv->read_cb (client, client->buffer, client->content_length, TRUE,
-                           priv->read_data, &client->user_data);
+            priv->read_cb (client, (guchar *) client->buffer,
+                           client->content_length, TRUE, priv->read_data,
+                           &client->user_data);
 
           /* Move remaining data to buffer start */
           memmove (client->buffer, client->buffer + client->content_length,
@@ -461,8 +462,9 @@ melo_rtsp_handle_client (GSocket *sock, GIOCondition condition,
         } else if (client->buffer_len == client->buffer_size) {
           /* Next chunk */
           if (priv->read_cb)
-            priv->read_cb (client, client->buffer, client->buffer_size, FALSE,
-                           priv->read_data, &client->user_data);
+            priv->read_cb (client, (guchar *) client->buffer,
+                           client->buffer_size, FALSE, priv->read_data,
+                           &client->user_data);
 
           /* Reset buffer */
           client->content_length -= client->buffer_size;
@@ -503,8 +505,8 @@ melo_rtsp_handle_client (GSocket *sock, GIOCondition condition,
     case MELO_RTSP_STATE_SEND_BODY:
       if (client->packet) {
         if (client->packet_len > 0) {
-          len = g_socket_send (sock, client->packet, client->packet_len, NULL,
-                               NULL);
+          len = g_socket_send (sock, (gchar *) client->packet,
+                               client->packet_len, NULL, NULL);
           if (len <= 0)
             goto close;
           client->packet_len -= len;
@@ -860,7 +862,7 @@ melo_rtsp_basic_auth_check (MeloRTSPClient *client, const gchar *username,
     return FALSE;
 
   /* Decode string */
-  uname = g_base64_decode (auth + 6, &len);
+  uname = (gchar *) g_base64_decode (auth + 6, &len);
 
   /* Find password */
   pass = strchr (uname, ':');
@@ -1012,7 +1014,7 @@ melo_rtsp_digest_auth_check (MeloRTSPClient *client, const gchar *username,
 static void
 melo_rtsp_generate_nonce (gchar *buffer, gsize len)
 {
-  gint i = 0;
+  gsize i = 0;
 #ifdef G_OS_WIN32
   HCRYPTPROV crypt;
 
@@ -1031,15 +1033,16 @@ melo_rtsp_generate_nonce (gchar *buffer, gsize len)
   /* Open kernel random generator */
   fd = open("/dev/random", O_RDONLY);
   if (fd != -1) {
+    gssize s;
+
     /* Read len random bytes */
-    i = read(fd, buffer, len);
+    s = read(fd, buffer, len);
     close (fd);
 
     /* Check length of random bytes sequence generated */
-    if (i == len)
+    if (s == (gint) len)
       return;
-    else if (i < 0)
-      i = 0;
+    i = s > 0 ? s : 0;
   }
 #endif
 
@@ -1063,7 +1066,8 @@ melo_rtsp_digest_auth_response (MeloRTSPClient *client, const gchar *realm,
     melo_rtsp_generate_nonce (buffer, 32);
 
     /* Convert it into md5 string */
-    client->nonce = g_compute_checksum_for_data (G_CHECKSUM_MD5, buffer, 32);
+    client->nonce = g_compute_checksum_for_data (G_CHECKSUM_MD5,
+                                                 (const guchar *) buffer, 32);
   }
 
   /* Create response */

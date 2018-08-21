@@ -633,12 +633,8 @@ melo_tags_get_cover_by_id (const gchar *id)
       msg = soup_message_new ("GET", cover_url->url);
       if (msg) {
         /* Download cover data */
-        if (soup_session_send_message (melo_tags_cover_session, msg) == 200) {
-          GBytes *cover = NULL;
-
-          /* Create cover */
+        if (soup_session_send_message (melo_tags_cover_session, msg) == 200)
           g_object_get (msg, "response-body-data", &data, NULL);
-        }
 
         /* Free message */
         g_object_unref (msg);

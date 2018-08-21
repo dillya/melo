@@ -48,8 +48,6 @@ struct _MeloSinkPrivate {
   gboolean mute;
 };
 
-static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data);
-
 G_DEFINE_TYPE_WITH_PRIVATE (MeloSink, melo_sink, G_TYPE_OBJECT)
 
 static void
@@ -94,12 +92,6 @@ melo_sink_init (MeloSink *self)
   MeloSinkPrivate *priv = melo_sink_get_instance_private (self);
 
   self->priv = priv;
-}
-
-static gboolean
-bus_call (GstBus *bus, GstMessage *msg, gpointer data)
-{
-  return TRUE;
 }
 
 static inline gboolean

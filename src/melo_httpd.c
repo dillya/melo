@@ -188,6 +188,8 @@ melo_httpd_set_certificate (MeloHTTPD *httpd, const gchar *cert_file,
     g_clear_error (&err);
     return FALSE;
   }
+
+  return TRUE;
 }
 
 gboolean

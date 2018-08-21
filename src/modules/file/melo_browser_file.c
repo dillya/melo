@@ -380,7 +380,6 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
     MeloBrowserItemType itype;
     MeloBrowserItem *item;
     GFileType type;
-    GList **l;
     gchar *id;
 
     /* Get item type */
@@ -390,17 +389,14 @@ melo_browser_file_list (MeloBrowserFile * bfile, GFile *dir,
       itype = MELO_BROWSER_ITEM_TYPE_FILE;
       actions = MELO_BROWSER_ITEM_ACTION_FIELDS_ADD |
                 MELO_BROWSER_ITEM_ACTION_FIELDS_PLAY;
-      l = &list;
     } else if (type == G_FILE_TYPE_DIRECTORY) {
       id = g_strdup (g_file_info_get_name (info));
       itype = MELO_BROWSER_ITEM_TYPE_FOLDER;
       actions = MELO_BROWSER_ITEM_ACTION_FIELDS_NONE;
-      l = &dir_list;
     } else if (type == G_FILE_TYPE_SHORTCUT ||
                type == G_FILE_TYPE_MOUNTABLE) {
       const gchar *uri;
       gchar *sha1;
-      l = &dir_list;
       uri = g_file_info_get_attribute_string (info,
                                           G_FILE_ATTRIBUTE_STANDARD_TARGET_URI);
 
@@ -721,8 +717,6 @@ melo_browser_file_get_network_uri (MeloBrowserFile *bfile, const gchar *path)
 
   /* Path contains a shortcut */
   if (shortcut) {
-    GError *error = NULL;
-    GFileInfo *info;
     GFile *dir;
     gchar *furi, *uri;
 
@@ -965,7 +959,6 @@ melo_browser_file_get_tags (MeloBrowser *browser, const gchar *path,
                             MeloTagsFields fields)
 {
   MeloBrowserFile *bfile = MELO_BROWSER_FILE (browser);
-  MeloBrowserFilePrivate *priv = bfile->priv;
   MeloTags *tags = NULL;
   gchar *uri, *uuri;
 

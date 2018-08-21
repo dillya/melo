@@ -407,10 +407,8 @@ melo_playlist_jsonrpc_empty (const gchar *method,
                              JsonNode **result, JsonNode **error,
                              gpointer user_data)
 {
-  const gchar *id;
   MeloPlaylist *plist;
   JsonObject *obj;
-  gboolean ret = FALSE;
 
   /* Get parameters */
   obj = melo_jsonrpc_get_object (s_params, params, error);

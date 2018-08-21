@@ -323,7 +323,6 @@ melo_player_jsonrpc_get_list (const gchar *method,
   MeloPlayerJSONRPCStatusFields sfields =
                                          MELO_PLAYER_JSONRPC_STATUS_FIELDS_NONE;
   MeloTagsFields tfields = MELO_TAGS_FIELDS_NONE;
-  const MeloPlayerInfo *info = NULL;
   gint64 tags_ts = 0;
   JsonArray *array;
   JsonObject *obj;
