@@ -1422,7 +1422,7 @@ static const gchar *melo_player_state_str[] = {
  *
  * Convert a #MeloPlayerState to a string.
  *
- * Returns: a string with the translated #MeloPlayerStatei, %NULL otherwise.
+ * Returns: a string with the translated #MeloPlayerState, %NULL otherwise.
 */
 const gchar *
 melo_player_state_to_string (MeloPlayerState state)
@@ -1433,8 +1433,8 @@ melo_player_state_to_string (MeloPlayerState state)
 }
 
 /**
- * melo_player_state_to_string:
- * @state: a string with player state
+ * melo_player_state_from_string:
+ * @sstate: a string with player state
  *
  * Convert a string to a #MeloPlayerState.
  *
