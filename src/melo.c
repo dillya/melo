@@ -161,8 +161,10 @@ main (int argc, char *argv[])
 
   /* Load configuration */
   config = melo_config_main_new ();
-  if (!melo_config_load_from_def_file (config))
+  if (!melo_config_load_from_def_file (config)) {
     melo_config_load_default (config);
+    melo_config_save_to_def_file (config);
+  }
 
   /* Save automatically configuration to file */
   melo_config_save_to_def_file_at_update (config, TRUE);
