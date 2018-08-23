@@ -28,6 +28,9 @@ static gboolean melo_sink_mute;
 static GstCaps *melo_sink_caps;
 static GHashTable *melo_sink_hash;
 static GList *melo_sink_list;
+static GKeyFile *melo_sink_store;
+static gchar *melo_sink_store_file;
+static guint melo_sink_store_timer;
 
 struct _MeloSinkPrivate {
   /* Associated player */
@@ -125,6 +128,7 @@ melo_sink_new (MeloPlayer *player, const gchar *id, const gchar *name)
 
   /* Init private structure */
   priv = sink->priv;
+  priv->vol = 1.0;
   priv->player = player;
   priv->id = g_strdup (id);
   priv->name = g_strdup (name);
@@ -151,10 +155,34 @@ melo_sink_new (MeloPlayer *player, const gchar *id, const gchar *name)
   /* Setup caps for audio sink */
   g_object_set (priv->filter, "caps", melo_sink_caps, NULL);
 
+  /* Restore volume and mute from storage file */
+  if (melo_sink_store) {
+    GError *err = NULL;
+    gdouble volume;
+    gboolean mute;
+
+    /* Restore volume */
+    volume = g_key_file_get_double (melo_sink_store, id, "volume", &err);
+    if (!err)
+      priv->vol = volume;
+    g_clear_error (&err);
+
+    /* Restore mute */
+    mute = g_key_file_get_boolean (melo_sink_store, id, "mute", &err);
+    if (!err)
+      priv->mute = mute;
+    g_clear_error (&err);
+
+    /* Update player status */
+    if (priv->player) {
+      melo_player_set_status_volume (priv->player, priv->vol);
+      melo_player_set_status_mute (priv->player, priv->mute);
+    }
+  }
+
   /* Setup volume */
-  priv->vol = 1.0;
   g_object_set (priv->volume, "volume", priv->vol * melo_sink_volume, "mute",
-                melo_sink_mute, NULL);
+                priv->mute || melo_sink_mute, NULL);
 
   /* Add and connect convert -> resample -> volume -> audiosink to sink bin */
   gst_bin_add_many (GST_BIN (priv->sink), priv->convert, priv->resample,
@@ -227,6 +255,24 @@ melo_sink_get_volume (MeloSink *sink)
   return sink->priv->vol;
 }
 
+static gboolean
+melo_sink_update_store_file_func (gpointer user_data)
+{
+  G_LOCK (melo_sink_mutex);
+  g_key_file_save_to_file (melo_sink_store, melo_sink_store_file, NULL);
+  melo_sink_store_timer = 0;
+  G_UNLOCK (melo_sink_mutex);
+
+  return FALSE;
+}
+
+static void
+melo_sink_update_store_file (void)
+{
+  if (!melo_sink_store_timer)
+    g_timeout_add_seconds (10, melo_sink_update_store_file_func, NULL);
+}
+
 gdouble
 melo_sink_set_volume (MeloSink *sink, gdouble volume)
 {
@@ -244,6 +290,14 @@ melo_sink_set_volume (MeloSink *sink, gdouble volume)
   /* Update player status */
   if (priv->player)
     melo_player_set_status_volume (priv->player, volume);
+
+  /* Save volume */
+  G_LOCK (melo_sink_mutex);
+  if (melo_sink_store) {
+    g_key_file_set_double (melo_sink_store, priv->id, "volume", volume);
+    melo_sink_update_store_file ();
+  }
+  G_UNLOCK (melo_sink_mutex);
 
   return volume;
 }
@@ -274,6 +328,14 @@ melo_sink_set_mute (MeloSink *sink, gboolean mute)
   if (priv->player)
     melo_player_set_status_mute (priv->player, mute);
 
+  /* Save mute */
+  G_LOCK (melo_sink_mutex);
+  if (melo_sink_store) {
+    g_key_file_set_boolean (melo_sink_store, priv->id, "mute", mute);
+    melo_sink_update_store_file ();
+  }
+  G_UNLOCK (melo_sink_mutex);
+
   return mute;
 }
 
@@ -291,6 +353,7 @@ melo_sink_gen_caps (gint rate, gint channels)
 gboolean
 melo_sink_main_init (gint rate, gint channels)
 {
+  gchar *path;
 
   /* Lock main context access */
   G_LOCK (melo_sink_mutex);
@@ -304,6 +367,37 @@ melo_sink_main_init (gint rate, gint channels)
 
   /* Create hash table */
   melo_sink_hash = g_hash_table_new (g_str_hash, g_str_equal);
+
+  /* Prepare filename to prepare sinks parameters storage */
+  melo_sink_store_file = g_strdup_printf ("%s/melo/sink_store.conf",
+                                          g_get_user_config_dir ());
+  path = g_path_get_dirname (melo_sink_store_file);
+  g_mkdir_with_parents (path, 0700);
+  g_free (path);
+
+  /* Create key file for volume/mute storage */
+  melo_sink_store = g_key_file_new ();
+  if (melo_sink_store) {
+    GError *err = NULL;
+    gdouble volume;
+    gboolean mute;
+
+    /* Restore settings from file */
+    g_key_file_load_from_file (melo_sink_store, melo_sink_store_file,
+                               G_KEY_FILE_NONE, NULL);
+
+    /* Restore volume */
+    volume = g_key_file_get_double (melo_sink_store, "main", "volume", &err);
+    if (!err)
+      melo_sink_volume = volume;
+    g_clear_error (&err);
+
+    /* Restore mute */
+    mute = g_key_file_get_boolean (melo_sink_store, "main", "mute", &err);
+    if (!err)
+      melo_sink_mute = mute;
+    g_clear_error (&err);
+  }
 
   /* Unlock main context access */
   G_UNLOCK (melo_sink_mutex);
@@ -334,6 +428,20 @@ melo_sink_main_release ()
   /* Free hash table */
   g_hash_table_unref (melo_sink_hash);
   melo_sink_hash = NULL;
+
+  /* Save sink store */
+  if (melo_sink_store) {
+    /* Stop source */
+    if (melo_sink_store_timer)
+      g_source_remove (melo_sink_store_timer);
+
+    /* Save to file */
+    g_key_file_save_to_file (melo_sink_store, melo_sink_store_file, NULL);
+    g_key_file_unref (melo_sink_store);
+    melo_sink_store = NULL;
+  }
+  g_free (melo_sink_store_file);
+  melo_sink_store_file = NULL;
 
   /* Unlock main context access */
   G_UNLOCK (melo_sink_mutex);
@@ -416,6 +524,12 @@ melo_sink_set_main_volume (gdouble volume)
     g_object_set (priv->volume, "volume", priv->vol * volume, NULL);
   }
 
+  /* Save volume */
+  if (melo_sink_store) {
+    g_key_file_set_double (melo_sink_store, "main", "volume", volume);
+    melo_sink_update_store_file ();
+  }
+
   /* Unlock main context access */
   G_UNLOCK (melo_sink_mutex);
 
@@ -444,6 +558,12 @@ melo_sink_set_main_mute (gboolean mute)
     MeloSink *sink = (MeloSink *) list->data;
     MeloSinkPrivate *priv = sink->priv;
     g_object_set (priv->volume, "mute", priv->mute || mute, NULL);
+  }
+
+  /* Save mute */
+  if (melo_sink_store) {
+    g_key_file_set_double (melo_sink_store, "main", "mute", mute);
+    melo_sink_update_store_file ();
   }
 
   /* Unlock main context access */
