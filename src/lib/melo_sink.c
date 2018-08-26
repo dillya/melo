@@ -21,6 +21,39 @@
 
 #include "melo_sink.h"
 
+/**
+ * SECTION:melo_sink
+ * @title: MeloSink
+ * @short_description: Audio sink for #MeloPlayer
+ *
+ * #MeloSink provides a full set of functions to construct and manage an audio
+ * sink for #MeloPlayer and GStreamer pipelines.
+ *
+ * The main purpose of this object is to provide a common set of audio sinks for
+ * all players instantiated in Melo, to control global settings and individual
+ * settings through a common interface.
+ * By default, when a #MeloSink is created, it is attached to a #MeloPlayer and
+ * it will update the output settings of the player transparently. Moreover,
+ * when output settings are updated (like sample-rate), all sinks are updated
+ * according to the new values.
+ * A main volume control is also available in #MeloSink, to control the final
+ * output volume.
+ *
+ * The function melo_sink_get_gst_sink() is intended to provide a sink
+ * compatible #GstElement to be embedded in a full audio pipeline. The audio
+ * mixing and control is then hided by the #MeloSink implementation.
+ *
+ * In addition to provide a common interface for all audio sinks, the #MeloSink
+ * embed a mechanism to save and restore each individual volume / mute settings
+ * of the #MeloSink instances. This settings are saved to a key file, 10 seconds
+ * after value update in order to reduce file I/O.
+ *
+ * Before any #MeloPlayer instantiation, the melo_sink_main_init() must be
+ * called once in order to initialize internal mixer and main audio sink. After
+ * user, when all instances of #MeloPlayer have been released, the function
+ * melo_sink_main_release() should be called.
+ */
+
 /* Main audio mixer pipeline */
 G_LOCK_DEFINE_STATIC (melo_sink_mutex);
 static gdouble melo_sink_volume = 1.0;
@@ -103,6 +136,22 @@ melo_sink_is_initialized (void)
   return melo_sink_hash ? TRUE : FALSE;
 }
 
+/**
+ * melo_sink_new:
+ * @player: a #MeloPlayer on which to attach
+ * @id: a string containing the sink ID
+ * @name: a string containing the display name of the sink
+ *
+ * Instantiate a new #MeloSink object attached to the provided @player. The
+ * melo_player_set_volume(), melo_player_get_volume(), melo_player_set_mute()
+ * and melo_player_get_mute() are automatically bound on the new #MeloSink
+ * instance.
+ *
+ * If a #MeloSink has been already instantiated with the same ID, the volume and
+ * mute settings are restored and applied.
+ *
+ * Returns: (transfer full): the new #MeloSink instance or %NULL if failed.
+ */
 MeloSink *
 melo_sink_new (MeloPlayer *player, const gchar *id, const gchar *name)
 {
@@ -210,18 +259,43 @@ failed:
   return NULL;
 }
 
+/**
+ * melo_sink_get_id:
+ * @sink: the sink
+ *
+ * Get the #MeloSink ID.
+ *
+ * Returns: the ID of the #MeloSink.
+ */
 const gchar *
 melo_sink_get_id (MeloSink *sink)
 {
   return sink->priv->id;
 }
 
+/**
+ * melo_sink_get_name:
+ * @sink: the sink
+ *
+ * Get the #MeloSink name.
+ *
+ * Returns: the name of the #MeloSink.
+ */
 const gchar *
 melo_sink_get_name (MeloSink *sink)
 {
   return sink->priv->name;
 }
 
+/**
+ * melo_sink_get_gst_sink:
+ * @sink: the sink
+ *
+ * Get a #GstElement audio sink to use inside a Gstreamer audio pipeline.
+ *
+ * Returns: (transfer full): a new reference of a #GstElement representing the
+ * audio sink. After use, the gst_object_unref() should be called.
+ */
 GstElement *
 melo_sink_get_gst_sink (MeloSink *sink)
 {
@@ -229,6 +303,15 @@ melo_sink_get_gst_sink (MeloSink *sink)
   return gst_object_ref (sink->priv->sink);
 }
 
+/**
+ * melo_sink_get_sync:
+ * @sink: the sink
+ *
+ * Get the sync flag status of the audio sink.
+ *
+ * Returns: %TRUE if the clock synchronization is enabled on the audio sink,
+ * %FALSE otherwise.
+ */
 gboolean
 melo_sink_get_sync (MeloSink *sink)
 {
@@ -240,6 +323,14 @@ melo_sink_get_sync (MeloSink *sink)
   return enable;
 }
 
+/**
+ * melo_sink_set_sync:
+ * @sink: the sink
+ * @enable: set %TRUE to enable clock synchronization
+ *
+ * Set the sync flag status of the audio sink. If @enable is set to %TRUE, the
+ * sink will synchronize its clock with the sound card clock.
+ */
 void
 melo_sink_set_sync (MeloSink *sink, gboolean enable)
 {
@@ -247,6 +338,14 @@ melo_sink_set_sync (MeloSink *sink, gboolean enable)
   g_object_set (G_OBJECT (sink->priv->audiosink), "sync", enable, NULL);
 }
 
+/**
+ * melo_sink_get_volume:
+ * @sink: the sink
+ *
+ * Get current volume of the sink.
+ *
+ * Returns: the current volume applied on the sink.
+ */
 gdouble
 melo_sink_get_volume (MeloSink *sink)
 {
@@ -273,6 +372,15 @@ melo_sink_update_store_file (void)
     g_timeout_add_seconds (10, melo_sink_update_store_file_func, NULL);
 }
 
+/**
+ * melo_sink_set_volume:
+ * @sink: the sink
+ * @volume: the volume to use
+ *
+ * Set a new volume value on the sink.
+ *
+ * Returns: the actual volume value applied on the sink.
+ */
 gdouble
 melo_sink_set_volume (MeloSink *sink, gdouble volume)
 {
@@ -302,6 +410,14 @@ melo_sink_set_volume (MeloSink *sink, gdouble volume)
   return volume;
 }
 
+/**
+ * melo_sink_get_mute:
+ * @sink: the sink
+ *
+ * Get the current mute flag of the sink.
+ *
+ * Returns: the current mute flag applied on the sink.
+ */
 gboolean
 melo_sink_get_mute (MeloSink *sink)
 {
@@ -310,6 +426,15 @@ melo_sink_get_mute (MeloSink *sink)
   return sink->priv->mute;
 }
 
+/**
+ * melo_sink_set_mute:
+ * @sink: the sink
+ * @mute: set %TRUE to mute the sink
+ *
+ * Set the mute flag of the sink.
+ *
+ * Returns: the actual mute flag applied on the sink.
+ */
 gboolean
 melo_sink_set_mute (MeloSink *sink, gboolean mute)
 {
@@ -350,6 +475,18 @@ melo_sink_gen_caps (gint rate, gint channels)
                               "channels", G_TYPE_INT, channels, NULL);
 }
 
+/**
+ * melo_sink_main_init:
+ * @rate: the sample rate to use for the sound card
+ * @channels: the channel count to use for the sound card
+ *
+ * Initialize and configure the sound card and internal mixer with the settings
+ * provided. This function must be called once before any #MeloPlayer
+ * instantiation.
+ *
+ * Returns: %TRUE if initialization has been done with success, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_sink_main_init (gint rate, gint channels)
 {
@@ -409,6 +546,14 @@ failed:
   return FALSE;
 }
 
+/**
+ * melo_sink_main_release:
+ *
+ * Release internal mixer and sound card. It must be called at end of program,
+ * after release of all #MeloPlayer instances using a #MeloSink.
+ *
+ * Returns: %TRUE if release has been done with success, %FALSE otherwise.
+ */
 gboolean
 melo_sink_main_release ()
 {
@@ -449,6 +594,18 @@ melo_sink_main_release ()
   return TRUE;
 }
 
+/**
+ * melo_sink_set_main_config:
+ * @rate: the sample rate to use for the sound card
+ * @channels: the channel count to use for the sound card
+ *
+ * Set a new configuration on the sound card. An incremental update will be
+ * done on all #MeloSink instances and then Gstreamer pipeline using the
+ * #GstElement objects provided by melo_sink_get_gst_sink().
+ *
+ * Returns: %TRUE if new configuration has been applied with success, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_sink_set_main_config (gint rate, gint channels)
 {
@@ -477,6 +634,16 @@ melo_sink_set_main_config (gint rate, gint channels)
   return ret;
 }
 
+/**
+ * melo_sink_get_main_config:
+ * @rate: a pointer to a #gint to store the current sample rate
+ * @channels: a pointer to a #gint to store the current channel count
+ *
+ * Get current configuration applied on the sound card.
+ *
+ * Returns: %TRUE if configuration has been retrieved with success, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_sink_get_main_config (gint *rate, gint *channels)
 {
@@ -500,12 +667,27 @@ melo_sink_get_main_config (gint *rate, gint *channels)
   return ret;
 }
 
+/**
+ * melo_sink_set_main_volume:
+ *
+ * Get the current global volume value.
+ *
+ * Returns: the current global volume value.
+ */
 gdouble
 melo_sink_get_main_volume ()
 {
   return melo_sink_volume;
 }
 
+/**
+ * melo_sink_set_main_volume:
+ * @volume: the global volume value to apply
+ *
+ * Set the global volume value on all sinks.
+ *
+ * Returns: the actual global volume value applied.
+ */
 gdouble
 melo_sink_set_main_volume (gdouble volume)
 {
@@ -536,12 +718,27 @@ melo_sink_set_main_volume (gdouble volume)
   return volume;
 }
 
+/**
+ * melo_sink_set_main_mute:
+ *
+ * Get the current global mute flag.
+ *
+ * Returns: the current global mute flag.
+ */
 gboolean
 melo_sink_get_main_mute ()
 {
   return melo_sink_mute;
 }
 
+/**
+ * melo_sink_set_main_mute:
+ * @mute: set %TRUE to mute all sinks
+ *
+ * Set the global mute flag.
+ *
+ * Returns: the actual global mute flag applied.
+ */
 gboolean
 melo_sink_set_main_mute (gboolean mute)
 {
@@ -572,6 +769,15 @@ melo_sink_set_main_mute (gboolean mute)
   return mute;
 }
 
+/**
+ * melo_sink_get_sink_by_id:
+ * @id: the #MeloSink ID to retrieve
+ *
+ * Get an instance of the #MeloSink with its ID.
+ *
+ * Returns: (transfer full): the #MeloSink instance or %NULL if not found. Use
+ * g_object_unref() after usage.
+ */
 MeloSink *
 melo_sink_get_sink_by_id (const gchar *id)
 {
@@ -591,6 +797,15 @@ melo_sink_get_sink_by_id (const gchar *id)
   return sink;
 }
 
+/**
+ * melo_sink_get_sink_list:
+ *
+ * Get a #GList of all #MeloSink registered.
+ *
+ * Returns: (transfer full): a #GList of all #MeloSink registered. You must
+ * free list and its data when you are done with it. You can use
+ * g_list_free_full() with g_object_unref() to do this.
+ */
 GList *
 melo_sink_get_sink_list (void)
 {

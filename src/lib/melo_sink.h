@@ -40,6 +40,11 @@ typedef struct _MeloSink MeloSink;
 typedef struct _MeloSinkClass MeloSinkClass;
 typedef struct _MeloSinkPrivate MeloSinkPrivate;
 
+/**
+ * MeloSink:
+ *
+ * The opaque #MeloSink data structure.
+ */
 struct _MeloSink {
   GObject parent_instance;
 
@@ -47,6 +52,12 @@ struct _MeloSink {
   MeloSinkPrivate *priv;
 };
 
+/**
+ * MeloSinkClass:
+ * @parent_class: Object parent class
+ *
+ * The #MeloSinkClass data structure.
+ */
 struct _MeloSinkClass {
   GObjectClass parent_class;
 };
