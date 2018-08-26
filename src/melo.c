@@ -95,6 +95,7 @@ melo_event_callback (MeloEventClient *client, MeloEventType type, guint event,
       json_generator_set_root (gen, node);
       json_generator_set_pretty (gen, TRUE);
       str = json_generator_to_data (gen, NULL);
+      json_node_unref (node);
       g_object_unref (gen);
 
       g_message ("Event: %s\n", str);
