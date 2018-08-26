@@ -30,6 +30,27 @@
 
 #include "melo_rtsp.h"
 
+/**
+ * SECTION:melo_rtsp
+ * @title: MeloRTSP
+ * @short_description: Simple RTSP Server implementation
+ *
+ * The #MeloRTSP class is intended to create a simple and lightweight RTSP
+ * server instance in one or more #MeloModule. It is based on the GLib sockets
+ * and main loop context which remove any need of a thread.
+ *
+ * Only three callbacks (#MeloRTSPRequest, #MeloRTSPRead and #MeloRTSPClose)
+ * are required to handle any RTSP request and the attachment of the RTSP server
+ * instance to a #GMainContext though a call to melo_rtsp_attach().
+ *
+ * In addition to standard RTSP request handling, the basic and digest
+ * authentication methods are available.
+ *
+ * Thanks to %MELO_RTSP_METHOD_UNKNOWN and melo_rtsp_get_method_name(), custom
+ * RTSP methods can be handled with the #MeloRTSP server and then implement
+ * modified RTSP protocols.
+ */
+
 #define MELO_DEFAULT_MAX_USER 5
 #define MELO_DEFAULT_BUFFER_SIZE 8192
 
@@ -143,12 +164,32 @@ melo_rtsp_init (MeloRTSP *self)
   g_mutex_init (&priv->mutex);
 }
 
+/**
+ * melo_rtsp_new:
+ *
+ * Instantiate a new #MeloRTSP object.
+ *
+ * Returns: (transfer full): the new #MeloRTSP instance or %NULL if failed.
+ */
 MeloRTSP *
 melo_rtsp_new (void)
 {
   return g_object_new (MELO_TYPE_RTSP, NULL);
 }
 
+/**
+ * melo_rtsp_start:
+ * @rtsp: a RTSP server handle
+ * @port: the port number on which to listen
+ *
+ * Start a new RTSP server instance, listening on port number @port. If the port
+ * is already in use, the function will return %FALSE.
+ *
+ * Note: by default, the connection is kept alive.
+ *
+ * Returns: %TRUE if RTSP server has been started successfully, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_rtsp_start (MeloRTSP *rtsp, guint port)
 {
@@ -204,6 +245,13 @@ failed:
   return FALSE;
 }
 
+/**
+ * melo_rtsp_stop:
+ * @rtsp: a RTSP server handle
+ *
+ * Stop the RTSP server handled by @rtsp. All connections are aborted and closed
+ * before it returns.
+ */
 void
 melo_rtsp_stop (MeloRTSP *rtsp)
 {
@@ -228,6 +276,15 @@ melo_rtsp_stop (MeloRTSP *rtsp)
   priv->context = NULL;
 }
 
+/**
+ * melo_rtsp_set_request_callback:
+ * @rtsp: a RTSP server handle
+ * @callback: a #MeloRTSPRequest callback
+ * @user_data: a pointer to associate with the callback
+ *
+ * Set a #MeloRTSPRequest callback which is called when a new RTSP request is
+ * received by the server.
+ */
 void
 melo_rtsp_set_request_callback (MeloRTSP *rtsp, MeloRTSPRequest callback,
                                 gpointer user_data)
@@ -236,6 +293,15 @@ melo_rtsp_set_request_callback (MeloRTSP *rtsp, MeloRTSPRequest callback,
   rtsp->priv->request_data = user_data;
 }
 
+/**
+ * melo_rtsp_set_read_callback:
+ * @rtsp: a RTSP server handle
+ * @callback: a #MeloRTSPRead callback
+ * @user_data: a pointer to associate with the callback
+ *
+ * Set a #MeloRTSPRead callback which is called when data are received from a
+ * RTSP client in the body request.
+ */
 void
 melo_rtsp_set_read_callback (MeloRTSP *rtsp, MeloRTSPRead callback,
                              gpointer user_data)
@@ -244,6 +310,15 @@ melo_rtsp_set_read_callback (MeloRTSP *rtsp, MeloRTSPRead callback,
   rtsp->priv->read_data = user_data;
 }
 
+/**
+ * melo_rtsp_set_close_callback:
+ * @rtsp: a RTSP server handle
+ * @callback: a #MeloRTSPClose callback
+ * @user_data: a pointer to associate with the callback
+ *
+ * Set a #MeloRTSPClose callback which is called at request completion or end a
+ * a connection.
+ */
 void
 melo_rtsp_set_close_callback (MeloRTSP *rtsp, MeloRTSPClose callback,
                               gpointer user_data)
@@ -671,6 +746,15 @@ failed:
   return G_SOURCE_CONTINUE;
 }
 
+/**
+ * melo_rtsp_attach:
+ * @rtsp: a RTSP server handle
+ * @context: a #GMainContext on which to attach the RTSP server
+ *
+ * Attach the RTSP server instance to a #GMainContext.
+ *
+ * Returns: a source ID which can be used to detach the server.
+ */
 guint
 melo_rtsp_attach (MeloRTSP *rtsp, GMainContext *context)
 {
@@ -701,6 +785,14 @@ melo_rtsp_attach (MeloRTSP *rtsp, GMainContext *context)
   return id;
 }
 
+/**
+ * melo_rtsp_get_method:
+ * @client: a RTSP client handle
+ *
+ * Get method of the current RTSP request.
+ *
+ * Returns: a #MeloRTSPMethod containing the current request method.
+ */
 MeloRTSPMethod
 melo_rtsp_get_method (MeloRTSPClient *client)
 {
@@ -708,6 +800,14 @@ melo_rtsp_get_method (MeloRTSPClient *client)
   return client->method;
 }
 
+/**
+ * melo_rtsp_get_method_name:
+ * @client: a RTSP client handle
+ *
+ * Get method name of the current RTSP request.
+ *
+ * Returns: a string containing the current request method name.
+ */
 const gchar *
 melo_rtsp_get_method_name (MeloRTSPClient *client)
 {
@@ -715,18 +815,45 @@ melo_rtsp_get_method_name (MeloRTSPClient *client)
   return client->method_name;
 }
 
+/**
+ * melo_rtsp_get_header:
+ * @client: a RTSP client handle
+ * @name: a string containing the name of the header value to get
+ *
+ * Get value of the header named @name for the current RTSP request.
+ *
+ * Returns: a string containing the value of the header requested or %NULL if
+ * not found.
+ */
 const gchar *
 melo_rtsp_get_header (MeloRTSPClient *client, const gchar *name)
 {
   return g_hash_table_lookup (client->headers, name);
 }
 
+/**
+ * melo_rtsp_get_content_length:
+ * @client: a RTSP client handle
+ *
+ * Get content length of the current RTSP request.
+ *
+ * Returns: the content length of the RTSP request.
+ */
 gsize
 melo_rtsp_get_content_length (MeloRTSPClient *client)
 {
   return client->body_size;
 }
 
+/**
+ * melo_rtsp_get_ip:
+ * @client: a RTSP client handle
+ *
+ * Get the IPv4 address of the client. It provides the address as a 4 bytes
+ * array.
+ *
+ * Returns: a 4-bytes array containing the IPv4 address of the client.
+ */
 const guchar *
 melo_rtsp_get_ip (MeloRTSPClient *client)
 {
@@ -734,12 +861,30 @@ melo_rtsp_get_ip (MeloRTSPClient *client)
   return client->ip;
 }
 
-const gchar *melo_rtsp_get_ip_string (MeloRTSPClient *client)
+/**
+ * melo_rtsp_get_ip_string:
+ * @client: a RTSP client handle
+ *
+ * Get the IPv4 address of the client. It provides the address as a string in
+ * standard format like "127.0.0.1".
+ *
+ * Returns: a string containing the IPv4 address of the client.
+ */
+const gchar *
+melo_rtsp_get_ip_string (MeloRTSPClient *client)
 {
   g_return_val_if_fail (client, NULL);
   return client->ip_string;
 }
 
+/**
+ * melo_rtsp_get_port:
+ * @client: a RTSP client handle
+ *
+ * Get the port used by the current client.
+ *
+ * Returns: the port number used by the current client.
+ */
 guint
 melo_rtsp_get_port (MeloRTSPClient *client)
 {
@@ -747,6 +892,14 @@ melo_rtsp_get_port (MeloRTSPClient *client)
   return client->port;
 }
 
+/**
+ * melo_rtsp_get_hostname:
+ * @client: a RTSP client handle
+ *
+ * Get the host name of the current client.
+ *
+ * Returns: a string containing the host name of the current client.
+ */
 const gchar *
 melo_rtsp_get_hostname (MeloRTSPClient *client)
 {
@@ -754,6 +907,15 @@ melo_rtsp_get_hostname (MeloRTSPClient *client)
   return client->hostname;
 }
 
+/**
+ * melo_rtsp_get_server_ip:
+ * @client: a RTSP client handle
+ *
+ * Get the IPv4 address of the server. It provides the address as a 4 bytes
+ * array.
+ *
+ * Returns: a 4-bytes array containing the IPv4 address of the server.
+ */
 const guchar *
 melo_rtsp_get_server_ip (MeloRTSPClient *client)
 {
@@ -761,6 +923,14 @@ melo_rtsp_get_server_ip (MeloRTSPClient *client)
   return client->server_ip;
 }
 
+/**
+ * melo_rtsp_get_server_port:
+ * @client: a RTSP client handle
+ *
+ * Get the port used by the server.
+ *
+ * Returns: the port number used by the server.
+ */
 guint
 melo_rtsp_get_server_port (MeloRTSPClient *client)
 {
@@ -768,6 +938,19 @@ melo_rtsp_get_server_port (MeloRTSPClient *client)
   return client->server_port;
 }
 
+/**
+ * melo_rtsp_init_response:
+ * @client: a RTSP client handle
+ * @code: the RTSP response code
+ * @reason: a string containing the RTSP reason
+ *
+ * Initialize the response for the current RTSP request. It basically adds the
+ * "RTSP/1.0 CODE REASON" line to the response buffer, where CODE is @code and
+ * REASON is @reason.
+ *
+ * Returns: %TRUE if the response has been initialized successfully, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_rtsp_init_response (MeloRTSPClient *client, guint code,
                          const gchar *reason)
@@ -786,6 +969,20 @@ melo_rtsp_init_response (MeloRTSPClient *client, guint code,
   return TRUE;
 }
 
+/**
+ * melo_rtsp_add_header:
+ * @client: a RTSP client handle
+ * @name: the name of the header field
+ * @value: the value of the header field
+ *
+ * Add a new header field to the current response. The melo_rtsp_init_response()
+ * function should be called once before any call to this function. It basically
+ * adds the "NAME: VALUE" line to the response buffer, where NAME is @name and
+ * VALUE is @value.
+ *
+ * Returns: %TRUE if the header field has been added successfully to the
+ * response, %FALSE otherwise.
+ */
 gboolean
 melo_rtsp_add_header (MeloRTSPClient *client, const gchar *name,
                       const gchar *value)
@@ -802,6 +999,17 @@ melo_rtsp_add_header (MeloRTSPClient *client, const gchar *name,
   return TRUE;
 }
 
+/**
+ * melo_rtsp_set_response:
+ * @client: a RTSP client handle
+ * @response: a string containing the full formatted RTSP response
+ *
+ * Set a complete formatted RTSP response into response buffer. It should not
+ * be used in combination with melo_rtsp_init_response() and
+ * melo_rtsp_add_header().
+ *
+ * Returns: %TRUE if the response has been set successfully, %FALSE otherwise.
+ */
 gboolean
 melo_rtsp_set_response (MeloRTSPClient *client, const gchar *response)
 {
@@ -820,6 +1028,20 @@ melo_rtsp_set_response (MeloRTSPClient *client, const gchar *response)
   return TRUE;
 }
 
+/**
+ * melo_rtsp_set_packet:
+ * @client: a RTSP client handle
+ * @buffer: a buffer containing the packet to send to the client
+ * @len: size in bytes of the packet to send
+ * @free: a callback used to free the buffer at end of transmission, or %NULL
+ *
+ * Set the packet to append to the RTSP response. The data can be send
+ * asynchronously and for allocated packet, a #GDestroyNotify callback is
+ * required in order to free the buffer at end of transmission.
+ *
+ * Returns: %TRUE if the packet has been appended successfully, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_rtsp_set_packet (MeloRTSPClient *client, guchar *buffer, gsize len,
                       GDestroyNotify free)
@@ -839,7 +1061,18 @@ melo_rtsp_set_packet (MeloRTSPClient *client, guchar *buffer, gsize len,
   return TRUE;
 }
 
-/* Authentication part */
+/**
+ * melo_rtsp_basic_auth_check:
+ * @client: a RTSP client handle
+ * @username:  the required user name, or %NULL
+ * @password: the required password, or %NULL
+ *
+ * Check if the request embed all basic authentication information and check
+ * that user name and password are correct.
+ *
+ * Returns: %TRUE if authentication information are available in the request and
+ * correspond to the provided user name / password, %FALSE otherwise.
+ */
 gboolean
 melo_rtsp_basic_auth_check (MeloRTSPClient *client, const gchar *username,
                             const gchar *password)
@@ -879,6 +1112,15 @@ melo_rtsp_basic_auth_check (MeloRTSPClient *client, const gchar *username,
   return ret;
 }
 
+/**
+ * melo_rtsp_basic_auth_response:
+ * @client: a RTSP client handle
+ * @realm: the realm to use for basic authentication
+ *
+ * Set response with a basic authentication error message.
+ *
+ * Returns: %TRUE if the response has been set successfully, %FALSE otherwise.
+ */
 gboolean
 melo_rtsp_basic_auth_response (MeloRTSPClient *client, const gchar *realm)
 {
@@ -923,6 +1165,19 @@ melo_rtsp_digest_get_sub_value (const gchar *str, const gchar *name)
   return g_strndup (value, end - value);
 }
 
+/**
+ * melo_rtsp_digest_auth_check:
+ * @client: a RTSP client handle
+ * @username:  the required user name, or %NULL
+ * @password: the required password, or %NULL
+ * @realm: the required realm, or %NULL
+ *
+ * Check if the request embed all digest authentication information and check
+ * that user name, password and realm are correct.
+ *
+ * Returns: %TRUE if authentication information are available in the request and
+ * correspond to the provided user name / password / realm, %FALSE otherwise.
+ */
 gboolean
 melo_rtsp_digest_auth_check (MeloRTSPClient *client, const gchar *username,
                              const gchar *password, const gchar *realm)
@@ -1051,6 +1306,17 @@ melo_rtsp_generate_nonce (gchar *buffer, gsize len)
     buffer[i] = g_random_int_range (0, 256);
 }
 
+/**
+ * melo_rtsp_digest_auth_response:
+ * @client: a RTSP client handle
+ * @realm: the realm to use for digest authentication
+ * @opaque: the opaque to use for digest authentication
+ * @signal_stale: add 'stale' header if set to %TRUE
+ *
+ * Set response with a digest authentication error message.
+ *
+ * Returns: %TRUE if the response has been set successfully, %FALSE otherwise.
+ */
 gboolean
 melo_rtsp_digest_auth_response (MeloRTSPClient *client, const gchar *realm,
                                 const gchar *opaque, gint signal_stale)

@@ -39,6 +39,27 @@ typedef struct _MeloRTSPPrivate MeloRTSPPrivate;
 
 typedef struct _MeloRTSPClient MeloRTSPClient;
 
+/**
+ * MeloRTSPMethod:
+ * @MELO_RTSP_METHOD_UNKNOWN: unknown RTSP method (not in specification)
+ * @MELO_RTSP_METHOD_OPTIONS: OPTIONS RTSP method
+ * @MELO_RTSP_METHOD_DESCRIBE: DESCRIBE RTSP method
+ * @MELO_RTSP_METHOD_ANNOUNCE: ANNOUNCE RTSP method
+ * @MELO_RTSP_METHOD_SETUP: SETUP RTSP method
+ * @MELO_RTSP_METHOD_PLAY: PLAY RTSP method
+ * @MELO_RTSP_METHOD_PAUSE: PAUSE RTSP method
+ * @MELO_RTSP_METHOD_TEARDOWN: TEARDOWN RTSP method
+ * @MELO_RTSP_METHOD_GET_PARAMETER: GET_PARAMETER RTSP method
+ * @MELO_RTSP_METHOD_SET_PARAMETER: SET_PARAMETER RTSP method
+ * @MELO_RTSP_METHOD_RECORD: RECORD RTSP method
+ *
+ * #MeloRTSPMethod represents all RTSP methods specified by the RFC 2326 and is
+ * used to create or identify an RTSP request.
+ *
+ * Some custom protocols based on RTSP protocol can implement more methods, in
+ * which case, the MELO_RTSP_METHOD_UNKNOWN is used and method name can then be
+ * retrieved with melo_rtsp_get_method_name().
+ */
 typedef enum _MeloRTSPMethod {
   MELO_RTSP_METHOD_UNKNOWN = 0,
   MELO_RTSP_METHOD_OPTIONS,
@@ -53,6 +74,11 @@ typedef enum _MeloRTSPMethod {
   MELO_RTSP_METHOD_RECORD,
 } MeloRTSPMethod;
 
+/**
+ * MeloRTSP:
+ *
+ * The opaque #MeloRTSP data structure.
+ */
 struct _MeloRTSP {
   GObject parent_instance;
 
@@ -60,16 +86,69 @@ struct _MeloRTSP {
   MeloRTSPPrivate *priv;
 };
 
+/**
+ * MeloRTSPClass:
+ * @parent_class: Object parent class
+ *
+ * The #MeloRTSPClass data structure.
+ */
 struct _MeloRTSPClass {
   GObjectClass parent_class;
 };
 
+/**
+ * MeloRTSPRequest:
+ * @client: the current RTSP client handle
+ * @method: the method of the request
+ * @url: the URL of the request
+ * @user_data: a pointer to the user data set with callback
+ * @client_data: a pointer to the client data
+ *
+ * This callback is called when a new request is received by the RTSP server
+ * instance. For each new request, a #MeloRTSPClient handle is provided to
+ * follow usage of the client through a request parsing, a data receiving from
+ * client (handled by #MeloRTSPRead)  and end of connection (handled by
+ * #MeloRTSPClose).
+ * The @client_data can be used to attach a specific buffer to the current
+ * connection and it will be kept until end of connection. If the value is set,
+ * it must be freed in the #MeloRTSPClose callback implementation.
+ */
 typedef void (*MeloRTSPRequest) (MeloRTSPClient *client, MeloRTSPMethod method,
                                  const gchar *url, gpointer user_data,
                                  gpointer *client_data);
+
+/**
+ * MeloRTSPRead:
+ * @client: the current RTSP client handle
+ * @buffer: a pointer to the buffer to filled with body RTSP request
+ * @size: size of the buffer in bytes
+ * @last: set to %TRUE if it is last buffer (end of body)
+ * @user_data: a pointer to the user data set with callback
+ * @client_data: a pointer to the client data
+ *
+ * This callback is called when data is received from a client: @buffer is
+ * filled with @size bytes of data received from the client and corresponding to
+ * the body request data. This callback can be called several times, until the
+ * end of the body is reached, signaled by @last.
+ * The @client_data can be used to attach a specific buffer to the current
+ * connection and it will be kept until end of connection. If the value is set,
+ * it must be freed in the #MeloRTSPClose callback implementation.
+ */
 typedef void (*MeloRTSPRead) (MeloRTSPClient *client, guchar *buffer,
                               gsize size, gboolean last, gpointer user_data,
                               gpointer *client_data);
+
+/**
+ * MeloRTSPClose:
+ * @client: the current RTSP client handle
+ * @user_data: a pointer to the user data set with callback
+ * @client_data: a pointer to the client data
+ *
+ * This callback is called at end of connection, after a request completion or
+ * an abort / error.
+ * If the @client_data has been set in previous callback (#MeloRTSPRequest
+ * and/or #MeloRTSPRead) execution, it should be freed here.
+ */
 typedef void (*MeloRTSPClose) (MeloRTSPClient *client, gpointer user_data,
                                gpointer *client_data);
 
