@@ -23,6 +23,29 @@
 
 #include "melo_plugin.h"
 
+/**
+ * SECTION:melo_plugin
+ * @title: MeloPlugin
+ * @short_description: Plugin management for Melo
+ *
+ * The #MeloPlugin part of Melo is used to add more #MeloModule and feature
+ * dynamically to Melo.
+ *
+ * Basically, a plugin consists on a dynamic library loaded at runtime which
+ * provides many functions and Melo modules.
+ * Each plugin is described by #MeloPlugin which must be declared with
+ * DECLARE_MELO_PLUGIN(). This structure provides the name and the description
+ * of the plugin, in addition to the two required callbacks #MeloPluginEnable
+ * and #MeloPluginDisable which are respectivelly called when a plugin is
+ * enabled and disabled.
+ * An API version can also be found in #MeloPlugin and developer should not
+ * modify it: it is intended to follow evolutions of the Melo API and prevent
+ * any plugin load compiled with an incompatible API.
+ *
+ * Several functions are available to load and unload one or more plugins and it
+ * must be used only by the main program.
+ */
+
 #ifndef MELO_PLUGIN_PATH
 #define MELO_PLUGIN_PATH "/usr/local/lib/melo"
 #endif
@@ -138,6 +161,17 @@ melo_plugin_context_unload (MeloPluginContext *ctx)
   return g_module_close (ctx->module);
 }
 
+/**
+ * melo_plugin_load:
+ * @name: the name of the plugin
+ * @enable: set %TRUE if the plugin must be enabled
+ *
+ * Load a plugin from Melo plugin directory with the name passed by @name. If
+ * @enable is set to %TRUE, the plugin is loaded and enabled, which leads in a
+ * call to the #MeloPluginEnable callback defined for the plugin.
+ *
+ * Returns: %TRUE if the plugin has been loaded successfully, %FALSE otherwise.
+ */
 gboolean
 melo_plugin_load (const gchar *name, gboolean enable)
 {
@@ -153,6 +187,15 @@ melo_plugin_load (const gchar *name, gboolean enable)
   return ret;
 }
 
+/**
+ * melo_plugin_unload:
+ * @name: the name of the plugin
+ *
+ * Disable a plugin and unload it from Melo.
+ *
+ * Returns: %TRUE if the plugin has been disabled and unloaded successfully,
+ * %FALSE otherwise.
+ */
 gboolean
 melo_plugin_unload (const gchar *name)
 {
@@ -178,6 +221,15 @@ melo_plugin_unload (const gchar *name)
   return ret;
 }
 
+/**
+ * melo_plugin_enable:
+ * @name: the name of the plugin
+ *
+ * Enable the plugin selected with @name. It basically call the
+ * #MeloPluginEnable callback defined in the plugin.
+ *
+ * Returns: %TRUE if the plugin has been enabled successfully, %FALSE otherwise.
+ */
 gboolean
 melo_plugin_enable (const gchar *name)
 {
@@ -198,6 +250,16 @@ melo_plugin_enable (const gchar *name)
   return ret;
 }
 
+/**
+ * melo_plugin_disable:
+ * @name: the name of the plugin
+ *
+ * Disable the plugin selected with @name. It basically call the
+ * #MeloPluginDisable callback defined in the plugin.
+ *
+ * Returns: %TRUE if the plugin has been disabled successfully, %FALSE
+ * otherwise.
+ */
 gboolean
 melo_plugin_disable (const gchar *name)
 {
@@ -221,6 +283,17 @@ melo_plugin_disable (const gchar *name)
   return ret;
 }
 
+/**
+ * melo_plugin_load_all:
+ * @enable: set %TRUE if the plugins must be enabled
+ *
+ * Load all plugins from Melo plugin directory. If @enable is set to %TRUE, the
+ * plugins are loaded and enabled, which leads in a call to the
+ * #MeloPluginEnable callback defined for each plugin.
+ *
+ * Returns: %TRUE if all  plugins have been loaded successfully, %FALSE
+ * otherwise.
+ */
 void
 melo_plugin_load_all (gboolean enable)
 {
@@ -258,6 +331,14 @@ melo_plugin_load_all (gboolean enable)
   G_UNLOCK (melo_plugin_mutex);
 }
 
+/**
+ * melo_plugin_unload_all:
+ *
+ * Disable all loaded plugins and unload them from Melo.
+ *
+ * Returns: %TRUE if all loaded plugin have been disabled and unloaded
+ * successfully, %FALSE otherwise.
+ */
 void
 melo_plugin_unload_all (void)
 {
@@ -283,7 +364,17 @@ melo_plugin_unload_all (void)
 
   G_UNLOCK (melo_plugin_mutex);
 }
-
+/**
+ * melo_plugin_get_list:
+ *
+ * Get a #GList of #MeloPluginItem items containing details of all loaded
+ * plugins in Melo.
+ *
+ * Returns: (transfer full) (element-type MeloPluginItem): a #GList of
+ * #MeloPluginItem items containing details of all loaded plugins in Melo. You
+ * must free list and its data when you are done with it. You can use
+ * g_list_free_full() with melo_plugin_item_free() to do this.
+ */
 GList *
 melo_plugin_get_list (void)
 {
@@ -317,6 +408,12 @@ melo_plugin_get_list (void)
   return list;
 }
 
+/**
+ * melo_plugin_item_free:
+ * @item: the item to free
+ *
+ * Free the #MeloPluginItem instance.
+ */
 void
 melo_plugin_item_free (MeloPluginItem *item)
 {
