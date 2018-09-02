@@ -32,6 +32,17 @@ typedef struct _MeloEventClient MeloEventClient;
 
 typedef enum _MeloEventPlayer MeloEventPlayer;
 
+/**
+ * MeloEventType:
+ * @MELO_EVENT_TYPE_GENERAL: a general event (from anywhere)
+ * @MELO_EVENT_TYPE_MODULE: a module event (from #MeloModule)
+ * @MELO_EVENT_TYPE_BROWSER: a browser event (from #MeloBrowser)
+ * @MELO_EVENT_TYPE_PLAYER: a player event (from #MeloPlayer)
+ * @MELO_EVENT_TYPE_PLAYLIST: a playlist event (from #MeloPlaylist)
+ *
+ * The #MeloEventType presents the source of an event. For custom or global
+ * events, please use @MELO_EVENT_TYPE_GENERAL.
+ */
 enum _MeloEventType {
   MELO_EVENT_TYPE_GENERAL = 0,
   MELO_EVENT_TYPE_MODULE,
@@ -39,9 +50,29 @@ enum _MeloEventType {
   MELO_EVENT_TYPE_PLAYER,
   MELO_EVENT_TYPE_PLAYLIST,
 
+  /*< private >*/
   MELO_EVENT_TYPE_COUNT
 };
 
+/**
+ * MeloEventPlayer:
+ * @MELO_EVENT_PLAYER_NEW: a new player has been created
+ * @MELO_EVENT_PLAYER_DELETE: a plater has been destroyed
+ * @MELO_EVENT_PLAYER_STATUS: the status of a player has been updated
+ * @MELO_EVENT_PLAYER_STATE: the state of a player has been updated
+ * @MELO_EVENT_PLAYER_BUFFERING: the buffering state has been updated
+ * @MELO_EVENT_PLAYER_SEEK: a seek has been done on the player
+ * @MELO_EVENT_PLAYER_DURATION: the duration has been updated on the player
+ * @MELO_EVENT_PLAYER_PLAYLIST: an update has been done in the playlist
+ * @MELO_EVENT_PLAYER_VOLUME: the volume has changed in the player
+ * @MELO_EVENT_PLAYER_MUTE: the mute has changed in the player
+ * @MELO_EVENT_PLAYER_NAME: the status name of the player has changed
+ * @MELO_EVENT_PLAYER_ERROR: an error occurred in the player
+ * @MELO_EVENT_PLAYER_TAGS: the tags has been updated in the player
+ *
+ * The #MeloEventPlayer describes the sub-type for an event coming from a
+ * #MeloPlayer instance. For each types, a function is available to parse it.
+ */
 enum _MeloEventPlayer {
   MELO_EVENT_PLAYER_NEW = 0,
   MELO_EVENT_PLAYER_DELETE,
@@ -57,9 +88,31 @@ enum _MeloEventPlayer {
   MELO_EVENT_PLAYER_ERROR,
   MELO_EVENT_PLAYER_TAGS,
 
+  /*< private >*/
   MELO_EVENT_PLAYER_COUNT,
 };
 
+/**
+ * MeloEventCallback:
+ * @client: the current client instance
+ * @type: the event type
+ * @event: the sub-type of the event
+ * @id: the Melo object ID
+ * @data: the event data
+ * @user_data: the user data associated to the callback
+ *
+ * This callback is called when a new event is emitted by one of the Melo
+ * objects. The event type is provided by @type and according to this value, the
+ * correct sub-type held in @event should be selected: for a
+ * #MELO_EVENT_TYPE_PLAYER, you should use #MeloEventPlayer.
+ *
+ * This callback during client creation with melo_event_register().
+ *
+ * Note: this callback is not threaded and long operation or blocking calls
+ * should be avoided!
+ *
+ * Returns: %TRUE if the event has been handled successfully, %FALSE otherwise.
+ */
 typedef gboolean (*MeloEventCallback) (MeloEventClient *client,
                                        MeloEventType type, guint event,
                                        const gchar *id, gpointer data,
