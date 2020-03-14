@@ -1,0 +1,2 @@
+# Program options
+option('web_ui_path', type : 'string', description : 'Web user interface path')
