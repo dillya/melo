@@ -1,0 +1,15 @@
+---
+BasedOnStyle: LLVM
+AlignAfterOpenBracket: DontAlign
+AlignEscapedNewlines: DontAlign
+AlwaysBreakAfterReturnType: TopLevelDefinitions
+AlwaysBreakBeforeMultilineStrings: false
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBraces: Linux
+ContinuationIndentWidth: 4
+IndentPPDirectives: None
+IndentWidth: 2
+MaxEmptyLinesToKeep: 1
+SpaceAfterCStyleCast: true
+SpaceBeforeParens: Always
