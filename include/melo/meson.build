@@ -5,13 +5,16 @@ libmelo_headers = [
 	'melo_async.h',
 	'melo_browser.h',
 	'melo_cover.h',
+	'melo_http_client.h',
+	'melo_http_server.h',
 	'melo_log.h',
 	'melo_message.h',
 	'melo_module.h',
 	'melo_player.h',
 	'melo_playlist.h',
 	'melo_request.h',
-	'melo_tags.h'
+	'melo_tags.h',
+	'melo_websocket.h'
 ]
 
 install_headers(libmelo_headers, subdir : 'melo')

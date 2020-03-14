@@ -26,6 +26,9 @@ Melo is based on Meson for the build purpose and GLib low-level library on which
 Gstreamer and many useful libraries are based. It brings the object oriented
 coding style thanks to GObject.
 
+For HTTP server / client side, Melo is based on libsoup which brings most of
+HTTP features out of the box.
+
 You may need to install some development libraries and build tools before
 starting with Melo build.
 
@@ -33,7 +36,8 @@ On Debian / Ubuntu Linux system, you can install required dependencies with the
 following command:
 
 ```sh
-apt install meson libglib2.0-dev libgstreamer-plugins-base1.0-dev
+apt install meson libglib2.0-dev libgstreamer-plugins-base1.0-dev \
+    libsoup2.4-dev libjson-glib-dev
 ```
 
 Then, you are ready to build Melo:

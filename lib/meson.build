@@ -21,6 +21,10 @@ libmelo_sources = [
 	'melo_browser.c',
 	'melo_cover.c',
 	'melo_events.c',
+	'melo_http_client.c',
+	'melo_http_server.c',
+	'melo_http_server_file.c',
+	'melo_http_server_url.c',
 	'melo_log.c',
 	'melo_message.c',
 	'melo_module.c',
@@ -28,7 +32,8 @@ libmelo_sources = [
 	'melo_playlist.c',
 	'melo_request.c',
 	'melo_requests.c',
-	'melo_tags.c'
+	'melo_tags.c',
+	'melo_websocket.c'
 ]
 
 # Library dependencies
@@ -38,6 +43,8 @@ gmodule_dep = dependency('gmodule-2.0')
 gio_dep = dependency('gio-2.0')
 gstreamer_dep = dependency('gstreamer-1.0', version: '>=1.14.4')
 gstreamer_tag_dep = dependency('gstreamer-tag-1.0')
+libsoup_dep = dependency('libsoup-2.4', version : '>=2.56.0')
+json_glib_dep = dependency('json-glib-1.0', version : '>=1.4.4')
 
 # Generate shared library
 libmelo = shared_library(
@@ -50,7 +57,9 @@ libmelo = shared_library(
 		gmodule_dep,
 		gio_dep,
 		gstreamer_dep,
-		gstreamer_tag_dep
+		gstreamer_tag_dep,
+		libsoup_dep,
+		json_glib_dep
 	],
 	install : true)
 
@@ -58,7 +67,13 @@ libmelo = shared_library(
 libmelo_dep = declare_dependency(
 	link_with : libmelo,
 	include_directories : libmelo_inc,
-	dependencies : [ glib_dep, gobject_dep, gmodule_dep, gstreamer_dep ])
+	dependencies : [
+		glib_dep,
+		gobject_dep,
+		gmodule_dep,
+		gstreamer_dep,
+		json_glib_dep
+	])
 
 # Create pkg-config
 pkgg = import('pkgconfig')
@@ -72,6 +87,7 @@ pkgg.generate(
 		'glib-2.0',
 		'gobject-2.0',
 		'gmodule-2.0',
-		'gstreamer-1.0'
+		'gstreamer-1.0',
+		'json-glib-1.0'
 	]
 )
