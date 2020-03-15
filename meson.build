@@ -10,6 +10,7 @@ module_path = join_paths(get_option('prefix'), get_option('libdir'), 'melo')
 
 libmelo_inc = include_directories('include')
 
+subdir('proto')
 subdir('include/melo')
 subdir('lib')
 subdir('src')

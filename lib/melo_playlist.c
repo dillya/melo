@@ -23,6 +23,8 @@
 #include "melo_player_priv.h"
 #include "melo_requests.h"
 
+#include "playlist.pb-c.h"
+
 #include "melo/melo_playlist.h"
 
 #define DEFAULT_PLAYLIST_ID "default"
@@ -253,13 +255,57 @@ melo_playlist_get_property (
 static MeloMessage *
 melo_playlist_message_add (const char *name, MeloTags *tags)
 {
-  return NULL;
+  Playlist__Event pmsg = PLAYLIST__EVENT__INIT;
+  Playlist__Media media = PLAYLIST__MEDIA__INIT;
+  Tags__Tags media_tags = TAGS__TAGS__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYLIST__EVENT__EVENT_ADD;
+  pmsg.add = &media;
+
+  /* Set media */
+  media.name = (char *) name;
+
+  /* Set tags */
+  if (tags) {
+    media_tags.title = (char *) melo_tags_get_title (tags);
+    media_tags.artist = (char *) melo_tags_get_artist (tags);
+    media_tags.album = (char *) melo_tags_get_album (tags);
+    media_tags.genre = (char *) melo_tags_get_genre (tags);
+    media_tags.track = melo_tags_get_track (tags);
+    media_tags.cover = (char *) melo_tags_get_cover (tags);
+    media.tags = &media_tags;
+  }
+
+  /* Generate message */
+  msg = melo_message_new (playlist__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static MeloMessage *
 melo_playlist_message_play (unsigned int index)
 {
-  return NULL;
+  Playlist__Event pmsg = PLAYLIST__EVENT__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYLIST__EVENT__EVENT_PLAY;
+
+  /* Set current index */
+  pmsg.play = index;
+
+  /* Generate message */
+  msg = melo_message_new (playlist__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 /*
@@ -372,6 +418,155 @@ melo_playlist_remove_event_listener (
   return ret;
 }
 
+static bool
+melo_playlist_get_media_list (MeloPlaylist *playlist,
+    Playlist__Request__GetMediaList *req, MeloAsyncData *async)
+{
+  Playlist__Response resp = PLAYLIST__RESPONSE__INIT;
+  Playlist__Response__MediaList media_list =
+      PLAYLIST__RESPONSE__MEDIA_LIST__INIT;
+  Playlist__Media **medias_ptr = NULL;
+  Playlist__Media *medias = NULL;
+  Tags__Tags *tags = NULL;
+  MeloMessage *msg;
+
+  /* Set response type */
+  resp.resp_case = PLAYLIST__RESPONSE__RESP_MEDIA_LIST;
+  resp.media_list = &media_list;
+
+  /* Generate media list */
+  if (req->offset < playlist->count) {
+    unsigned int i;
+    GList *l;
+
+    /* Set message */
+    media_list.offset = req->offset;
+    media_list.count = playlist->count - req->offset;
+    media_list.current = playlist->current_index;
+
+    /* Allocate buffer to store media list and tags */
+    medias_ptr = malloc (sizeof (*medias_ptr) * media_list.count);
+    medias = malloc (sizeof (*medias) * media_list.count);
+    tags = malloc (sizeof (*tags) * media_list.count);
+
+    /* Set list */
+    media_list.n_medias = media_list.count;
+    media_list.medias = medias_ptr;
+
+    /* Fill list */
+    for (l = g_list_nth (playlist->list, req->offset), i = 0; l != NULL;
+         l = l->next, i++) {
+      MeloPlaylistMedia *m = l->data;
+
+      /* Set media */
+      playlist__media__init (&medias[i]);
+      medias[i].name = (char *) m->name;
+      if (m->tags) {
+        tags__tags__init (&tags[i]);
+        tags[i].title = (char *) melo_tags_get_title (m->tags);
+        tags[i].artist = (char *) melo_tags_get_artist (m->tags);
+        tags[i].album = (char *) melo_tags_get_album (m->tags);
+        tags[i].genre = (char *) melo_tags_get_genre (m->tags);
+        tags[i].track = melo_tags_get_track (m->tags);
+        tags[i].cover = (char *) melo_tags_get_cover (m->tags);
+        medias[i].tags = &tags[i];
+      }
+      media_list.medias[i] = &medias[i];
+    }
+
+  } else {
+    /* Set default message */
+    media_list.offset = playlist->count;
+    media_list.count = 0;
+    media_list.current = playlist->current_index;
+  }
+
+  /* Generate message */
+  msg = melo_message_new (playlist__response__get_packed_size (&resp));
+  if (msg)
+    melo_message_set_size (
+        msg, playlist__response__pack (&resp, melo_message_get_data (msg)));
+
+  /* Free buffer */
+  free (medias_ptr);
+  free (medias);
+  free (tags);
+
+  /* Send message */
+  if (async->cb)
+    async->cb (msg, async->user_data);
+
+  return true;
+}
+
+static bool
+melo_playlist_get_current (MeloPlaylist *playlist, MeloAsyncData *async)
+{
+  Playlist__Response resp = PLAYLIST__RESPONSE__INIT;
+  MeloMessage *msg;
+
+  /* Set response type */
+  resp.resp_case = PLAYLIST__RESPONSE__RESP_CURRENT;
+
+  /* Set current media index */
+  resp.current = playlist->current_index;
+
+  /* Generate message */
+  msg = melo_message_new (playlist__response__get_packed_size (&resp));
+  if (msg)
+    melo_message_set_size (
+        msg, playlist__response__pack (&resp, melo_message_get_data (msg)));
+
+  /* Send message */
+  if (async->cb)
+    async->cb (msg, async->user_data);
+
+  return true;
+}
+
+static bool
+melo_playlist_play (MeloPlaylist *playlist, unsigned int index)
+{
+  MeloPlaylistMedia *media;
+  GList *l;
+
+  /* Play media */
+  l = g_list_nth (playlist->list, index);
+  if (!l)
+    return false;
+
+  /* Switch playlist */
+  G_LOCK (melo_playlist_mutex);
+  if (playlist != melo_playlist_current)
+    melo_playlist_current = playlist;
+  G_UNLOCK (melo_playlist_mutex);
+
+  /* Play this media */
+  media = l->data;
+  playlist->current = l;
+  melo_player_play_media (
+      media->player, media->path, media->name, melo_tags_ref (media->tags));
+  playlist->current_index = index;
+
+  /* Broadcast media addition */
+  melo_events_broadcast (
+      &melo_playlist_events, melo_playlist_message_play (index));
+
+  /* Update player controls */
+  melo_player_update_playlist_controls (
+      playlist->current && playlist->current->next != NULL,
+      playlist->list != playlist->current);
+
+  return true;
+}
+
+static bool
+melo_playlist_delete (
+    MeloPlaylist *playlist, Playlist__Range *req, MeloAsyncData *async)
+{
+  return false;
+}
+
 /**
  * melo_playlist_handle_request:
  * @id: the id of the playlist or %NULL for current playlist
@@ -400,8 +595,9 @@ melo_playlist_handle_request (
       .cb = cb,
       .user_data = user_data,
   };
+  Playlist__Request *request;
   MeloPlaylist *playlist;
-  MeloRequest *req;
+  bool ret = false;
 
   if (!msg)
     return false;
@@ -411,15 +607,45 @@ melo_playlist_handle_request (
   if (!playlist)
     return false;
 
-  /* Create new request */
-  req = melo_requests_new_request (
-      &playlist->requests, &async, G_OBJECT (playlist));
-  melo_request_unref (req);
+  /* Unpack request */
+  request = playlist__request__unpack (
+      NULL, melo_message_get_size (msg), melo_message_get_cdata (msg, NULL));
+  if (!request) {
+    MELO_LOGE ("failed to unpack request");
+    g_object_unref (playlist);
+    return false;
+  }
+
+  /* Handle request */
+  switch (request->req_case) {
+  case PLAYLIST__REQUEST__REQ_GET_MEDIA_LIST:
+    ret = melo_playlist_get_media_list (
+        playlist, request->get_media_list, &async);
+    break;
+  case PLAYLIST__REQUEST__REQ_GET_CURRENT:
+    ret = melo_playlist_get_current (playlist, &async);
+    break;
+  case PLAYLIST__REQUEST__REQ_PLAY:
+    ret = melo_playlist_play (playlist, request->play);
+    break;
+  case PLAYLIST__REQUEST__REQ_DELETE:
+    ret = melo_playlist_delete (playlist, request->delete_, &async);
+    break;
+  default:
+    MELO_LOGE ("request %u not supported", request->req_case);
+  }
+
+  /* Free request */
+  playlist__request__free_unpacked (request, NULL);
 
   /* Release playlist */
   g_object_unref (playlist);
 
-  return false;
+  /* End of request */
+  if (ret && cb)
+    cb (NULL, user_data);
+
+  return ret;
 }
 
 /**

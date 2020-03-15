@@ -59,7 +59,8 @@ libmelo = shared_library(
 		gstreamer_dep,
 		gstreamer_tag_dep,
 		libsoup_dep,
-		json_glib_dep
+		json_glib_dep,
+		libmelo_proto_dep
 	],
 	install : true)
 

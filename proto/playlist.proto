@@ -1,0 +1,86 @@
+/* Melo playlist protobuf */
+
+syntax = "proto3";
+
+import "tags.proto";
+
+package Playlist;
+
+/* Playlist media */
+message Media {
+  /* Name to display */
+  string name = 2;
+  /* Media tags (optional) */
+  Tags.Tags tags = 3;
+  /* Media is playable */
+  bool playable = 4;
+  /* Media is deletable */
+  bool deletable = 5;
+}
+
+/* Playlist range */
+message Range {
+  bool linear = 1;
+  uint32 first = 2;
+  uint32 last = 3;
+  repeated uint32 list = 4;
+}
+
+/* Playlist event */
+message Event {
+  /* Events */
+  oneof event {
+    /* A media has been added to list */
+    Media add = 10;
+    /* Current playing media has changed, contains the ID of the new one */
+    uint32 play = 11;
+    /* Some medias have been removed */
+    Range delete = 12;
+  }
+}
+
+/* Playlist request */
+message Request {
+  /* Get media list request */
+  message GetMediaList {
+    /* Number of media to get */
+    uint32 count = 1;
+    /* Start point in media list */
+    uint32 offset = 2;
+  }
+
+  /* Requests */
+  oneof req {
+    /* Get medias playlist (resp: Playlist.Response.media_list) */
+    GetMediaList get_media_list = 10;
+    /* Get ID of the current playing media (resp: Playlist.Response.current) */
+    bool get_current = 11;
+    /* Play the media by ID (resp: none) */
+    uint32 play = 12;
+    /* Delete a range of medias (resp: none) */
+    Range delete = 13;
+  }
+}
+
+/* Playlist response */
+message Response {
+  /* Media list response */
+  message MediaList {
+    /* Effective count, can be smaller than request count */
+    uint32 count = 1;
+    /* Effective offset, can be smaller than request offset */
+    uint32 offset = 2;
+    /* ID of the current playing media */
+    uint32 current = 3;
+    /* List of medias */
+    repeated Media medias = 4;
+  }
+
+  /* Responses */
+  oneof resp {
+    /* Medias in playlist req Playlist.Request.get_media_list) */
+    MediaList media_list = 10;
+    /* ID of current playing media (req Playlist.Request.get_current) */
+    uint32 current = 11;
+  }
+}

@@ -29,6 +29,11 @@ coding style thanks to GObject.
 For HTTP server / client side, Melo is based on libsoup which brings most of
 HTTP features out of the box.
 
+For messaging between modules, main program and the user interface, the Google
+protocol buffers have been chosen for their scalability and the versioning of
+protocol removal. The C compiler version from protobuf-c project has been
+chosen.
+
 You may need to install some development libraries and build tools before
 starting with Melo build.
 
@@ -37,7 +42,7 @@ following command:
 
 ```sh
 apt install meson libglib2.0-dev libgstreamer-plugins-base1.0-dev \
-    libsoup2.4-dev libjson-glib-dev
+    libsoup2.4-dev libjson-glib-dev libprotobuf-c-dev protobuf-c-compiler
 ```
 
 Then, you are ready to build Melo:

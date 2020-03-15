@@ -22,6 +22,8 @@
 #include "melo_player_priv.h"
 #include "melo_playlist_priv.h"
 
+#include "player.pb-c.h"
+
 /* Global player list */
 G_LOCK_DEFINE_STATIC (melo_player_mutex);
 static GHashTable *melo_player_list;
@@ -233,38 +235,180 @@ melo_player_get_property (
 static MeloMessage *
 melo_player_message_media (const char *name, MeloTags *tags)
 {
-  return NULL;
+  Player__Event pmsg = PLAYER__EVENT__INIT;
+  Player__Event__Media media = PLAYER__EVENT__MEDIA__INIT;
+  Tags__Tags media_tags = TAGS__TAGS__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYER__EVENT__EVENT_MEDIA;
+  pmsg.media = &media;
+
+  /* Set name */
+  media.name = (char *) name;
+
+  /* Set tags */
+  if (tags) {
+    media_tags.title = (char *) melo_tags_get_title (tags);
+    media_tags.artist = (char *) melo_tags_get_artist (tags);
+    media_tags.album = (char *) melo_tags_get_album (tags);
+    media_tags.genre = (char *) melo_tags_get_genre (tags);
+    media_tags.track = melo_tags_get_track (tags);
+    media_tags.cover = (char *) melo_tags_get_cover (tags);
+    media.tags = &media_tags;
+  }
+
+  /* Generate message */
+  msg = melo_message_new (player__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, player__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static MeloMessage *
 melo_player_message_status (MeloPlayerState state,
     MeloPlayerStreamState stream_state, unsigned int stream_state_value)
 {
-  return NULL;
+  Player__Event pmsg = PLAYER__EVENT__INIT;
+  Player__Event__Status status = PLAYER__EVENT__STATUS__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYER__EVENT__EVENT_STATUS;
+  pmsg.status = &status;
+
+  /* Set state */
+  switch (state) {
+  case MELO_PLAYER_STATE_PLAYING:
+    status.state = PLAYER__STATE__STATE_PLAYING;
+    break;
+  case MELO_PLAYER_STATE_PAUSED:
+    status.state = PLAYER__STATE__STATE_PAUSED;
+    break;
+  case MELO_PLAYER_STATE_STOPPED:
+    status.state = PLAYER__STATE__STATE_STOPPED;
+    break;
+  case MELO_PLAYER_STATE_NONE:
+  default:
+    status.state = PLAYER__STATE__STATE_NONE;
+  }
+
+  /* Set stream state */
+  switch (stream_state) {
+  case MELO_PLAYER_STREAM_STATE_LOADING:
+    status.stream_state = PLAYER__EVENT__STATUS__STREAM_STATE__LOADING;
+    break;
+  case MELO_PLAYER_STREAM_STATE_BUFFERING:
+    status.stream_state = PLAYER__EVENT__STATUS__STREAM_STATE__BUFFERING;
+    break;
+  case MELO_PLAYER_STREAM_STATE_NONE:
+  default:
+    status.stream_state = PLAYER__EVENT__STATUS__STREAM_STATE__NONE;
+  }
+  status.value = stream_state_value;
+
+  /* Generate message */
+  msg = melo_message_new (player__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, player__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static MeloMessage *
 melo_player_message_position (unsigned int position, unsigned int duration)
 {
-  return NULL;
+  Player__Event pmsg = PLAYER__EVENT__INIT;
+  Player__Event__Position pos = PLAYER__EVENT__POSITION__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYER__EVENT__EVENT_POSITION;
+  pmsg.position = &pos;
+
+  /* Set position */
+  pos.position = position;
+  pos.duration = duration;
+
+  /* Generate message */
+  msg = melo_message_new (player__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, player__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static MeloMessage *
 melo_player_message_volume (float volume, bool mute)
 {
-  return NULL;
+  Player__Event pmsg = PLAYER__EVENT__INIT;
+  Player__Event__Volume vol = PLAYER__EVENT__VOLUME__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYER__EVENT__EVENT_VOLUME;
+  pmsg.volume = &vol;
+
+  /* Set volume and mute */
+  vol.volume = volume;
+  vol.mute = mute;
+
+  /* Generate message */
+  msg = melo_message_new (player__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, player__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static MeloMessage *
 melo_player_message_error (const char *error)
 {
-  return NULL;
+  Player__Event pmsg = PLAYER__EVENT__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYER__EVENT__EVENT_ERROR;
+
+  /* Set error message */
+  pmsg.error = (char *) error;
+
+  /* Generate message */
+  msg = melo_message_new (player__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, player__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static MeloMessage *
 melo_player_message_playlist (bool prev, bool next)
 {
-  return NULL;
+  Player__Event pmsg = PLAYER__EVENT__INIT;
+  Player__Event__Playlist playlist = PLAYER__EVENT__PLAYLIST__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYER__EVENT__EVENT_PLAYLIST;
+  pmsg.playlist = &playlist;
+
+  /* Set playlist controls */
+  playlist.prev = prev;
+  playlist.next = next;
+
+  /* Generate message */
+  msg = melo_message_new (player__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, player__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 /**
@@ -366,10 +510,90 @@ melo_player_remove_event_listener (MeloAsyncCb cb, void *user_data)
 bool
 melo_player_handle_request (MeloMessage *msg, MeloAsyncCb cb, void *user_data)
 {
+  Player__Request *request;
+  MeloPlayerClass *class;
+  MeloPlayer *player;
   bool ret = false;
 
   if (!msg)
     return false;
+
+  /* Unpack request */
+  request = player__request__unpack (
+      NULL, melo_message_get_size (msg), melo_message_get_cdata (msg, NULL));
+  if (!request) {
+    MELO_LOGE ("failed to unpack request");
+    return false;
+  }
+
+  /* Get current player */
+  G_LOCK (melo_player_mutex);
+  player = melo_player_current ? g_object_ref (melo_player_current) : NULL;
+  G_UNLOCK (melo_player_mutex);
+
+  /* Get class */
+  class = player ? MELO_PLAYER_GET_CLASS (player) : NULL;
+
+  /* Handle request */
+  switch (request->req_case) {
+  case PLAYER__REQUEST__REQ_SET_STATE:
+    if (class && class->set_state) {
+      MeloPlayerState state;
+
+      /* Convert state */
+      switch (request->set_state) {
+      case PLAYER__STATE__STATE_PLAYING:
+        state = MELO_PLAYER_STATE_PLAYING;
+        break;
+      case PLAYER__STATE__STATE_PAUSED:
+        state = MELO_PLAYER_STATE_PAUSED;
+        break;
+      case PLAYER__STATE__STATE_STOPPED:
+        state = MELO_PLAYER_STATE_STOPPED;
+        break;
+      case PLAYER__STATE__STATE_NONE:
+      default:
+        state = MELO_PLAYER_STATE_NONE;
+      }
+
+      /* Set new state */
+      ret = class->set_state (player, state);
+      if (ret)
+        melo_player_update_state (player, state);
+    }
+    break;
+  case PLAYER__REQUEST__REQ_SET_POSITION:
+    if (class && class->set_position)
+      ret = class->set_position (player, request->set_position);
+    break;
+  case PLAYER__REQUEST__REQ_SET_VOLUME:
+    melo_player_update_volume (player, request->set_volume, melo_player_mute);
+    ret = true;
+    break;
+  case PLAYER__REQUEST__REQ_SET_MUTE:
+    melo_player_update_volume (player, melo_player_volume, request->set_mute);
+    ret = true;
+    break;
+  case PLAYER__REQUEST__REQ_PLAY_PREVIOUS:
+    ret = melo_playlist_play_previous ();
+    break;
+  case PLAYER__REQUEST__REQ_PLAY_NEXT:
+    ret = melo_playlist_play_next ();
+    break;
+  default:
+    MELO_LOGE ("request %u not supported", request->req_case);
+  }
+
+  /* Release player */
+  if (player)
+    g_object_unref (player);
+
+  /* Free request */
+  player__request__free_unpacked (request, NULL);
+
+  /* End of request */
+  if (ret && cb)
+    cb (NULL, user_data);
 
   return ret;
 }

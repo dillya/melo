@@ -1,0 +1,206 @@
+/* Melo browser protobuf */
+
+syntax = "proto3";
+
+import "tags.proto";
+
+package Browser;
+
+/* Sort menu */
+message SortMenu {
+  /* Menu item */
+  message Item {
+    /* Unique item ID, to be used in Browser.GetMediaList.sort */
+    string id = 1;
+    /* Name to display */
+    string name = 2;
+  };
+
+  /* List of the menu items */
+  repeated Item items = 3;
+};
+
+/* Media action */
+message Action {
+  /* Action types */
+  enum Type {
+    /* Unknown action: no-op */
+    UNKNOWN = 0;
+    /* Play media */
+    PLAY = 1;
+    /* Add media to top of playlist */
+    ADD = 2;
+    /* Custom action: Browser.Request.DoAction.action_id must be with the custom
+     * action ID
+     */
+    CUSTOM = 16;
+  }
+
+  /* Action type */
+  Action.Type type = 1;
+  /* Custom action ID (when type == CUSTOM) */
+  string custom_id = 2;
+  /* Action display name (optional) */
+  string name = 3;
+  /* Action icon (optional) */
+  string icon = 4;
+}
+
+/* Browser event */
+message Event {
+  /* Browser description */
+  message Desc {
+    /* Browser unique ID */
+    string id = 1;
+
+    /* Browser name to display */
+    string name = 2;
+    /* Browser description (optional) */
+    string description = 3;
+    /* Browser icon (optional) */
+    string icon = 4;
+
+    /* Search support: 'true' if supported */
+    bool support_search = 5;
+  }
+
+  /* Events */
+  oneof event {
+    /* A browser has been added */
+    Desc add = 10;
+    /* A browser has been removed */
+    Desc remove = 11;
+  }
+}
+
+/* Browser request */
+message Request {
+  /* Get media list request */
+  message GetMediaList {
+    /* Query string: contains a path or a search request as:
+     *  - path: starting with '/' for root and follows standard URI schemes,
+     *  - search: start with 'search:' and followed with the query string.
+     */
+    string query = 1;
+
+    /* Authentication string (optional)
+     * It should follow URI scheme as domain;username:password
+     */
+    string auth = 2;
+
+    /* Number of media to get */
+    uint32 count = 3;
+    /* Start point in media list */
+    uint32 offset = 4;
+
+    /* List of sort options (optional)
+     * It should be composed of one menu item describe in Browser.SortMenu. When
+     * multiple sort menu are available, this list should be composed of one
+     * item of each sort menu.
+     */
+    repeated string sort = 5;
+
+    /* Pagination token (optional)
+     * For browser which uses tokens for pagination, this field should be empty
+     * for first request and the Browser.Response.MediaList.prev_token and
+     * Browser.Response.MediaList.next_token values must used to get
+     * respectively the previous page and the next page.
+     * The offset field is unused when pagination token is used.
+     */
+    string token = 6;
+  }
+
+  /* Do action request */
+  message DoAction {
+    /* Media path on which action should be done */
+    string path = 1;
+    /* Action type */
+    Action.Type type = 2;
+    /* Custom action ID (when type == CUSTOM) */
+    string custom_id = 3;
+  }
+
+  /* Requests */
+  oneof req {
+    /* Get media list (resp: Browser.Response.media_list) */
+    GetMediaList get_media_list = 10;
+    /* Do an action on a media or a path (resp: none) */
+    DoAction do_action = 11;
+  }
+}
+
+/* Browser response */
+message Response {
+  /* Error response */
+  message Error {
+    /* Error code (following HTTP error codes) */
+    uint32 code = 1;
+    /* Error message (optional) */
+    string message = 2;
+  }
+
+  /* Media item response */
+  message MediaItem {
+    /* Media ID: to use with actions or browsing sub-folders */
+    string id = 1;
+    /* Media display name */
+    string name = 2;
+    /* Media tags (optional) */
+    Tags.Tags tags = 3;
+
+    /* Media item type */
+    enum Type {
+      /* Unknown item type */
+      UNKNOWN = 0;
+      /* Item is a media file */
+      MEDIA = 1;
+      /* Item is a folder */
+      FOLDER = 2;
+    }
+
+    /* Item type */
+    Type type = 4;
+
+    /* Item actions */
+    repeated Action actions = 5;
+  }
+
+  /* Media list response */
+  message MediaList {
+    /* Effective count, can be smaller than request count */
+    uint32 count = 1;
+    /* Effective offset, can be smaller than request offset */
+    uint32 offset = 2;
+
+    /* Token to use to iterate backward in media list */
+    string prev_token = 3;
+    /* Token to use to iterate forward in media list */
+    string next_token = 4;
+
+    /* List of sort menu
+     * It can be composed of one or more menus, each one will be seen as a
+     * section and one of the item of each menu should be set in
+     * Browser.Request.GetMediaList.sort
+     */
+    repeated SortMenu sort_menus = 6;
+    /* Sort options applied */
+    repeated string sort = 7;
+
+    /* List actions */
+    repeated Action actions = 8;
+
+    /* Media items */
+    repeated MediaItem items = 9;
+}
+
+  /* Responses */
+  oneof resp {
+    /* Error response (req: any) */
+    Error error = 10;
+
+    /* Media list response (req: Browser.Request.get_media_list) */
+    MediaList media_list = 11;
+    /* Media item response (req: Browser.Request.get_media_list) */
+    MediaItem media_item = 12;
+  }
+}

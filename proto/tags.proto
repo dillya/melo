@@ -1,0 +1,34 @@
+/* Melo tag protobuf */
+
+syntax = "proto3";
+
+package Tags;
+
+/* Media tags */
+message Tags {
+  /* Media title */
+  string title = 1;
+  /* Media artist */
+  string artist = 2;
+  /* Media album */
+  string album = 3;
+  /* Media year production */
+  uint32 year = 4;
+  /* Media comment */
+  string comment = 5;
+  /* Number of track on the album */
+  uint32 track = 6;
+  /* Media genre */
+  string genre = 7;
+  /* Media cover
+   * It contains a path and an ID to retrieve the cover through a specific API
+   * implemented by the application.
+   * The format is the following: 'OBJECT/OBJECT_ID/COVER_ID', where
+   *  - OBJECT: is the object type managing the cover [browser; player]
+   *  - OBJECT_ID: is the object ID of the object managing the cover
+   *  - COVER_ID: the cover ID
+   * Examples:
+   *  - "browser/com.sparod.file.browser/a4677aeabd0edccf79333853eab4fc12.jpg"
+   */
+  string cover = 8;
+}

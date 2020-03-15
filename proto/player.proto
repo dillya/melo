@@ -1,0 +1,105 @@
+/* Melo player protobuf */
+
+syntax = "proto3";
+
+import "tags.proto";
+
+package Player;
+
+/* Player state */
+enum State {
+  STATE_NONE = 0;
+  STATE_PLAYING = 1;
+  STATE_PAUSED = 2;
+  STATE_STOPPED = 3;
+}
+
+/* Player event */
+message Event {
+  /* Current media loaded */
+  message Media {
+    /* Name of the current media to display */
+    string name = 1;
+    /* Tags of the current media (optional) */
+    Tags.Tags tags = 2;
+  }
+
+  /* Current status */
+  message Status {
+    /* Stream state */
+    enum StreamState {
+      /* No state */
+      NONE = 0;
+      /* Stream is loading, media is not playing */
+      LOADING = 1;
+      /* Stream is buffering, media is playing */
+      BUFFERING = 2;
+    }
+
+    /* Current player state */
+    State state = 1;
+    /* Current player stream state */
+    StreamState stream_state = 2;
+    /* Buffering state (valid when stream_state == BUFFERING) */
+    uint32 value = 3;
+  }
+
+  /* Current position */
+  message Position {
+    /* Current position of the media (in ms) */
+    uint32 position = 1;
+    /* Duration of current media (in ms), 0 for live stream */
+    uint32 duration = 2;
+  }
+
+  /* Current volume */
+  message Volume {
+    /* Current volume value, between 0.0 and 1.0 */
+    float volume = 1;
+    /* Current mute status, 'true' if mute is enabled */
+    bool mute = 2;
+  }
+
+  /* Current playlist status */
+  message Playlist {
+    /* A media is present in playlist before current one */
+    bool prev = 1;
+    /* A media is present in playlist after current one */
+    bool next = 2;
+  }
+
+  /* Events */
+  oneof event {
+    /* New media descriptions */
+    Media media = 10;
+    /* New status */
+    Status status = 11;
+    /* New position values */
+    Position position = 12;
+    /* New volume values */
+    Volume volume = 13;
+    /* An error occurred on player, contains the error message */
+    string error = 14;
+    /* New playlist status */
+    Playlist playlist = 15;
+  }
+}
+
+/* Player request */
+message Request {
+  /* Requests */
+  oneof req {
+    /* Set player state (play, pause, stop) (resp: none) */
+    State set_state = 10;
+    /* Set player position (seek) (resp: none) */
+    uint32 set_position = 11;
+    /* Set volume (resp: none) */
+    float set_volume = 12;
+    /* Set mute (resp: none) */
+    bool set_mute = 13;
+    /* Play previous media in playlist (resp: none) */
+    bool play_previous = 14;
+    /* Play next media in playlist (resp: none) */
+    bool play_next = 15;
+  }
+}

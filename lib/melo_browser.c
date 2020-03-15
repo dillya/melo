@@ -27,6 +27,8 @@
 #define MELO_LOG_TAG "browser"
 #include "melo/melo_log.h"
 
+#include "browser.pb-c.h"
+
 #include "melo_events.h"
 #include "melo_requests.h"
 
@@ -324,13 +326,51 @@ melo_browser_get_by_id (const char *id)
 static MeloMessage *
 melo_browser_message_add (MeloBrowserPrivate *priv)
 {
-  return NULL;
+  Browser__Event pmsg = BROWSER__EVENT__INIT;
+  Browser__Event__Desc pdesc = BROWSER__EVENT__DESC__INIT;
+  MeloMessage *msg;
+
+  /* Prepare message */
+  pmsg.event_case = BROWSER__EVENT__EVENT_ADD;
+  pmsg.add = &pdesc;
+
+  /* Set description */
+  pdesc.id = priv->id;
+  pdesc.name = priv->name;
+  pdesc.description = priv->description;
+  pdesc.icon = priv->icon;
+  pdesc.support_search = priv->support_search;
+
+  /* Generate message */
+  msg = melo_message_new (browser__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, browser__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static MeloMessage *
 melo_browser_message_remove (MeloBrowserPrivate *priv)
 {
-  return NULL;
+  Browser__Event pmsg = BROWSER__EVENT__INIT;
+  Browser__Event__Desc pdesc = BROWSER__EVENT__DESC__INIT;
+  MeloMessage *msg;
+
+  /* Prepare message */
+  pmsg.event_case = BROWSER__EVENT__EVENT_REMOVE;
+  pmsg.remove = &pdesc;
+
+  /* Set minimal description */
+  pdesc.id = priv->id;
+
+  /* Generate message */
+  msg = melo_message_new (browser__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, browser__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static void
