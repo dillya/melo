@@ -25,6 +25,11 @@
 
 #define MELO_COVER_CACHE_PATH "/melo/cover_cache/"
 
+typedef struct {
+  GstBuffer *buffer;
+  GstMapInfo info;
+} MeloCoverMapInfo;
+
 static char *melo_cover_cache_path;
 
 /**
@@ -189,6 +194,14 @@ melo_cover_cache_save (unsigned char *data, size_t size, MeloCoverType type,
   return hash;
 }
 
+static void
+melo_cover_map_info_free (MeloCoverMapInfo *map_info)
+{
+  gst_buffer_unmap (map_info->buffer, &map_info->info);
+  gst_buffer_unref (map_info->buffer);
+  free (map_info);
+}
+
 /**
  * melo_cover_cache_save_gst_sample:
  * @sample: (transfer none): a #GstSample containing a cover
@@ -201,8 +214,8 @@ char *
 melo_cover_cache_save_gst_sample (GstSample *sample)
 {
   MeloCoverType type = MELO_COVER_TYPE_UNKNOWN;
+  MeloCoverMapInfo *map_info;
   GstBuffer *buffer;
-  GstMapInfo info;
   GstCaps *caps;
 
   /* No sample */
@@ -226,18 +239,26 @@ melo_cover_cache_save_gst_sample (GstSample *sample)
     type = melo_cover_type_from_mime_type (gst_structure_get_name (structure));
   }
 
-  /* Release sample */
-  gst_buffer_ref (buffer);
-  gst_sample_unref (sample);
-
-  /* Map buffer */
-  if (!gst_buffer_map (buffer, &info, GST_MAP_READ)) {
-    gst_buffer_unref (buffer);
+  /* Create map info */
+  map_info = malloc (sizeof (*map_info));
+  if (!map_info) {
+    gst_sample_unref (sample);
     return NULL;
   }
 
-  return melo_cover_cache_save (
-      info.data, info.size, type, (GDestroyNotify) gst_buffer_unref, buffer);
+  /* Release sample */
+  map_info->buffer = gst_buffer_ref (buffer);
+  gst_sample_unref (sample);
+
+  /* Map buffer */
+  if (!gst_buffer_map (buffer, &map_info->info, GST_MAP_READ)) {
+    gst_buffer_unref (buffer);
+    free (map_info);
+    return NULL;
+  }
+
+  return melo_cover_cache_save (map_info->info.data, map_info->info.size, type,
+      (GDestroyNotify) melo_cover_map_info_free, map_info);
 }
 
 /**
