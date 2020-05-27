@@ -18,6 +18,7 @@ configure_file(output : 'config.h', configuration : cdata)
 # Program sources
 src = [
 	'asset.c',
+	'discover.c',
 	'main.c',
 	'websocket.c'
 ]

@@ -30,6 +30,7 @@
 #include <melo/melo_log.h>
 
 #include "asset.h"
+#include "discover.h"
 #include "websocket.h"
 
 /** Default web UI path (for HTTP server). */
@@ -62,6 +63,12 @@ main (int argc, char *argv[])
 
   /* Load modules */
   melo_module_load ();
+
+  /* Initialize discover */
+  discover_init ();
+
+  /* Enable discover by default */
+  discover_register_device ("Melo", 8080, 8443);
 
   /* Create HTTP server for remote control */
   http_server = melo_http_server_new ();
@@ -127,6 +134,9 @@ main (int argc, char *argv[])
   ret = 0;
 
 end:
+  /* Exit discover */
+  discover_exit ();
+
   /* Unload modules */
   melo_module_unload ();
 
