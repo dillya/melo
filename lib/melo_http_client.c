@@ -92,6 +92,23 @@ melo_http_client_new (const char *user_agent)
   return client;
 }
 
+/**
+ * melo_http_client_set_max_connections:
+ * @client: the #MeloHttpClient
+ * @max_connections: the maximum number of connections opened at once
+ *
+ * This function can be used to limit the number of connections that the client
+ * can open at once.
+ */
+void
+melo_http_client_set_max_connections (
+    MeloHttpClient *client, unsigned int max_connections)
+{
+  if (client && max_connections > 0)
+    g_object_set (client->session, "max-conns", max_connections,
+        "max-conns-per-host", max_connections, NULL);
+}
+
 static void
 send_cb (SoupSession *session, SoupMessage *msg, gpointer user_data)
 {

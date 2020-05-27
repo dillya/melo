@@ -62,6 +62,9 @@ typedef void (*MeloHttpClientJsonCb) (
 
 MeloHttpClient *melo_http_client_new (const char *user_agent);
 
+void melo_http_client_set_max_connections (
+    MeloHttpClient *client, unsigned int max_connections);
+
 bool melo_http_client_get (MeloHttpClient *client, const char *url,
     MeloHttpClientCb cb, void *user_data);
 bool melo_http_client_get_json (MeloHttpClient *client, const char *url,
