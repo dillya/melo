@@ -80,6 +80,7 @@ static void
 melo_file_player_init (MeloFilePlayer *self)
 {
   GstElement *sink;
+  GstCaps *caps;
   GstBus *bus;
 
   /* Create pipeline */
@@ -88,6 +89,11 @@ melo_file_player_init (MeloFilePlayer *self)
       gst_element_factory_make ("uridecodebin", MELO_FILE_PLAYER_ID "_src");
   sink = melo_player_get_sink (MELO_PLAYER (self), MELO_FILE_PLAYER_ID "_sink");
   gst_bin_add_many (GST_BIN (self->pipeline), self->src, sink, NULL);
+
+  /* Handle only audio tracks */
+  caps = gst_caps_from_string ("audio/x-raw(ANY)");
+  g_object_set (self->src, "caps", caps, "expose-all-streams", FALSE, NULL);
+  gst_caps_unref (caps);
 
   /* Add signal handler on new pad */
   g_signal_connect (self->src, "pad-added", G_CALLBACK (pad_added_cb), sink);
