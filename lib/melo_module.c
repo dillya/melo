@@ -92,7 +92,7 @@ melo_module_load_file (const char *name)
   }
 
   /* Create item */
-  item = malloc (sizeof (item));
+  item = malloc (sizeof (*item));
   if (!item) {
     MELO_LOGE ("failed to create module '%s' item", m->id);
     g_module_close (module);

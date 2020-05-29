@@ -435,7 +435,7 @@ melo_browser_add_event_listener (
     ret = melo_events_add_listener (&melo_browser_events, cb, user_data);
 
     /* Send browser list to new listener */
-    if (ret) {
+    if (ret && melo_browser_list) {
       MeloAsyncData data = {.cb = cb, .user_data = user_data};
 
       /* Send browser list */

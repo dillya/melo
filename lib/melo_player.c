@@ -437,6 +437,7 @@ melo_player_add_event_listener (MeloAsyncCb cb, void *user_data)
   /* Send status to new event listener */
   if (ret) {
     MeloPlayer *player;
+    MeloMessage *msg;
 
     /* Get current player */
     G_LOCK (melo_player_mutex);
@@ -454,21 +455,38 @@ melo_player_add_event_listener (MeloAsyncCb cb, void *user_data)
         position = class->get_position (player);
 
       /* Send current state */
-      cb (melo_player_message_media (priv->name, priv->tags), user_data);
-      cb (melo_player_message_status (
-              priv->state, priv->stream_state, priv->stream_state_percent),
-          user_data);
-      cb (melo_player_message_position (position, priv->duration), user_data);
+      msg = melo_player_message_media (priv->name, priv->tags);
+      if (msg) {
+        cb (msg, user_data);
+        melo_message_unref (msg);
+      }
+      msg = melo_player_message_status (
+          priv->state, priv->stream_state, priv->stream_state_percent);
+      if (msg) {
+        cb (msg, user_data);
+        melo_message_unref (msg);
+      }
+      msg = melo_player_message_position (position, priv->duration);
+      if (msg) {
+        cb (msg, user_data);
+        melo_message_unref (msg);
+      }
 
       /* Release player */
       g_object_unref (player);
     }
 
     /* Send volume and playlist status */
-    cb (melo_player_message_volume (melo_player_volume, melo_player_mute),
-        user_data);
-    cb (melo_player_message_playlist (melo_player_prev, melo_player_next),
-        user_data);
+    msg = melo_player_message_volume (melo_player_volume, melo_player_mute);
+    if (msg) {
+      cb (msg, user_data);
+      melo_message_unref (msg);
+    }
+    msg = melo_player_message_playlist (melo_player_prev, melo_player_next);
+    if (msg) {
+      cb (msg, user_data);
+      melo_message_unref (msg);
+    }
   }
 
   return ret;

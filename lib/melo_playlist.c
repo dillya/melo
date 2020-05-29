@@ -496,6 +496,9 @@ melo_playlist_get_media_list (MeloPlaylist *playlist,
   if (async->cb)
     async->cb (msg, async->user_data);
 
+  /* Release message */
+  melo_message_unref (msg);
+
   return true;
 }
 
@@ -520,6 +523,9 @@ melo_playlist_get_current (MeloPlaylist *playlist, MeloAsyncData *async)
   /* Send message */
   if (async->cb)
     async->cb (msg, async->user_data);
+
+  /* Release message */
+  melo_message_unref (msg);
 
   return true;
 }

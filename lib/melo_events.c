@@ -71,6 +71,7 @@ melo_events_remove_listener (
     /* Remove listener */
     if (async->cb == cb && async->user_data == user_data) {
       events->list = g_list_delete_link (events->list, l);
+      free (async);
       break;
     }
   }
@@ -83,8 +84,10 @@ melo_events_broadcast (MeloEvents *events, MeloMessage *msg)
 {
   GList *l;
 
-  if (!events)
+  if (!events) {
+    melo_message_unref (msg);
     return;
+  }
 
   /* Find listener */
   for (l = events->list; l != NULL; l = l->next) {

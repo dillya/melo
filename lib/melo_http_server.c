@@ -203,6 +203,9 @@ websocket_close_cb (SoupWebsocketConnection *connection, gpointer user_data)
 
   /* Signal user for disconnection */
   melo_websocket_signal_connection (ws, false);
+
+  /* Release websocket */
+  melo_websocket_destroy (ws);
 }
 
 static void
