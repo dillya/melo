@@ -76,6 +76,7 @@ asset_cb (MeloHttpServer *server, MeloHttpServerConnection *connection,
 
     /* Get player asset */
     uri = melo_player_get_asset (id, path);
+    g_free (id);
   }
 
   /* Serve asset */
