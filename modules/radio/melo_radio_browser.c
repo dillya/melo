@@ -241,6 +241,7 @@ list_station_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
       /* Init media item */
       browser__response__media_item__init (&items[i]);
       media_list.items[i] = &items[i];
+      tags__tags__init (&tags[i]);
 
       /* Get next entry */
       obj = json_array_get_object_element (array, i);
@@ -255,7 +256,6 @@ list_station_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
       items[i].actions = actions_ptr;
 
       /* Set tags */
-      tags__tags__init (&tags[i]);
       items[i].tags = &tags[i];
 
       /* Set cover */
@@ -269,6 +269,11 @@ list_station_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
     msg = melo_message_new (browser__response__get_packed_size (&resp));
     melo_message_set_size (
         msg, browser__response__pack (&resp, melo_message_get_data (msg)));
+
+    /* Free covers */
+    for (i = 0; i < len; i++)
+      if (tags[i].cover != protobuf_c_empty_string)
+        g_free (tags[i].cover);
 
     /* Free item list */
     free (items_ptr);
