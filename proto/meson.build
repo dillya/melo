@@ -11,6 +11,7 @@ proto_files = [
 	'browser.proto',
 	'player.proto',
 	'playlist.proto',
+	'settings.proto',
 	'tags.proto'
 ]
 
@@ -24,10 +25,12 @@ proto_gen_src = custom_target('proto-src',
 		'browser.pb-c.h',
 		'player.pb-c.h',
 		'playlist.pb-c.h',
+		'settings.pb-c.h',
 		'tags.pb-c.h',
 		'browser.pb-c.c',
 		'player.pb-c.c',
 		'playlist.pb-c.c',
+		'settings.pb-c.c',
 		'tags.pb-c.c',
 	],
 	command : [
@@ -38,8 +41,8 @@ proto_gen_src = custom_target('proto-src',
 	],
 	install : true,
 	install_dir : [
-		install_dir, install_dir, install_dir, install_dir,
-		false, false, false, false
+		install_dir, install_dir, install_dir, install_dir, install_dir,
+		false, false, false, false, false
 	]
 )
 

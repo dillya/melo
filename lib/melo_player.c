@@ -59,6 +59,9 @@ typedef struct _MeloPlayerPrivate {
   /* Audio sink */
   GstElement *sink;
   GstElement *volume;
+
+  /* Settings */
+  MeloSettings *settings;
 } MeloPlayerPrivate;
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloPlayer, melo_player, G_TYPE_OBJECT)
@@ -112,6 +115,7 @@ melo_player_constructed (GObject *object)
 {
   MeloPlayer *player = MELO_PLAYER (object);
   MeloPlayerPrivate *priv = melo_player_get_instance_private (player);
+  MeloPlayerClass *class;
 
   /* Register player */
   if (priv->id) {
@@ -140,6 +144,17 @@ melo_player_constructed (GObject *object)
       MELO_LOGW ("failed to add player '%s' to global list", priv->id);
   }
 
+  /* Create settings */
+  class = MELO_PLAYER_GET_CLASS (player);
+  if (class->settings) {
+    /* Populate settings */
+    priv->settings = melo_settings_new (priv->id);
+    class->settings (player, priv->settings);
+
+    /* Load values */
+    melo_settings_load (priv->settings);
+  }
+
   /* Chain constructed */
   G_OBJECT_CLASS (melo_player_parent_class)->constructed (object);
 }
@@ -149,6 +164,10 @@ melo_player_finalize (GObject *object)
 {
   MeloPlayer *player = MELO_PLAYER (object);
   MeloPlayerPrivate *priv = melo_player_get_instance_private (player);
+
+  /* Release settings */
+  if (priv->settings)
+    g_object_unref (priv->settings);
 
   /* Release tags and name */
   melo_tags_unref (priv->tags);

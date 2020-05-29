@@ -13,6 +13,7 @@ libmelo_headers = [
 	'melo_player.h',
 	'melo_playlist.h',
 	'melo_request.h',
+	'melo_settings.h',
 	'melo_tags.h',
 	'melo_websocket.h'
 ]

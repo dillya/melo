@@ -1,0 +1,83 @@
+/* Melo settings protobuf */
+
+syntax = "proto3";
+
+package Settings;
+
+/* Settings entry */
+message Entry {
+  /* Entry unique ID */
+  string id = 1;
+  /* Entry name to display (set only in response) */
+  string name = 2;
+  /* Entry description */
+  string description = 3;
+  /* Depends on entry */
+  string depends = 4;
+  /* Value is ready only */
+  bool read_only = 5;
+  /* Value is a password */
+  bool password = 6;
+
+  /* Value */
+  oneof value {
+    /* Boolean value */
+    bool boolean = 10;
+    /* Integer 32-bits value */
+    int32 int32 = 11;
+    /* Unsigned integer 32-bits value */
+    uint32 uint32 = 12;
+    /* Integer 64-bits value */
+    int64 int64 = 13;
+    /* Unsigned integer 64-bits value */
+    uint64 uint64 = 14;
+    /* String value */
+    string string = 15;
+  }
+}
+
+/* Settings group */
+message Group {
+  /* Group unique ID */
+  string id = 1;
+  /* Group name (set only in response) */
+  string name = 2;
+  /* Group description (set only in response) */
+  string description = 3;
+
+  /* List of entroes */
+  repeated Entry entries = 4;
+}
+
+/* Settings request */
+message Request {
+  /* Settings unique ID */
+  string id = 1;
+
+  /* Requests */
+  oneof req {
+     /* Get grpoup list (resp: Settings.Response.group_list) */
+     string get_group_list = 10;
+     /* Set a group (resp: Settings.Response.group) */
+     Group set_group = 11;
+  }
+}
+
+/* Settings response */
+message Response {
+  /* Group list */
+  message GroupList {
+    /* List of groups */
+    repeated Group groups = 1;
+  }
+
+  /* Responses */
+  oneof resp {
+    /* Error (req: any) */
+    string error = 10;
+    /* Group list (req: Settings.Request.get_group_list) */
+    GroupList group_list = 11;
+    /* Group update (req: Settings.Request.set_group) */
+    Group group = 12;
+  }
+}

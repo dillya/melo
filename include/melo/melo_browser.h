@@ -22,6 +22,7 @@
 
 #include <melo/melo_async.h>
 #include <melo/melo_request.h>
+#include <melo/melo_settings.h>
 
 G_BEGIN_DECLS
 
@@ -39,6 +40,8 @@ G_DECLARE_DERIVABLE_TYPE (MeloBrowser, melo_browser, MELO, BROWSER, GObject)
  *     should be handled by the #MeloBrowser instance
  * @get_asset: This function is called to get an URI for a specific asset
  *     identified by its ID
+ * @settings: This function is called when settings have been created and should
+ *     be populated
  *
  * The class structure for a #MeloBrowser object.
  */
@@ -48,6 +51,7 @@ struct _MeloBrowserClass {
   bool (*handle_request) (
       MeloBrowser *browser, const MeloMessage *msg, MeloRequest *req);
   char *(*get_asset) (MeloBrowser *browser, const char *id);
+  void (*settings) (MeloBrowser *browser, MeloSettings *settings);
 };
 
 /**

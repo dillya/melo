@@ -51,6 +51,8 @@ typedef struct _MeloBrowserPrivate {
 
   MeloEvents events;
   MeloRequests requests;
+
+  MeloSettings *settings;
 } MeloBrowserPrivate;
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloBrowser, melo_browser, G_TYPE_OBJECT)
@@ -157,6 +159,7 @@ melo_browser_constructed (GObject *object)
 {
   MeloBrowser *browser = MELO_BROWSER (object);
   MeloBrowserPrivate *priv = melo_browser_get_instance_private (browser);
+  MeloBrowserClass *class;
 
   /* Register browser */
   if (priv->id) {
@@ -190,6 +193,17 @@ melo_browser_constructed (GObject *object)
       MELO_LOGW ("failed to add browser '%s' to global list", priv->id);
   }
 
+  /* Create settings */
+  class = MELO_BROWSER_GET_CLASS (browser);
+  if (class->settings) {
+    /* Populate settings */
+    priv->settings = melo_settings_new (priv->id);
+    class->settings (browser, priv->settings);
+
+    /* Load values */
+    melo_settings_load (priv->settings);
+  }
+
   /* Chain constructed */
   G_OBJECT_CLASS (melo_browser_parent_class)->constructed (object);
 }
@@ -199,6 +213,10 @@ melo_browser_finalize (GObject *object)
 {
   MeloBrowser *browser = MELO_BROWSER (object);
   MeloBrowserPrivate *priv = melo_browser_get_instance_private (browser);
+
+  /* Release settings */
+  if (priv->settings)
+    g_object_unref (priv->settings);
 
   /* Un-register browser */
   if (priv->id) {

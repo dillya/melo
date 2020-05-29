@@ -22,6 +22,7 @@
 #include <gst/gst.h>
 
 #include <melo/melo_async.h>
+#include <melo/melo_settings.h>
 #include <melo/melo_tags.h>
 
 G_BEGIN_DECLS
@@ -46,6 +47,8 @@ G_DECLARE_DERIVABLE_TYPE (MeloPlayer, melo_player, MELO, PLAYER, GObject)
  * @get_position: This function is called to get the current position in media
  * @get_asset: This function is called to get an URI for a specific asset
  *     identified by its ID
+ * @settings: This function is called when settings have been created and should
+ *     be populated
  *
  * The class structure for a #MeloPlayer object.
  */
@@ -57,6 +60,7 @@ struct _MeloPlayerClass {
   bool (*set_position) (MeloPlayer *player, unsigned int position);
   unsigned int (*get_position) (MeloPlayer *player);
   char *(*get_asset) (MeloPlayer *player, const char *id);
+  void (*settings) (MeloPlayer *player, MeloSettings *settings);
 };
 
 /**
