@@ -363,7 +363,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         msg, browser__response__pack (&resp, melo_message_get_data (msg)));
 
     /* Free message data */
-    for (i = 0; i < media_list.n_items; i++) {
+    while (i--) {
       g_free (items[i].id);
       g_free (items[i].name);
     }
@@ -719,7 +719,7 @@ melo_file_browser_do_action (
     MeloFileBrowser *browser, Browser__Request__DoAction *r, MeloRequest *req)
 {
   bool ret = false;
-  char *uri;
+  char *uri = NULL;
 
   /* Generate URI from path */
   if (!melo_file_browser_get_uri (browser, r->path, &uri) || !uri)
