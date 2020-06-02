@@ -35,6 +35,7 @@ typedef enum {
   WEBSOCKET_OBJECT_BROWSER,
   WEBSOCKET_OBJECT_PLAYER,
   WEBSOCKET_OBJECT_PLAYLIST,
+  WEBSOCKET_OBJECT_SETTINGS,
 } WebsocketObject;
 
 static bool
@@ -85,6 +86,9 @@ websocket_parse_path (
     path += 6;
   } else if (!strncmp (path, "playlist", 8)) {
     *obj = WEBSOCKET_OBJECT_PLAYLIST;
+    path += 8;
+  } else if (!strncmp (path, "settings", 8)) {
+    *obj = WEBSOCKET_OBJECT_SETTINGS;
     path += 8;
   } else
     return false;
@@ -236,6 +240,9 @@ websocket_request_cb (MeloWebsocket *ws, const char *path,
     break;
   case WEBSOCKET_OBJECT_PLAYLIST:
     ret = melo_playlist_handle_request (id, msg, websocket_async_cb, ws);
+    break;
+  case WEBSOCKET_OBJECT_SETTINGS:
+    ret = melo_settings_handle_request (msg, websocket_async_cb, ws);
     break;
   default:
     MELO_LOGW ("unsupported request");
