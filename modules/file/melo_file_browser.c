@@ -20,6 +20,7 @@
 
 #include <melo/melo_cover.h>
 #include <melo/melo_playlist.h>
+#include <melo/melo_settings.h>
 
 #define MELO_LOG_TAG "file_browser"
 #include <melo/melo_log.h>
@@ -62,10 +63,16 @@ struct _MeloFileBrowser {
   GObject parent_instance;
 
   char *root_path;
+
+  /* Settings */
+  MeloSettingsEntry *en_network;
+  MeloSettingsEntry *en_tags;
 };
 
 MELO_DEFINE_BROWSER (MeloFileBrowser, melo_file_browser)
 
+static void melo_file_browser_settings (
+    MeloBrowser *browser, MeloSettings *settings);
 static bool melo_file_browser_handle_request (
     MeloBrowser *browser, const MeloMessage *msg, MeloRequest *req);
 static char *melo_file_browser_get_asset (MeloBrowser *browser, const char *id);
@@ -89,6 +96,7 @@ melo_file_browser_class_init (MeloFileBrowserClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   /* Setup callbacks */
+  parent_class->settings = melo_file_browser_settings;
   parent_class->handle_request = melo_file_browser_handle_request;
   parent_class->get_asset = melo_file_browser_get_asset;
 
@@ -115,6 +123,34 @@ melo_file_browser_new ()
       "name", "Files", "description",
       "Browse in your local and network device(s)", "icon", "fa:folder-open",
       NULL);
+}
+
+static void
+melo_file_browser_settings (MeloBrowser *browser, MeloSettings *settings)
+{
+  MeloFileBrowser *fbrowser = MELO_FILE_BROWSER (browser);
+  MeloSettingsGroup *group;
+
+  /* Create global group */
+  group =
+      melo_settings_add_group (settings, "global", "Global", NULL, NULL, NULL);
+  melo_settings_group_add_string (group, "path", "Local path",
+      "Directory path for Local files", fbrowser->root_path, NULL,
+      MELO_SETTINGS_FLAG_READ_ONLY);
+  fbrowser->en_network = melo_settings_group_add_boolean (group, "network",
+      "Enable network", "Enable network device discovering and browsing", true,
+      NULL, MELO_SETTINGS_FLAG_NONE);
+  melo_settings_group_add_boolean (group, "removable",
+      "Enable removable devices",
+      "Enable removable devices support such as USB flash drive", false, NULL,
+      MELO_SETTINGS_FLAG_READ_ONLY);
+  fbrowser->en_tags =
+      melo_settings_group_add_boolean (group, "tags", "Display media file tags",
+          "Find media tags (title, artist, album, cover) and display them",
+          true, NULL, MELO_SETTINGS_FLAG_NONE);
+  melo_settings_group_add_string (group, "filter", "File extension filter",
+      "File extension to display", ".mp3,.mp4", NULL,
+      MELO_SETTINGS_FLAG_READ_ONLY);
 }
 
 static gint
@@ -243,10 +279,18 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     Browser__Response__MediaList media_list =
         BROWSER__RESPONSE__MEDIA_LIST__INIT;
     Browser__Response__MediaItem *items;
+    MeloFileBrowser *browser;
     unsigned int i = 0;
     MeloMessage *msg;
+    bool en_tags;
     char *en_uri;
     GList *l;
+
+    /* Get tags settings */
+    browser = MELO_FILE_BROWSER (melo_request_get_object (mlist->req));
+    if (!browser ||
+        !melo_settings_entry_get_boolean (browser->en_tags, &en_tags, NULL))
+      en_tags = true;
 
     /* Get directory URI */
     en_uri = g_file_get_uri (g_file_enumerator_get_container (en));
@@ -332,7 +376,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
       items[i].actions = file_actions_ptr;
 
       /* Create discoverer */
-      if (!mlist->disco) {
+      if (en_tags && !mlist->disco) {
         mlist->disco = gst_discoverer_new (GST_SECOND * 10, NULL);
         g_signal_connect (mlist->disco, "discovered",
             G_CALLBACK (discover_discovered_cb), mlist->req);
@@ -597,20 +641,28 @@ melo_file_browser_get_root_list (MeloRequest *req)
   Browser__Response__MediaList media_list = BROWSER__RESPONSE__MEDIA_LIST__INIT;
   Browser__Response__MediaItem *media_items[2];
   Browser__Response__MediaItem items[2];
+  MeloFileBrowser *browser;
   Tags__Tags tags[2];
   MeloMessage *msg;
+  bool en_network;
   unsigned int i;
+
+  /* Get network settings */
+  browser = MELO_FILE_BROWSER (melo_request_get_object (req));
+  if (!browser ||
+      !melo_settings_entry_get_boolean (browser->en_network, &en_network, NULL))
+    en_network = true;
 
   /* Prepare response */
   resp.resp_case = BROWSER__RESPONSE__RESP_MEDIA_LIST;
   resp.media_list = &media_list;
   media_list.items = media_items;
-  media_list.n_items = 2;
-  media_list.count = 2;
+  media_list.n_items = 1;
+  media_list.count = 1;
   media_list.offset = 0;
 
   /* Prepare media items */
-  for (i = 0; i < media_list.n_items; i++) {
+  for (i = 0; i < 2; i++) {
     browser__response__media_item__init (&items[i]);
     tags__tags__init (&tags[i]);
     items[i].tags = &tags[i];
@@ -624,10 +676,14 @@ melo_file_browser_get_root_list (MeloRequest *req)
   tags[0].cover = "fa:folder-open";
 
   /* Add network */
-  items[1].id = "network";
-  items[1].name = "Network";
-  items[1].type = BROWSER__RESPONSE__MEDIA_ITEM__TYPE__FOLDER;
-  tags[1].cover = "fa:network-wired";
+  if (en_network) {
+    items[1].id = "network";
+    items[1].name = "Network";
+    items[1].type = BROWSER__RESPONSE__MEDIA_ITEM__TYPE__FOLDER;
+    tags[1].cover = "fa:network-wired";
+    media_list.n_items++;
+    media_list.count++;
+  }
 
   /* Generate message */
   msg = melo_message_new (browser__response__get_packed_size (&resp));
