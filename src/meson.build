@@ -20,6 +20,7 @@ src = [
 	'asset.c',
 	'discover.c',
 	'main.c',
+	'settings.c',
 	'websocket.c'
 ]
 

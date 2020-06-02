@@ -31,6 +31,7 @@
 
 #include "asset.h"
 #include "discover.h"
+#include "settings.h"
 #include "websocket.h"
 
 /** Default web UI path (for HTTP server). */
@@ -56,10 +57,17 @@ main (int argc, char *argv[])
 {
   MeloHttpServer *http_server;
   GMainLoop *loop;
+  unsigned int http_port, https_port;
   int ret = -1;
 
   /* Initialize Melo library */
   melo_init (&argc, &argv);
+
+  /* Initialize settings */
+  settings_init ();
+
+  /* Get settings */
+  settings_get_http_ports (&http_port, &https_port);
 
   /* Load modules */
   melo_module_load ();
@@ -68,7 +76,8 @@ main (int argc, char *argv[])
   discover_init ();
 
   /* Enable discover by default */
-  discover_register_device ("Melo", 8080, 8443);
+  if (settings_is_discover ())
+    discover_register_device (settings_get_name (), http_port, https_port);
 
   /* Create HTTP server for remote control */
   http_server = melo_http_server_new ();
@@ -102,11 +111,14 @@ main (int argc, char *argv[])
   }
 
   /* Start HTTP server */
-  if (!melo_http_server_start (http_server, 8080, 0)) {
+  if (!melo_http_server_start (http_server, http_port, https_port)) {
     MELO_LOGE ("failed to start HTTP server");
     g_object_unref (http_server);
     goto end;
   }
+
+  /* Bind HTTP server to settings */
+  settings_bind_http_server (http_server);
 
   /* Start main loop */
   loop = g_main_loop_new (NULL, FALSE);
@@ -139,6 +151,9 @@ end:
 
   /* Unload modules */
   melo_module_unload ();
+
+  /* Clean settings */
+  settings_deinit ();
 
   /* Clean Melo library */
   melo_deinit ();
