@@ -70,6 +70,12 @@ bool melo_http_client_get (MeloHttpClient *client, const char *url,
 bool melo_http_client_get_json (MeloHttpClient *client, const char *url,
     MeloHttpClientJsonCb cb, void *user_data);
 
+bool melo_http_client_status_cannot_resolve (unsigned int code);
+bool melo_http_client_status_cannot_connect (unsigned int code);
+bool melo_http_client_status_ssl_failed (unsigned int code);
+bool melo_http_client_status_io_error (unsigned int code);
+bool melo_http_client_status_too_many_redirects (unsigned int code);
+
 G_END_DECLS
 
 #endif /* !_MELO_HTTP_CLIENT_H_ */

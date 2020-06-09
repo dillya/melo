@@ -258,3 +258,67 @@ melo_http_client_get_json (MeloHttpClient *client, const char *url,
 
   return true;
 }
+
+/**
+ * melo_http_client_status_cannot_resolve:
+ * @code: the code passed to #MeloHttpClientCb
+ *
+ * Returns: %true if client was unable to resolve destination host name, %false
+ *     otherwise.
+ */
+bool
+melo_http_client_status_cannot_resolve (unsigned int code)
+{
+  return code == SOUP_STATUS_CANT_RESOLVE ||
+         code == SOUP_STATUS_CANT_RESOLVE_PROXY;
+}
+
+/**
+ * melo_http_client_status_cannot_connect:
+ * @code: the code passed to #MeloHttpClientCb
+ *
+ * Returns: %true if client was unable to connect to remote host, %false
+ *     otherwise.
+ */
+bool
+melo_http_client_status_cannot_connect (unsigned int code)
+{
+  return code == SOUP_STATUS_CANT_CONNECT ||
+         code == SOUP_STATUS_CANT_CONNECT_PROXY;
+}
+
+/**
+ * melo_http_client_status_ssl_failed:
+ * @code: the code passed to #MeloHttpClientCb
+ *
+ * Returns: %true if SSL/TLS negotiation failed, %false otherwise.
+ */
+bool
+melo_http_client_status_ssl_failed (unsigned int code)
+{
+  return code == SOUP_STATUS_SSL_FAILED;
+}
+
+/**
+ * melo_http_client_status_io_error:
+ * @code: the code passed to #MeloHttpClientCb
+ *
+ * Returns: %true if a network error occurred, %false otherwise.
+ */
+bool
+melo_http_client_status_io_error (unsigned int code)
+{
+  return code == SOUP_STATUS_IO_ERROR;
+}
+
+/**
+ * melo_http_client_status_too_many_redirects:
+ * @code: the code passed to #MeloHttpClientCb
+ *
+ * Returns: %true if there were too many redirections, %false otherwise.
+ */
+bool
+melo_http_client_status_too_many_redirects (unsigned int code)
+{
+  return code == SOUP_STATUS_TOO_MANY_REDIRECTS;
+}
