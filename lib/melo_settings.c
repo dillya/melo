@@ -35,6 +35,8 @@ typedef enum {
   MELO_SETTINGS_TYPE_UINT32,
   MELO_SETTINGS_TYPE_INT64,
   MELO_SETTINGS_TYPE_UINT64,
+  MELO_SETTINGS_TYPE_FLOAT,
+  MELO_SETTINGS_TYPE_DOUBLE,
   MELO_SETTINGS_TYPE_STRING,
 } MeloSettingsType;
 
@@ -44,6 +46,8 @@ typedef union {
   uint32_t _uint32;
   int64_t _int64;
   uint64_t _uint64;
+  float _float;
+  double _double;
   char *_string;
 } MeloSettingsValue;
 
@@ -624,6 +628,92 @@ MELO_SETTINGS_FUNC (INT64, int64, int64_t)
 MELO_SETTINGS_FUNC (UINT64, uint64, uint64_t)
 
 /**
+ * melo_settings_group_add_float:
+ * @group: a #MeloSettingsGroup instance
+ * @id: the unique ID of the entry
+ * @name: the name to display for the entry
+ * @description: (nullable): the description of the entry
+ * @default_value: the default value
+ * @depends: (nullable): a #MeloSettingsEntry instance
+ * @flags: a combination of #MeloSettingsFlag
+ *
+ * This function can be used to register a new float entry into @group. The
+ * @depends parameter can be used to specify on which this entry depends on: it
+ * should be a float entry.
+ *
+ * This function should be called after settings creation and before call to
+ * melo_settings_load().
+ *
+ * Returns: (transfer none): a borrowed reference to the newly created
+ *     #MeloSettingsEntry. It stays valid until group or settings is destroyed.
+ */
+/**
+ * melo_settings_entry_get_float:
+ * @entry: a #MeloSettingsEntry instance
+ * @value: (out) (transfer none) (optional): the new value to validate
+ * @old_value: (out) (transfer none) (optional): the current value
+ *
+ * This function should be used only in a #MeloSettingsUpdateCb implementation,
+ * to validate a group values change.
+ *
+ * Returns: %true if the entry has been found, %false otherwise.
+ */
+/**
+ * melo_settings_entry_set_float:
+ * @entry: a #MeloSettingsEntry instance
+ * @value: (transfer none): the new value to set
+ *
+ * This function can be used to set a new float value to @entry. The
+ * registered #MeloSettingsUpdateCb callback is not called.
+ *
+ * Returns: %true if the entry has been found and set, %false otherwise.
+ */
+MELO_SETTINGS_FUNC (FLOAT, float, float)
+
+/**
+ * melo_settings_group_add_double:
+ * @group: a #MeloSettingsGroup instance
+ * @id: the unique ID of the entry
+ * @name: the name to display for the entry
+ * @description: (nullable): the description of the entry
+ * @default_value: the default value
+ * @depends: (nullable): a #MeloSettingsEntry instance
+ * @flags: a combination of #MeloSettingsFlag
+ *
+ * This function can be used to register a new double entry into @group. The
+ * @depends parameter can be used to specify on which this entry depends on: it
+ * should be a double entry.
+ *
+ * This function should be called after settings creation and before call to
+ * melo_settings_load().
+ *
+ * Returns: (transfer none): a borrowed reference to the newly created
+ *     #MeloSettingsEntry. It stays valid until group or settings is destroyed.
+ */
+/**
+ * melo_settings_entry_get_double:
+ * @entry: a #MeloSettingsEntry instance
+ * @value: (out) (transfer none) (optional): the new value to validate
+ * @old_value: (out) (transfer none) (optional): the current value
+ *
+ * This function should be used only in a #MeloSettingsUpdateCb implementation,
+ * to validate a group values change.
+ *
+ * Returns: %true if the entry has been found, %false otherwise.
+ */
+/**
+ * melo_settings_entry_set_double:
+ * @entry: a #MeloSettingsEntry instance
+ * @value: (transfer none): the new value to set
+ *
+ * This function can be used to set a new double value to @entry. The
+ * registered #MeloSettingsUpdateCb callback is not called.
+ *
+ * Returns: %true if the entry has been found and set, %false otherwise.
+ */
+MELO_SETTINGS_FUNC (DOUBLE, double, double)
+
+/**
  * melo_settings_group_add_string:
  * @group: a #MeloSettingsGroup instance
  * @id: the unique ID of the entry
@@ -820,6 +910,16 @@ melo_settings_load (MeloSettings *settings)
         if (value == p)
           entry->value = entry->new_value = entry->default_value;
         break;
+      case MELO_SETTINGS_TYPE_FLOAT:
+        entry->value._float = entry->new_value._float = strtof (value, &p);
+        if (value == p)
+          entry->value = entry->new_value = entry->default_value;
+        break;
+      case MELO_SETTINGS_TYPE_DOUBLE:
+        entry->value._double = entry->new_value._double = strtod (value, &p);
+        if (value == p)
+          entry->value = entry->new_value = entry->default_value;
+        break;
       case MELO_SETTINGS_TYPE_STRING:
         g_free (entry->value._string);
         entry->value._string = entry->new_value._string = g_strdup (value);
@@ -894,6 +994,12 @@ melo_settings_save (MeloSettings *settings)
       case MELO_SETTINGS_TYPE_UINT64:
         fprintf (fp, "%s=%" PRIu64 "\n", entry->id, entry->value._uint64);
         break;
+      case MELO_SETTINGS_TYPE_FLOAT:
+        fprintf (fp, "%s=%f\n", entry->id, entry->value._float);
+        break;
+      case MELO_SETTINGS_TYPE_DOUBLE:
+        fprintf (fp, "%s=%lf\n", entry->id, entry->value._double);
+        break;
       case MELO_SETTINGS_TYPE_STRING:
         if (entry->value._string)
           fprintf (fp, "%s=%s\n", entry->id, entry->value._string);
@@ -965,6 +1071,14 @@ melo_settings_get_entry_list (MeloSettingsGroup *group, Settings__Group *g)
     case MELO_SETTINGS_TYPE_UINT64:
       entries[i].value_case = SETTINGS__ENTRY__VALUE_UINT64;
       entries[i].uint64 = entry->value._uint64;
+      break;
+    case MELO_SETTINGS_TYPE_FLOAT:
+      entries[i].value_case = SETTINGS__ENTRY__VALUE_FLOAT;
+      entries[i].float_ = entry->value._float;
+      break;
+    case MELO_SETTINGS_TYPE_DOUBLE:
+      entries[i].value_case = SETTINGS__ENTRY__VALUE_DOUBLE;
+      entries[i].double_ = entry->value._double;
       break;
     case MELO_SETTINGS_TYPE_STRING:
       entries[i].value_case = SETTINGS__ENTRY__VALUE_STRING;
@@ -1121,6 +1235,16 @@ melo_settings_set_group (MeloSettings *settings, Settings__Group *req,
       if (entry->type != MELO_SETTINGS_TYPE_UINT64)
         return false;
       entry->new_value._uint64 = req->entries[i]->uint64;
+      break;
+    case SETTINGS__ENTRY__VALUE_FLOAT:
+      if (entry->type != MELO_SETTINGS_TYPE_FLOAT)
+        return false;
+      entry->new_value._float = req->entries[i]->float_;
+      break;
+    case SETTINGS__ENTRY__VALUE_DOUBLE:
+      if (entry->type != MELO_SETTINGS_TYPE_DOUBLE)
+        return false;
+      entry->new_value._double = req->entries[i]->double_;
       break;
     case SETTINGS__ENTRY__VALUE_STRING:
       if (entry->type != MELO_SETTINGS_TYPE_STRING)

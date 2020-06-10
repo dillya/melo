@@ -121,6 +121,12 @@ MeloSettingsEntry *melo_settings_group_add_uint64 (MeloSettingsGroup *group,
     const char *id, const char *name, const char *description,
     uint64_t default_value, const MeloSettingsEntry *depends,
     unsigned int flags);
+MeloSettingsEntry *melo_settings_group_add_float (MeloSettingsGroup *group,
+    const char *id, const char *name, const char *description,
+    float default_value, const MeloSettingsEntry *depends, unsigned int flags);
+MeloSettingsEntry *melo_settings_group_add_double (MeloSettingsGroup *group,
+    const char *id, const char *name, const char *description,
+    double default_value, const MeloSettingsEntry *depends, unsigned int flags);
 MeloSettingsEntry *melo_settings_group_add_string (MeloSettingsGroup *group,
     const char *id, const char *name, const char *description,
     const char *default_value, const MeloSettingsEntry *depends,
@@ -137,6 +143,10 @@ bool melo_settings_entry_get_int64 (
     MeloSettingsEntry *entry, int64_t *value, int64_t *old_value);
 bool melo_settings_entry_get_uint64 (
     MeloSettingsEntry *entry, uint64_t *value, uint64_t *old_value);
+bool melo_settings_entry_get_float (
+    MeloSettingsEntry *entry, float *value, float *old_value);
+bool melo_settings_entry_get_double (
+    MeloSettingsEntry *entry, double *value, double *old_value);
 bool melo_settings_entry_get_string (
     MeloSettingsEntry *entry, const char **value, const char **old_value);
 
@@ -145,6 +155,8 @@ bool melo_settings_entry_set_int32 (MeloSettingsEntry *entry, int32_t value);
 bool melo_settings_entry_set_uint32 (MeloSettingsEntry *entry, uint32_t value);
 bool melo_settings_entry_set_int64 (MeloSettingsEntry *entry, int64_t value);
 bool melo_settings_entry_set_uint64 (MeloSettingsEntry *entry, uint64_t value);
+bool melo_settings_entry_set_float (MeloSettingsEntry *entry, float value);
+bool melo_settings_entry_set_double (MeloSettingsEntry *entry, double value);
 bool melo_settings_entry_set_string (
     MeloSettingsEntry *entry, const char *value);
 
@@ -188,6 +200,20 @@ melo_settings_group_get_uint64 (MeloSettingsGroup *group, const char *id,
       melo_settings_group_find_entry (group, id), value, old_value);
 }
 static inline bool
+melo_settings_group_get_float (
+    MeloSettingsGroup *group, const char *id, float *value, float *old_value)
+{
+  return melo_settings_entry_get_float (
+      melo_settings_group_find_entry (group, id), value, old_value);
+}
+static inline bool
+melo_settings_group_get_double (
+    MeloSettingsGroup *group, const char *id, double *value, double *old_value)
+{
+  return melo_settings_entry_get_double (
+      melo_settings_group_find_entry (group, id), value, old_value);
+}
+static inline bool
 melo_settings_group_get_string (MeloSettingsGroup *group, const char *id,
     const char **value, const char **old_value)
 {
@@ -228,6 +254,20 @@ melo_settings_group_set_uint64 (
     MeloSettingsGroup *group, const char *id, uint64_t value)
 {
   return melo_settings_entry_set_uint64 (
+      melo_settings_group_find_entry (group, id), value);
+}
+static inline bool
+melo_settings_group_set_float (
+    MeloSettingsGroup *group, const char *id, float value)
+{
+  return melo_settings_entry_set_float (
+      melo_settings_group_find_entry (group, id), value);
+}
+static inline bool
+melo_settings_group_set_double (
+    MeloSettingsGroup *group, const char *id, double value)
+{
+  return melo_settings_entry_set_double (
       melo_settings_group_find_entry (group, id), value);
 }
 static inline bool

@@ -31,8 +31,12 @@ message Entry {
     int64 int64 = 13;
     /* Unsigned integer 64-bits value */
     uint64 uint64 = 14;
+    /* Float value */
+    float float = 15;
+    /* Double value */
+    double double = 16;
     /* String value */
-    string string = 15;
+    string string = 17;
   }
 }
 
