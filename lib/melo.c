@@ -22,6 +22,8 @@
 #include "melo/melo_log.h"
 #include "melo/melo_playlist.h"
 
+#include "melo_player_priv.h"
+
 /* Default playlist */
 static MeloPlaylist *def_playlist;
 
@@ -45,6 +47,9 @@ melo_init (int *argc, char ***argv)
   /* Initialize cover cache */
   melo_cover_cache_init ();
 
+  /* Initialize player settings */
+  melo_player_settings_init ();
+
   /* Create default playlist */
   def_playlist = melo_playlist_new (NULL);
 }
@@ -60,6 +65,9 @@ melo_deinit (void)
 {
   /* Destroy default playlist */
   g_object_unref (def_playlist);
+
+  /* Release player settings */
+  melo_player_settings_deinit ();
 
   /* Clean cover cache */
   melo_cover_cache_deinit ();

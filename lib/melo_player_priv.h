@@ -20,6 +20,9 @@
 
 #include "melo/melo_player.h"
 
+void melo_player_settings_init (void);
+void melo_player_settings_deinit (void);
+
 bool melo_player_play_media (
     const char *id, const char *path, const char *name, MeloTags *tags);
 

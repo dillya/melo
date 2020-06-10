@@ -31,6 +31,12 @@ static GHashTable *melo_player_list;
 /* Player event listeners */
 static MeloEvents melo_player_events;
 
+/* Player settings */
+static MeloSettings *melo_player_settings;
+static MeloSettingsEntry *melo_player_settings_volume;
+static MeloSettingsEntry *melo_player_settings_mute;
+static guint melo_player_settings_source;
+
 /* Current player */
 static MeloPlayer *melo_player_current;
 
@@ -251,6 +257,53 @@ melo_player_get_property (
 /*
  * Static functions
  */
+
+void
+melo_player_settings_init (void)
+{
+  MeloSettingsGroup *group;
+
+  if (melo_player_settings)
+    return;
+
+  /* Create new player settings */
+  melo_player_settings = melo_settings_new ("player");
+  if (!melo_player_settings) {
+    MELO_LOGW ("failed to create player settings");
+    return;
+  }
+
+  /* Create global group */
+  group = melo_settings_add_group (
+      melo_player_settings, "global", "Global", NULL, NULL, NULL);
+
+  /* Add volume / mute settings (not exported) */
+  melo_player_settings_volume = melo_settings_group_add_float (
+      group, "volume", "Volume", NULL, 1.f, NULL, MELO_SETTINGS_FLAG_NO_EXPORT);
+  melo_player_settings_mute = melo_settings_group_add_boolean (
+      group, "mute", "Mute", NULL, false, NULL, MELO_SETTINGS_FLAG_NO_EXPORT);
+
+  /* Load settings */
+  melo_settings_load (melo_player_settings);
+
+  /* Set volume / mute */
+  melo_settings_entry_get_float (
+      melo_player_settings_volume, &melo_player_volume, NULL);
+  melo_settings_entry_get_boolean (
+      melo_player_settings_mute, &melo_player_mute, NULL);
+}
+
+void
+melo_player_settings_deinit (void)
+{
+  if (!melo_player_settings)
+    return;
+
+  /* Release settings */
+  g_object_unref (melo_player_settings);
+  melo_player_settings = NULL;
+}
+
 static MeloMessage *
 melo_player_message_media (const char *name, MeloTags *tags)
 {
@@ -1073,6 +1126,17 @@ melo_player_update_duration (
         &melo_player_events, melo_player_message_position (position, duration));
 }
 
+static gboolean
+melo_player_save_volume (gpointer user_data)
+{
+  /* Save settings */
+  melo_settings_save (melo_player_settings);
+
+  /* Remove timeout */
+  melo_player_settings_source = 0;
+  return FALSE;
+}
+
 /**
  * melo_player_update_volume:
  * @player: (nullable): a #MeloPlayer
@@ -1105,9 +1169,22 @@ melo_player_update_volume (MeloPlayer *player, float volume, bool mute)
   melo_player_mute = mute;
 
   /* Broadcast volume change */
-  if (player == melo_player_current)
+  if (player == melo_player_current) {
     melo_events_broadcast (
         &melo_player_events, melo_player_message_volume (volume, mute));
+
+    /* Update volume */
+    if (melo_player_settings) {
+      /* Set new values */
+      melo_settings_entry_set_float (melo_player_settings_volume, volume);
+      melo_settings_entry_set_boolean (melo_player_settings_mute, mute);
+
+      /* Delay save */
+      if (!melo_player_settings_source)
+        melo_player_settings_source =
+            g_timeout_add_seconds (10, melo_player_save_volume, NULL);
+    }
+  }
 }
 
 /**
