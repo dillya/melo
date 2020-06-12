@@ -43,6 +43,9 @@ typedef struct {
 static MeloHttpClient *discover_client;
 static bool discover_registered;
 static char *discover_serial;
+static char *discover_device_name;
+static unsigned int discover_http_port;
+static unsigned int discover_https_port;
 static int discover_ntlk_fd = -1;
 static gulong discover_ntlk_id = 0;
 static GList *discover_ifaces;
@@ -135,6 +138,9 @@ discover_exit (void)
     g_object_unref (discover_client);
   discover_client = NULL;
 
+  /* Free name */
+  g_free (discover_device_name);
+
   /* Free serial */
   g_free (discover_serial);
   discover_serial = NULL;
@@ -192,6 +198,14 @@ discover_interface_free (DiscoverInterface *iface)
   g_slice_free (DiscoverInterface, iface);
 }
 
+static void
+discover_address_cb (MeloHttpClient *client, unsigned int code,
+    const char *data, size_t size, void *user_data)
+{
+  if (code != 200)
+    discover_registered = false;
+}
+
 static bool
 discover_add_address (DiscoverInterface *iface)
 {
@@ -203,7 +217,7 @@ discover_add_address (DiscoverInterface *iface)
       discover_serial, iface->hw_address, iface->address);
 
   /* Send request */
-  melo_http_client_get (discover_client, url, NULL, NULL);
+  melo_http_client_get (discover_client, url, discover_address_cb, NULL);
   g_free (url);
 
   return true;
@@ -220,7 +234,7 @@ discover_remove_address (DiscoverInterface *iface)
       discover_serial, iface->hw_address);
 
   /* Send request */
-  melo_http_client_get (discover_client, url, NULL, NULL);
+  melo_http_client_get (discover_client, url, discover_address_cb, NULL);
   g_free (url);
 
   return true;
@@ -240,7 +254,8 @@ netlink_cb (gint fd, GIOCondition condition, gpointer user_data)
 
   /* Device not registered */
   if (!discover_registered)
-    goto end;
+    discover_register_device (
+        discover_device_name, discover_http_port, discover_https_port);
 
   /* Process messages */
   for (nh = (struct nlmsghdr *) buffer; NLMSG_OK (nh, len);
@@ -335,53 +350,24 @@ end:
   return TRUE;
 }
 
-/**
- * discover_register_device:
- * @name: the device name
- * @http_port: the port of the HTTP server
- * @https_port: the port of the HTTPs server
- *
- * This function will send a request to Sparod server to register the device
- * with its name and its serial. The HTTP server ports are also sent.
- * Then, the network interfaces are listed and each of them (except loop back)
- * are notified to the Sparod server.
- *
- * Returns: %true if the device has been registered, %false otherwise.
- */
-bool
-discover_register_device (
-    const char *name, unsigned int http_port, unsigned https_port)
+static void
+discover_register_cb (MeloHttpClient *client, unsigned int code,
+    const char *data, size_t size, void *user_data)
 {
   struct ifaddrs *ifap, *i;
   DiscoverInterface *iface;
-  const gchar *host;
-  char *url;
   GList *l;
 
-  /* No serial found */
-  if (!discover_serial) {
-    MELO_LOGE ("no serial found");
-    return false;
-  }
-
-  /* Get network interfaces list */
-  if (getifaddrs (&ifap))
-    return false;
-
-  /* Get host name */
-  host = g_get_host_name ();
-
-  /* Prepare device registration request */
-  url = g_strdup_printf (DISCOVER_URL
-      "?action=add_device&serial=%s&name=%s&hostname=%s&port=%u&sport=%u",
-      discover_serial, name, host, http_port, https_port);
-
-  /* Send request */
-  melo_http_client_get (discover_client, url, NULL, NULL);
-  g_free (url);
+  /* Failed to register device */
+  if (code != 200)
+    return;
 
   /* Device registered */
   discover_registered = true;
+
+  /* Get network interfaces list */
+  if (getifaddrs (&ifap))
+    return;
 
   /* List all interfaces */
   for (i = ifap; i != NULL; i = i->ifa_next) {
@@ -431,6 +417,51 @@ discover_register_device (
 
   /* Free interfaces list */
   freeifaddrs (ifap);
+}
+
+/**
+ * discover_register_device:
+ * @name: the device name
+ * @http_port: the port of the HTTP server
+ * @https_port: the port of the HTTPs server
+ *
+ * This function will send a request to Sparod server to register the device
+ * with its name and its serial. The HTTP server ports are also sent.
+ * Then, the network interfaces are listed and each of them (except loop back)
+ * are notified to the Sparod server.
+ *
+ * Returns: %true if the device has been registered, %false otherwise.
+ */
+bool
+discover_register_device (
+    const char *name, unsigned int http_port, unsigned https_port)
+{
+  const gchar *host;
+  char *url;
+
+  /* No serial found */
+  if (!discover_serial) {
+    MELO_LOGE ("no serial found");
+    return false;
+  }
+
+  /* Get host name */
+  host = g_get_host_name ();
+  if (name != discover_device_name) {
+    g_free (discover_device_name);
+    discover_device_name = g_strdup (name);
+  }
+  discover_http_port = http_port;
+  discover_https_port = https_port;
+
+  /* Prepare device registration request */
+  url = g_strdup_printf (DISCOVER_URL
+      "?action=add_device&serial=%s&name=%s&hostname=%s&port=%u&sport=%u",
+      discover_serial, name, host, http_port, https_port);
+
+  /* Send request */
+  melo_http_client_get (discover_client, url, discover_register_cb, NULL);
+  g_free (url);
 
   return true;
 }
