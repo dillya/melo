@@ -190,11 +190,14 @@ send_async_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
   SoupSession *session = SOUP_SESSION (source_object);
   MeloHttpClientAsync *async = user_data;
   GInputStream *stream;
+  GError *error = NULL;
   JsonParser *parser;
 
   /* Get response body stream */
-  stream = soup_session_send_finish (session, res, NULL);
+  stream = soup_session_send_finish (session, res, &error);
   if (!stream) {
+    MELO_LOGE ("failed to get input stream: %s", error->message);
+    g_error_free (error);
     free (async);
     return;
   }
