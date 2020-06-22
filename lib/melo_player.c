@@ -51,9 +51,12 @@ static bool melo_player_mute;
 /* Melo player private data */
 typedef struct _MeloPlayerPrivate {
   char *id;
+  char *name;
+  char *description;
+  char *icon;
 
   /* Media */
-  char *name;
+  char *media_name;
   MeloTags *tags;
 
   /* Status */
@@ -73,7 +76,7 @@ typedef struct _MeloPlayerPrivate {
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MeloPlayer, melo_player, G_TYPE_OBJECT)
 
 /* Melo player properties */
-enum { PROP_0, PROP_ID };
+enum { PROP_0, PROP_ID, PROP_NAME, PROP_DESCRIPTION, PROP_ICON };
 
 static void melo_player_constructed (GObject *object);
 static void melo_player_finalize (GObject *object);
@@ -82,6 +85,10 @@ static void melo_player_set_property (
     GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
 static void melo_player_get_property (
     GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
+
+/* Protobuf message */
+static MeloMessage *melo_player_message_add (MeloPlayerPrivate *priv);
+static MeloMessage *melo_player_message_remove (MeloPlayerPrivate *priv);
 
 static void
 melo_player_class_init (MeloPlayerClass *klass)
@@ -108,6 +115,37 @@ melo_player_class_init (MeloPlayerClass *klass)
    */
   g_object_class_install_property (object_class, PROP_ID,
       g_param_spec_string ("id", "ID", "Player unique ID.", NULL,
+          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+
+  /**
+   * MeloPlayer:name:
+   *
+   * The name of the player to display. This must be set during the construct
+   * and it can be only read after instantiation.
+   */
+  g_object_class_install_property (object_class, PROP_NAME,
+      g_param_spec_string ("name", "Name", "Player name.", NULL,
+          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+
+  /**
+   * MeloPlayer:description:
+   *
+   * The description of the player. This must be set during the construct and
+   * it can be only read after instantiation.
+   */
+  g_object_class_install_property (object_class, PROP_DESCRIPTION,
+      g_param_spec_string ("description", "Description", "Player description.",
+          NULL,
+          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+
+  /**
+   * MeloPlayer:icon:
+   *
+   * The icon of the player. This must be set during the construct and it can
+   * be only read after instantiation.
+   */
+  g_object_class_install_property (object_class, PROP_ICON,
+      g_param_spec_string ("icon", "Icon", "Player icon.", NULL,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
 }
 
@@ -144,9 +182,13 @@ melo_player_constructed (GObject *object)
     G_UNLOCK (melo_player_mutex);
 
     /* Player added */
-    if (added == TRUE)
+    if (added == TRUE) {
+      /* Broadcast 'add' message */
+      melo_events_broadcast (
+          &melo_player_events, melo_player_message_add (priv));
+
       MELO_LOGI ("player '%s' added", priv->id);
-    else
+    } else
       MELO_LOGW ("failed to add player '%s' to global list", priv->id);
   }
 
@@ -177,7 +219,7 @@ melo_player_finalize (GObject *object)
 
   /* Release tags and name */
   melo_tags_unref (priv->tags);
-  g_free (priv->name);
+  g_free (priv->media_name);
 
   /* Release audio sink */
   if (priv->sink)
@@ -210,8 +252,13 @@ melo_player_finalize (GObject *object)
     G_UNLOCK (melo_player_mutex);
 
     /* Player removed */
-    if (removed == TRUE)
+    if (removed == TRUE) {
+      /* Broadcast 'remove' message */
+      melo_events_broadcast (
+          &melo_player_events, melo_player_message_remove (priv));
+
       MELO_LOGI ("player '%s' removed", priv->id);
+    }
   }
 
   /* Free ID */
@@ -233,6 +280,18 @@ melo_player_set_property (
     g_free (priv->id);
     priv->id = g_value_dup_string (value);
     break;
+  case PROP_NAME:
+    g_free (priv->name);
+    priv->name = g_value_dup_string (value);
+    break;
+  case PROP_DESCRIPTION:
+    g_free (priv->description);
+    priv->description = g_value_dup_string (value);
+    break;
+  case PROP_ICON:
+    g_free (priv->icon);
+    priv->icon = g_value_dup_string (value);
+    break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
   }
@@ -248,6 +307,15 @@ melo_player_get_property (
   switch (property_id) {
   case PROP_ID:
     g_value_set_string (value, priv->id);
+    break;
+  case PROP_NAME:
+    g_value_set_string (value, priv->name);
+    break;
+  case PROP_DESCRIPTION:
+    g_value_set_string (value, priv->description);
+    break;
+  case PROP_ICON:
+    g_value_set_string (value, priv->icon);
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -302,6 +370,55 @@ melo_player_settings_deinit (void)
   /* Release settings */
   g_object_unref (melo_player_settings);
   melo_player_settings = NULL;
+}
+
+static MeloMessage *
+melo_player_message_add (MeloPlayerPrivate *priv)
+{
+  Player__Event pmsg = PLAYER__EVENT__INIT;
+  Player__Event__Desc pdesc = PLAYER__EVENT__DESC__INIT;
+  MeloMessage *msg;
+
+  /* Prepare message */
+  pmsg.event_case = PLAYER__EVENT__EVENT_ADD;
+  pmsg.add = &pdesc;
+
+  /* Set description */
+  pdesc.id = priv->id;
+  pdesc.name = priv->name;
+  pdesc.description = priv->description;
+  pdesc.icon = priv->icon;
+
+  /* Generate message */
+  msg = melo_message_new (player__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, player__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
+}
+
+static MeloMessage *
+melo_player_message_remove (MeloPlayerPrivate *priv)
+{
+  Player__Event pmsg = PLAYER__EVENT__INIT;
+  Player__Event__Desc pdesc = PLAYER__EVENT__DESC__INIT;
+  MeloMessage *msg;
+
+  /* Prepare message */
+  pmsg.event_case = PLAYER__EVENT__EVENT_REMOVE;
+  pmsg.remove = &pdesc;
+
+  /* Set minimal description */
+  pdesc.id = priv->id;
+
+  /* Generate message */
+  msg = melo_message_new (player__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, player__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
 }
 
 static MeloMessage *
@@ -483,6 +600,20 @@ melo_player_message_playlist (bool prev, bool next)
   return msg;
 }
 
+static void
+melo_player_list_cb (gpointer key, gpointer value, gpointer user_data)
+{
+  MeloPlayer *player = value;
+  MeloAsyncData *data = user_data;
+  MeloPlayerPrivate *priv = melo_player_get_instance_private (player);
+  MeloMessage *msg;
+
+  /* Generate 'add' message */
+  msg = melo_player_message_add (priv);
+  data->cb (msg, data->user_data);
+  melo_message_unref (msg);
+}
+
 /**
  * melo_player_add_event_listener:
  * @cb: the function to call when a new event occurred
@@ -511,6 +642,14 @@ melo_player_add_event_listener (MeloAsyncCb cb, void *user_data)
     MeloPlayer *player;
     MeloMessage *msg;
 
+    /* Send player list to new listener */
+    if (melo_player_list) {
+      MeloAsyncData data = {.cb = cb, .user_data = user_data};
+
+      /* Send player list */
+      g_hash_table_foreach (melo_player_list, melo_player_list_cb, &data);
+    }
+
     /* Get current player */
     G_LOCK (melo_player_mutex);
     player = melo_player_current ? g_object_ref (melo_player_current) : NULL;
@@ -527,7 +666,7 @@ melo_player_add_event_listener (MeloAsyncCb cb, void *user_data)
         position = class->get_position (player);
 
       /* Send current state */
-      msg = melo_player_message_media (priv->name, priv->tags);
+      msg = melo_player_message_media (priv->media_name, priv->tags);
       if (msg) {
         cb (msg, user_data);
         melo_message_unref (msg);
@@ -905,8 +1044,8 @@ melo_player_update_media (MeloPlayer *player, const char *name, MeloTags *tags)
   priv = melo_player_get_instance_private (player);
 
   /* Replace name */
-  g_free (priv->name);
-  priv->name = g_strdup (name);
+  g_free (priv->media_name);
+  priv->media_name = g_strdup (name);
 
   /* Replace tags */
   melo_tags_unref (priv->tags);
@@ -915,7 +1054,7 @@ melo_player_update_media (MeloPlayer *player, const char *name, MeloTags *tags)
   /* Broadcast media change */
   if (player == melo_player_current)
     melo_events_broadcast (&melo_player_events,
-        melo_player_message_media (priv->name, priv->tags));
+        melo_player_message_media (priv->media_name, priv->tags));
 }
 
 /**
@@ -946,7 +1085,7 @@ melo_player_update_tags (MeloPlayer *player, MeloTags *tags)
   /* Broadcast media change */
   if (player == melo_player_current)
     melo_events_broadcast (&melo_player_events,
-        melo_player_message_media (priv->name, priv->tags));
+        melo_player_message_media (priv->media_name, priv->tags));
 }
 
 /**

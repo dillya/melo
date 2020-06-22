@@ -16,6 +16,19 @@ enum State {
 
 /* Player event */
 message Event {
+  /* Player description */
+  message Desc {
+    /* Player unique ID */
+    string id = 1;
+
+    /* Player name to display */
+    string name = 2;
+    /* Player description (optional) */
+    string description = 3;
+    /* Player icon (optional) */
+    string icon = 4;
+  }
+
   /* Current media loaded */
   message Media {
     /* Name of the current media to display */
@@ -70,18 +83,22 @@ message Event {
 
   /* Events */
   oneof event {
+    /* A player has been added */
+    Desc add = 10;
+    /* A player has been removed */
+    Desc remove = 11;
     /* New media descriptions */
-    Media media = 10;
+    Media media = 12;
     /* New status */
-    Status status = 11;
+    Status status = 13;
     /* New position values */
-    Position position = 12;
+    Position position = 14;
     /* New volume values */
-    Volume volume = 13;
+    Volume volume = 15;
     /* An error occurred on player, contains the error message */
-    string error = 14;
+    string error = 16;
     /* New playlist status */
-    Playlist playlist = 15;
+    Playlist playlist = 17;
   }
 }
 
