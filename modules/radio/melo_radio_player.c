@@ -97,8 +97,10 @@ melo_radio_player_init (MeloRadioPlayer *self)
 MeloRadioPlayer *
 melo_radio_player_new ()
 {
-  return g_object_new (
-      MELO_TYPE_RADIO_PLAYER, "id", MELO_RADIO_PLAYER_ID, NULL);
+  return g_object_new (MELO_TYPE_RADIO_PLAYER, "id", MELO_RADIO_PLAYER_ID,
+      "name", "Radio", "description",
+      "Play any webradio stream (shoutcast / icecast)", "icon",
+      "fa:broadcast-tower", NULL);
 }
 
 static gboolean

@@ -107,7 +107,10 @@ melo_file_player_init (MeloFilePlayer *self)
 MeloFilePlayer *
 melo_file_player_new ()
 {
-  return g_object_new (MELO_TYPE_FILE_PLAYER, "id", MELO_FILE_PLAYER_ID, NULL);
+  return g_object_new (MELO_TYPE_FILE_PLAYER, "id", MELO_FILE_PLAYER_ID, "name",
+      "Files", "description",
+      "Play any media files (audio and/or video) from local or network devices",
+      "icon", "fa:folder-open", NULL);
 }
 
 static gboolean
