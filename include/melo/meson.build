@@ -8,6 +8,7 @@ libmelo_headers = [
 	'melo_http_client.h',
 	'melo_http_server.h',
 	'melo_log.h',
+	'melo_mdns.h',
 	'melo_message.h',
 	'melo_module.h',
 	'melo_player.h',

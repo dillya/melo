@@ -42,7 +42,8 @@ following command:
 
 ```sh
 apt install meson libglib2.0-dev libgstreamer-plugins-base1.0-dev \
-    libsoup2.4-dev libjson-glib-dev libprotobuf-c-dev protobuf-c-compiler
+    libsoup2.4-dev libjson-glib-dev libavahi-gobject-dev libprotobuf-c-dev \
+    protobuf-c-compiler
 ```
 
 Then, you are ready to build Melo:
