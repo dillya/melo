@@ -27,6 +27,11 @@
 static MeloSettings *settings;
 static MeloSettingsEntry *entry_name;
 static MeloSettingsEntry *entry_discover;
+static MeloSettingsEntry *entry_auth;
+static MeloSettingsEntry *entry_auth_user;
+static MeloSettingsEntry *entry_auth_pass;
+static MeloSettingsEntry *entry_auth_new_pass;
+static MeloSettingsEntry *entry_auth_conf_pass;
 static MeloSettingsEntry *entry_http_port;
 static MeloSettingsEntry *entry_https_port;
 
@@ -79,8 +84,58 @@ static bool
 auth_cb (MeloSettings *settings, MeloSettingsGroup *group, char **error,
     void *user_data)
 {
-  *error = g_strdup ("Not yet supported");
-  return false;
+  const char *user, *user_old, *pass, *pass_old, *pass_new, *pass_conf;
+  bool en_old, en;
+
+  /* Get authentication state */
+  melo_settings_entry_get_boolean (entry_auth, &en, &en_old);
+  melo_settings_entry_get_string (entry_auth_user, &user, &user_old);
+  melo_settings_entry_get_string (entry_auth_pass, &pass, &pass_old);
+  melo_settings_entry_get_string (entry_auth_new_pass, &pass_new, NULL);
+  melo_settings_entry_get_string (entry_auth_conf_pass, &pass_conf, NULL);
+
+  /* Check username and password */
+  if (en) {
+    /* Check user */
+    if (user_old && *user_old != '\0' && strcmp (user, user_old)) {
+      *error = g_strdup ("Invalid user name");
+      return false;
+    }
+    /* Check password */
+    if (pass_old && *pass_old != '\0' && strcmp (pass, pass_old)) {
+      *error = g_strdup ("Invalid current password");
+      return false;
+    }
+    /* Check new password */
+    if (!pass_new || !pass_conf || strcmp (pass_new, pass_conf)) {
+      *error = g_strdup ("New password mismatch");
+      return false;
+    }
+
+    /* Update password */
+    pass = pass_new;
+  } else if (en_old && !en) {
+    /* Check password */
+    if (pass_old && *pass_old != '\0' && strcmp (pass, pass_old)) {
+      *error = g_strdup ("Invalid current password to disable authentication");
+      return false;
+    }
+
+    /* Reset password */
+    pass = NULL;
+  }
+
+  /* Update password */
+  melo_settings_entry_set_string (entry_auth_pass, pass);
+
+  /* Nothing to update */
+  if (!http_server)
+    return true;
+
+  /* Update authentication settings */
+  melo_http_server_set_auth (http_server, en, user, pass);
+
+  return true;
 }
 
 static bool
@@ -115,7 +170,6 @@ void
 settings_init (void)
 {
   MeloSettingsGroup *group;
-  MeloSettingsEntry *entry;
 
   /* Create global settings */
   settings = melo_settings_new ("global");
@@ -141,17 +195,17 @@ settings_init (void)
   /* Create authentication group */
   group = melo_settings_add_group (settings, "auth", "Authentication",
       "Set a username / password to protect your device", auth_cb, NULL);
-  entry = melo_settings_group_add_boolean (
-      group, "en", "Enable", "", false, NULL, MELO_SETTINGS_FLAG_READ_ONLY);
-  melo_settings_group_add_string (group, "user", "User name", "", "melo", entry,
-      MELO_SETTINGS_FLAG_NONE | MELO_SETTINGS_FLAG_READ_ONLY);
-  melo_settings_group_add_string (group, "pass", "Current password", "", NULL,
-      entry, MELO_SETTINGS_FLAG_PASSWORD | MELO_SETTINGS_FLAG_READ_ONLY);
-  melo_settings_group_add_string (group, "new_pass", "New password", "", NULL,
-      entry, MELO_SETTINGS_FLAG_PASSWORD | MELO_SETTINGS_FLAG_READ_ONLY);
-  melo_settings_group_add_string (group, "conf_pass", "New password (confirm)",
-      "", NULL, entry,
-      MELO_SETTINGS_FLAG_PASSWORD | MELO_SETTINGS_FLAG_READ_ONLY);
+  entry_auth = melo_settings_group_add_boolean (
+      group, "en", "Enable", "", false, NULL, MELO_SETTINGS_FLAG_NONE);
+  entry_auth_user = melo_settings_group_add_string (group, "user", "User name",
+      "", "melo", entry_auth, MELO_SETTINGS_FLAG_NONE);
+  entry_auth_pass = melo_settings_group_add_string (group, "pass",
+      "Current password", "", NULL, entry_auth, MELO_SETTINGS_FLAG_PASSWORD);
+  entry_auth_new_pass = melo_settings_group_add_string (group, "new_pass",
+      "New password", "", NULL, entry_auth, MELO_SETTINGS_FLAG_PASSWORD);
+  entry_auth_conf_pass = melo_settings_group_add_string (group, "conf_pass",
+      "New password (confirm)", "", NULL, entry_auth,
+      MELO_SETTINGS_FLAG_PASSWORD);
 
   /* Create HTTP server group */
   group = melo_settings_add_group (settings, "http_server", "HTTP server",
@@ -221,7 +275,22 @@ settings_is_discover (void)
 void
 settings_bind_http_server (MeloHttpServer *server)
 {
+  bool enabled;
+
   http_server = server;
+
+  /* Set authentication */
+  melo_settings_entry_get_boolean (entry_auth, &enabled, NULL);
+  if (enabled) {
+    const char *user, *pass;
+
+    /* Get current username and password */
+    melo_settings_entry_get_string (entry_auth_user, &user, NULL);
+    melo_settings_entry_get_string (entry_auth_pass, &pass, NULL);
+
+    /* Enable authentication */
+    melo_http_server_set_auth (server, true, user, pass);
+  }
 }
 
 /**
