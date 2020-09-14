@@ -25,6 +25,7 @@
 #include <glib-unix.h>
 
 #include <melo/melo_http_client.h>
+#include <melo/melo_mdns.h>
 
 #define MELO_LOG_TAG "melo_discover"
 #include <melo/melo_log.h>
@@ -41,6 +42,9 @@ typedef struct {
 } DiscoverInterface;
 
 static MeloHttpClient *discover_client;
+static MeloMdns *discover_mdns;
+static const MeloMdnsService *discover_http_service;
+static const MeloMdnsService *discover_https_service;
 static bool discover_registered;
 static char *discover_serial;
 static char *discover_device_name;
@@ -113,6 +117,11 @@ discover_init (void)
     discover_ntlk_id =
         g_unix_fd_add (discover_ntlk_fd, G_IO_IN, netlink_cb, NULL);
   }
+
+  /* Create mdns client */
+  discover_mdns = melo_mdns_new ();
+  if (!discover_mdns)
+    MELO_LOGW ("failed to create mdns client");
 }
 
 /**
@@ -132,6 +141,11 @@ discover_exit (void)
 
   /* Free interfaces list */
   g_list_free_full (discover_ifaces, (GDestroyNotify) discover_interface_free);
+
+  /* Destroy mdns client */
+  if (discover_mdns)
+    g_object_unref (discover_mdns);
+  discover_mdns = NULL;
 
   /* Destroy HTTP client */
   if (discover_client)
@@ -493,6 +507,77 @@ discover_unregister_device (void)
 
   /* Device not registered */
   discover_registered = false;
+
+  return true;
+}
+
+/**
+ * discover_register_service:
+ * @name: the device name
+ * @http_port: the port of the HTTP server
+ * @https_port: the port of the HTTPs server
+ *
+ * This function will publish a new service for HTTP and HTTPs ports to the mdns
+ * client. After the call to this function, the device will be discoverable from
+ * local network.
+ *
+ * Returns: %true if the service has been registered, %false otherwise.
+ */
+bool
+discover_register_service (
+    const char *name, unsigned int http_port, unsigned https_port)
+{
+  /* Register HTTP service */
+  if (!discover_http_service) {
+    discover_http_service = melo_mdns_add_service (
+        discover_mdns, name, "_http._tcp", http_port, NULL);
+    if (!discover_http_service)
+      MELO_LOGW ("failed to register HTTP service");
+  } else if (!melo_mdns_update_service (discover_mdns, discover_http_service,
+                 name, "_http._tcp", http_port, false, NULL))
+    MELO_LOGW ("failed to update HTTP service");
+
+  /* Register HTTPs service */
+  if (discover_https_service) {
+    /* Update service */
+    if (https_port) {
+      if (!melo_mdns_update_service (discover_mdns, discover_https_service,
+              name, "_https._tcp", https_port, false, NULL))
+        MELO_LOGW ("failed to update HTTPs service");
+    } else {
+      melo_mdns_remove_service (discover_mdns, discover_https_service);
+      discover_https_service = NULL;
+    }
+  } else if (https_port) {
+    discover_https_service = melo_mdns_add_service (
+        discover_mdns, name, "_https._tcp", https_port, NULL);
+    if (!discover_https_service)
+      MELO_LOGW ("failed to register HTTPs service");
+  }
+
+  return true;
+}
+
+/**
+ * discover_unregister_service:
+ *
+ * This function is used to unregister the service from mdns client. After its
+ * call, the service won't be visible from local network.
+ *
+ * Returns: %true if the service has been unregistered, %false otherwise.
+ */
+bool
+discover_unregister_service (void)
+{
+  /* Unregister HTTP service */
+  if (discover_http_service)
+    melo_mdns_remove_service (discover_mdns, discover_http_service);
+  discover_http_service = NULL;
+
+  /* Unregister HTTPs service */
+  if (discover_https_service)
+    melo_mdns_remove_service (discover_mdns, discover_https_service);
+  discover_https_service = NULL;
 
   return true;
 }

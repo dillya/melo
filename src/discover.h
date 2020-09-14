@@ -27,4 +27,8 @@ bool discover_register_device (
     const char *name, unsigned int http_port, unsigned https_port);
 bool discover_unregister_device (void);
 
+bool discover_register_service (
+    const char *name, unsigned int http_port, unsigned https_port);
+bool discover_unregister_service (void);
+
 #endif /* !_DISCOVER_H_ */

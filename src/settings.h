@@ -25,7 +25,8 @@ void settings_deinit (void);
 
 const char *settings_get_name (void);
 
-bool settings_is_discover (void);
+bool settings_is_discover_sparod (void);
+bool settings_is_discover_local (void);
 
 void settings_bind_http_server (MeloHttpServer *server);
 void settings_get_http_ports (

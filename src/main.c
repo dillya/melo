@@ -76,8 +76,10 @@ main (int argc, char *argv[])
   discover_init ();
 
   /* Enable discover by default */
-  if (settings_is_discover ())
+  if (settings_is_discover_sparod ())
     discover_register_device (settings_get_name (), http_port, https_port);
+  if (settings_is_discover_local ())
+    discover_register_service (settings_get_name (), http_port, https_port);
 
   /* Create HTTP server for remote control */
   http_server = melo_http_server_new ();

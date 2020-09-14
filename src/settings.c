@@ -26,7 +26,8 @@
 /* Settings */
 static MeloSettings *settings;
 static MeloSettingsEntry *entry_name;
-static MeloSettingsEntry *entry_discover;
+static MeloSettingsEntry *entry_disco_net;
+static MeloSettingsEntry *entry_disco_local;
 static MeloSettingsEntry *entry_auth;
 static MeloSettingsEntry *entry_auth_user;
 static MeloSettingsEntry *entry_auth_pass;
@@ -42,16 +43,16 @@ static bool
 name_cb (MeloSettings *settings, MeloSettingsGroup *group, char **error,
     void *user_data)
 {
+  unsigned int http_port, https_port;
+
+  /* Get ports */
+  settings_get_http_ports (&http_port, &https_port);
+
   /* Update discover name */
-  if (settings_is_discover ()) {
-    unsigned int http_port, https_port;
-
-    /* Get ports */
-    settings_get_http_ports (&http_port, &https_port);
-
-    /* Register device */
+  if (settings_is_discover_sparod ())
     discover_register_device (settings_get_name (), http_port, https_port);
-  }
+  if (settings_is_discover_local ())
+    discover_register_service (settings_get_name (), http_port, https_port);
 
   return true;
 }
@@ -60,23 +61,31 @@ static bool
 discover_cb (MeloSettings *settings, MeloSettingsGroup *group, char **error,
     void *user_data)
 {
+  unsigned int http_port, https_port;
   bool disco, old_disco;
 
-  /* Update discover status */
-  if (melo_settings_group_get_boolean (group, "sparod", &disco, &old_disco) &&
+  /* Get ports */
+  settings_get_http_ports (&http_port, &https_port);
+
+  /* Update discover on sparod status */
+  if (melo_settings_entry_get_boolean (entry_disco_net, &disco, &old_disco) &&
       disco != old_disco) {
-    if (disco) {
-      unsigned int http_port, https_port;
-
-      /* Get ports */
-      settings_get_http_ports (&http_port, &https_port);
-
-      /* Register device */
+    /* Register device */
+    if (disco)
       discover_register_device (settings_get_name (), http_port, https_port);
-    } else
+    else
       discover_unregister_device ();
   }
 
+  /* Update discover local status */
+  if (melo_settings_entry_get_boolean (entry_disco_local, &disco, &old_disco) &&
+      disco != old_disco) {
+    /* Register service */
+    if (disco)
+      discover_register_service (settings_get_name (), http_port, https_port);
+    else
+      discover_unregister_service ();
+  }
   return true;
 }
 
@@ -187,10 +196,10 @@ settings_init (void)
   /* Create discover group */
   group = melo_settings_add_group (settings, "disco", "Discover",
       "Find Melo on https://www.sparod.com/melo", discover_cb, NULL);
-  entry_discover = melo_settings_group_add_boolean (group, "sparod",
+  entry_disco_net = melo_settings_group_add_boolean (group, "sparod",
       "Enable on Sparod", "", true, NULL, MELO_SETTINGS_FLAG_NONE);
-  melo_settings_group_add_boolean (group, "local", "Enable on local network",
-      "", true, NULL, MELO_SETTINGS_FLAG_READ_ONLY);
+  entry_disco_local = melo_settings_group_add_boolean (group, "local",
+      "Enable on local network", "", true, NULL, MELO_SETTINGS_FLAG_NONE);
 
   /* Create authentication group */
   group = melo_settings_add_group (settings, "auth", "Authentication",
@@ -251,16 +260,33 @@ settings_get_name (void)
 }
 
 /**
- * settings_is_discover:
+ * settings_is_discover_sparod:
  *
  * Returns: %true if the discovering on Sparod is enabled, %false otherwise.
  */
 bool
-settings_is_discover (void)
+settings_is_discover_sparod (void)
 {
   bool value;
 
-  if (!melo_settings_entry_get_boolean (entry_discover, &value, NULL))
+  if (!melo_settings_entry_get_boolean (entry_disco_net, &value, NULL))
+    return false;
+
+  return value;
+}
+
+/**
+ * settings_is_discover_local:
+ *
+ * Returns: %true if the discovering on local network is enabled, %false
+ *     otherwise.
+ */
+bool
+settings_is_discover_local (void)
+{
+  bool value;
+
+  if (!melo_settings_entry_get_boolean (entry_disco_local, &value, NULL))
     return false;
 
   return value;
