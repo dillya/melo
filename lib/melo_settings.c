@@ -409,6 +409,7 @@ melo_settings_group_find_entry (MeloSettingsGroup *group, const char *id)
       return false; \
 \
     entry->value._##_type = value; \
+    entry->new_value._##_type = value; \
     return true; \
   }
 
@@ -801,6 +802,7 @@ melo_settings_entry_set_string (MeloSettingsEntry *entry, const char *value)
   /* Change value */
   g_free (entry->value._string);
   entry->value._string = g_strdup (value);
+  entry->new_value._string = entry->value._string;
 
   return true;
 }
