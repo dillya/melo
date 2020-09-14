@@ -26,6 +26,8 @@
 #include "melo_http_server_url.h"
 #include "melo_websocket_priv.h"
 
+#define MELO_HTTP_SERVER_REALM "melo"
+
 struct _MeloHttpServer {
   /* Parent instance */
   GObject parent_instance;
@@ -33,6 +35,10 @@ struct _MeloHttpServer {
   /* HTTP server */
   SoupServer *server;
   SoupSession *session;
+
+  /* Authentication */
+  SoupAuthDomain *auth;
+  char *auth_password;
 };
 
 struct _MeloHttpServerConnection {
@@ -44,6 +50,9 @@ struct _MeloHttpServerConnection {
 
 G_DEFINE_TYPE (MeloHttpServer, melo_http_server, G_TYPE_OBJECT)
 
+static char *melo_http_server_auth_cb (SoupAuthDomain *domain, SoupMessage *msg,
+    const char *username, gpointer user_data);
+
 static void
 melo_http_server_finalize (GObject *gobject)
 {
@@ -51,6 +60,9 @@ melo_http_server_finalize (GObject *gobject)
 
   /* Free HTTP server */
   g_object_unref (self->server);
+
+  /* Free HTTP authentication domain */
+  g_object_unref (self->auth);
 
   /* Free HTTP client */
   g_object_unref (self->session);
@@ -73,6 +85,12 @@ melo_http_server_init (MeloHttpServer *self)
 {
   /* Create a new HTTP server */
   self->server = soup_server_new (0, NULL);
+
+  /* Create authentication domain */
+  self->auth = soup_auth_domain_digest_new (SOUP_AUTH_DOMAIN_REALM,
+      MELO_HTTP_SERVER_REALM, SOUP_AUTH_DOMAIN_ADD_PATH, "",
+      SOUP_AUTH_DOMAIN_DIGEST_AUTH_CALLBACK, melo_http_server_auth_cb,
+      SOUP_AUTH_DOMAIN_DIGEST_AUTH_DATA, self, NULL);
 
   /* Create a new HTTP client */
   self->session = soup_session_new ();
@@ -374,4 +392,42 @@ melo_http_server_connection_send_url (
     MeloHttpServerConnection *conn, const char *url)
 {
   melo_http_server_url_serve (conn->server, conn->msg, conn->session, url);
+}
+
+/**
+ * melo_http_server_set_auth:
+ * @srv: a #MeloHttpServer instance
+ * @enable: %true if authentication is enabled, %false otherwise
+ * @username: (nullable): the user name to set for authentication
+ * @password: (nullable): the password to set for authentication
+ *
+ * This function can be used to enable / disable the HTTP digest authentication
+ * on the HTTP server.
+ */
+void
+melo_http_server_set_auth (MeloHttpServer *srv, bool enable,
+    const char *username, const char *password)
+{
+  if (!srv)
+    return;
+
+  g_free (srv->auth_password);
+
+  if (enable) {
+    srv->auth_password = soup_auth_domain_digest_encode_password (
+        username, MELO_HTTP_SERVER_REALM, password);
+    soup_server_add_auth_domain (srv->server, srv->auth);
+  } else if (srv->auth_password != NULL) {
+    soup_server_remove_auth_domain (srv->server, srv->auth);
+    srv->auth_password = NULL;
+  }
+}
+
+static char *
+melo_http_server_auth_cb (SoupAuthDomain *domain, SoupMessage *msg,
+    const char *username, gpointer user_data)
+{
+  MeloHttpServer *srv = user_data;
+
+  return g_strdup (srv->auth_password);
 }

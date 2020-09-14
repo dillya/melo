@@ -79,6 +79,9 @@ void melo_http_server_connection_send_file (
 void melo_http_server_connection_send_url (
     MeloHttpServerConnection *conn, const char *url);
 
+void melo_http_server_set_auth (MeloHttpServer *srv, bool enable,
+    const char *username, const char *password);
+
 G_END_DECLS
 
 #endif /* !_MELO_HTTP_SERVER_H_ */
