@@ -29,6 +29,10 @@
 #define MELO_LOG_TAG "melo"
 #include <melo/melo_log.h>
 
+#ifdef NETWORK_SUPPORT
+#include "network.h"
+#endif
+
 #include "asset.h"
 #include "discover.h"
 #include "settings.h"
@@ -65,6 +69,11 @@ main (int argc, char *argv[])
 
   /* Initialize settings */
   settings_init ();
+
+#ifdef NETWORK_SUPPORT
+  /* Initialize network */
+  network_init ();
+#endif
 
   /* Get settings */
   settings_get_http_ports (&http_port, &https_port);
@@ -153,6 +162,11 @@ end:
 
   /* Unload modules */
   melo_module_unload ();
+
+#ifdef NETWORK_SUPPORT
+  /* Clean network */
+  network_deinit ();
+#endif
 
   /* Clean settings */
   settings_deinit ();

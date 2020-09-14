@@ -15,6 +15,24 @@ cdata.set_quoted(
 	description : 'Web UI path for HTTP server')
 configure_file(output : 'config.h', configuration : cdata)
 
+# Add protobuf files
+proto_gen = generator(
+	protoc_c,
+	output : ['@BASENAME@.pb-c.c', '@BASENAME@.pb-c.h'],
+	arguments : [
+		'--proto_path=@CURRENT_SOURCE_DIR@',
+		'--c_out=@BUILD_DIR@',
+		'@INPUT@'
+	]
+)
+proto_gen_src = proto_gen.process(
+	'proto/network.proto',
+	preserve_path_from : meson.current_source_dir(),
+)
+
+# Library dependencies
+libnm_dep = dependency('libnm', version : '>=1.14.6', required : false)
+
 # Program sources
 src = [
 	'asset.c',
@@ -23,10 +41,18 @@ src = [
 	'settings.c',
 	'websocket.c'
 ]
+cflags = []
+
+# Add network
+if libnm_dep.found()
+src += 'network.c'
+cflags += '-DNETWORK_SUPPORT'
+endif
 
 # Generate program
 executable(
 	'melo',
-	sources : src,
-	dependencies : libmelo_dep,
+	sources : [ src, proto_gen_src ],
+	dependencies : [ libmelo_dep, libprotobuf_c_dep, libnm_dep ],
+	c_args : cflags,
 	install : true)

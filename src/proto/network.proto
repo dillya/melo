@@ -1,0 +1,192 @@
+/* Melo network protobuf */
+
+syntax = "proto3";
+
+package Network;
+
+/* IP settings */
+message IPSettings {
+  /* Setting mode */
+  enum Mode {
+    /* IP is automatically set (hardware / DHCP / PPP) */
+    AUTOMATIC = 0;
+    /* IP is manually set */
+    MANUAL = 1;
+    /* Interface is disabled */
+    DISABLED = 2;
+  }
+
+  /* Mode */
+  Mode mode = 1;
+  /* IP address */
+  string address = 2;
+  /* IP address prefix */
+  uint32 prefix = 3;
+  /* Gateway */
+  string gateway = 4;
+  /* DNS server(s) */
+  string dns = 5;
+}
+
+/* Wifi security */
+ enum WifiSecurity {
+  /* No security */
+  NONE = 0;
+  /* WEP 40/128-bit key (Hex or ASCII) */
+  WEP_KEY = 1;
+  /* WEP 128-bit passphrase */
+  WEP_PASSPHRASE = 2;
+  /* WPA */
+  WPA = 3;
+  /* WPA2 */
+  WPA2 = 4;
+}
+
+/* Wifi mode */
+enum WifiMode {
+  /* Infrastructure mode */
+  INFRASTRUCTURE = 0;
+  /* Ad-Hoc mode */
+  AD_HOC = 1;
+  /* Access point mode (only for WifiSettings) */
+  ACCESS_POINT = 2;
+}
+
+/* Wifi settings */
+message WifiSettings {
+  /* Wifi mode */
+  WifiMode mode = 1;
+  /* Wifi SSID */
+  string ssid = 2;
+  /* Wifi security (only applicable for mode == ACCESS_POINT) */
+  WifiSecurity security = 3;
+  /* Wifi key */
+  string key = 4;
+}
+
+/* Network request */
+message Request {
+  /* Set IP settings request */
+  message SetIPSettings {
+    /* Interface to set */
+    string iface = 1;
+    /* IP settings */
+    IPSettings settings = 2;
+  }
+
+  /* Set Wifi settings request */
+  message SetWifiSettings {
+    /* Interface to set */
+    string iface = 1;
+    /* Wifi settings */
+    WifiSettings settings = 2;
+  }
+
+  /* Requests */
+  oneof req {
+    /* Get device list (resp: Network.Response.device_list) */
+    bool get_device_list = 10;
+    /* Get ethernet device (resp: Network.Response.ethernet_device) */
+    string get_ethernet_device = 11;
+    /* Get wifi device (resp: Network.Response.wifi_device) */
+    string get_wifi_device = 12;
+    /* Launch wifi access point scan (resp: none) */
+    string scan_wifi = 13;
+    /* Access point list (resp: Network.Response.ap_list) */
+    string get_ap_list = 14;
+    /* Set manual IPv4 settings (resp: Network.Response.ip_settings) */
+    SetIPSettings set_ipv4_settings = 15;
+    /* Set manual IPv6 settings (resp: Network.Response.ip_settings) */
+    SetIPSettings set_ipv6_settings = 16;
+    /* Set Wifi settings (resp: Network.Response.wifi_settings) */
+    SetWifiSettings set_wifi_settings = 17;
+  }
+}
+
+/* Network response */
+message Response {
+  /* Device list */
+  message DeviceList {
+    /* Device descriptor */
+    message Device {
+      /* Device type */
+      enum Type {
+        /* Wired ethernet device */
+        ETHERNET = 0;
+        /* 802.11 wifi device */
+        WIFI = 1;
+      }
+
+      /* Interface name */
+      string iface = 1;
+      /* Device type */
+      Type type = 2;
+    }
+
+    /* Device list */
+    repeated Device devices = 1;
+  }
+
+  /* Ethernet device */
+  message EthernetDevice {
+    /* Cable is connected */
+    bool connected = 1;
+    /* Current IPv4 settings */
+    IPSettings ipv4 = 2;
+    /* Current IPv6 settings */
+    IPSettings ipv6 = 3;
+  }
+
+  /* Wifi device */
+  message WifiDevice {
+    /* Device is connected / ready */
+    bool connected = 1;
+    /* Current IPv4 settings */
+    IPSettings ipv4 = 2;
+    /* Current IPv6 settings */
+    IPSettings ipv6 = 3;
+    /* Wifi settings */
+    WifiSettings settings = 4;
+  }
+
+  /* Access point list */
+  message AccessPointList {
+    /* Active access point */
+    string active_bssid = 1;
+
+    /* Access point */
+    message AccessPoint {
+      /* Access point SSID */
+      string ssid = 1;
+      /* Access point Base SSID */
+      string bssid = 2;
+      /* Wifi mode */
+      WifiMode mode = 3;
+      /* Signal strength [0; 100] */
+      uint32 strength = 4;
+      /* Access point security */
+      WifiSecurity security = 5;
+      /* Private network */
+      bool private = 6;
+    }
+
+    /* Access point lists */
+    repeated AccessPoint access_points = 2;
+  }
+
+  /* Response */
+  oneof resp {
+    /* Device list (req: Network.Request.get_device_list) */
+    DeviceList device_list = 10;
+    /* Ethernet device (req: Network.Request.get_ethernet_device) */
+    EthernetDevice ethernet_device = 11;
+    /* Wifi device (req: Network.Request.get_wifi_device) */
+    WifiDevice wifi_device = 12;
+    /* Access point list (req: Network.Request.get_ap_list) */
+    AccessPointList ap_list = 13;
+    /* IP settings (req: Network.Request.set_ipv[4|6]_settings) */
+    IPSettings ip_settings = 14;
+    /* Wifi settings (req: Network.Request.set_wifi_settings) */
+    WifiSettings wifi_settings = 15;
+  }
+}

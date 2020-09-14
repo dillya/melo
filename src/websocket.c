@@ -24,6 +24,10 @@
 #include <melo/melo_player.h>
 #include <melo/melo_playlist.h>
 
+#ifdef NETWORK_SUPPORT
+#include "network.h"
+#endif
+
 #include "websocket.h"
 
 typedef enum {
@@ -36,6 +40,9 @@ typedef enum {
   WEBSOCKET_OBJECT_PLAYER,
   WEBSOCKET_OBJECT_PLAYLIST,
   WEBSOCKET_OBJECT_SETTINGS,
+#ifdef NETWORK_SUPPORT
+  WEBSOCKET_OBJECT_NETWORK,
+#endif
 } WebsocketObject;
 
 static bool
@@ -90,6 +97,11 @@ websocket_parse_path (
   } else if (!strncmp (path, "settings", 8)) {
     *obj = WEBSOCKET_OBJECT_SETTINGS;
     path += 8;
+#ifdef NETWORK_SUPPORT
+  } else if (!strncmp (path, "network", 7)) {
+    *obj = WEBSOCKET_OBJECT_NETWORK;
+    path += 7;
+#endif
   } else
     return false;
 
@@ -191,6 +203,11 @@ websocket_conn_request_cb (
   case WEBSOCKET_OBJECT_PLAYLIST:
     melo_playlist_cancel_request (id, websocket_async_cb, ws);
     break;
+#ifdef NETWORK_SUPPORT
+  case WEBSOCKET_OBJECT_NETWORK:
+    network_cancel_request (websocket_async_cb, ws);
+    break;
+#endif
   default:
     break;
   }
@@ -244,6 +261,11 @@ websocket_request_cb (MeloWebsocket *ws, const char *path,
   case WEBSOCKET_OBJECT_SETTINGS:
     ret = melo_settings_handle_request (msg, websocket_async_cb, ws);
     break;
+#ifdef NETWORK_SUPPORT
+  case WEBSOCKET_OBJECT_NETWORK:
+    ret = network_handle_request (msg, websocket_async_cb, ws);
+    break;
+#endif
   default:
     MELO_LOGW ("unsupported request");
   }
