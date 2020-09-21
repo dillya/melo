@@ -790,7 +790,7 @@ melo_rtsp_server_attach (MeloRtspServer *srv, GMainContext *context)
  * Returns: a #MeloRtspMethod containing the current request method.
  */
 MeloRtspMethod
-melo_rtsp_get_method (MeloRtspServerConnection *conn)
+melo_rtsp_server_connection_get_method (MeloRtspServerConnection *conn)
 {
   g_return_val_if_fail (conn, MELO_RTSP_METHOD_UNKNOWN);
   return conn->method;
