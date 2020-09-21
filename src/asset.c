@@ -16,6 +16,7 @@
  */
 
 #include <melo/melo_browser.h>
+#include <melo/melo_cover.h>
 #include <melo/melo_player.h>
 
 #include <melo/melo_log.h>
@@ -77,7 +78,8 @@ asset_cb (MeloHttpServer *server, MeloHttpServerConnection *connection,
     /* Get player asset */
     uri = melo_player_get_asset (id, path);
     g_free (id);
-  }
+  } else
+    uri = melo_cover_cache_get_path (path);
 
   /* Serve asset */
   if (uri) {
