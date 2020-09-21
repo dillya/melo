@@ -175,6 +175,8 @@ bool melo_rtsp_server_connection_set_response (
 bool melo_rtsp_server_connection_set_packet (MeloRtspServerConnection *conn,
     unsigned char *buffer, size_t len, GDestroyNotify free);
 
+bool melo_rtsp_server_connection_close (MeloRtspServerConnection *conn);
+
 /* Authentication part */
 bool melo_rtsp_server_connection_basic_auth_check (
     MeloRtspServerConnection *conn, const char *username, const char *password);

@@ -1059,6 +1059,22 @@ melo_rtsp_server_connection_set_packet (MeloRtspServerConnection *conn,
 }
 
 /**
+ * melo_rtsp_server_connection_close:
+ * @conn: a RTSP connection handle
+ *
+ * This function can be used to close immediately a connection. The close
+ * callback will be called just after this call.
+ *
+ * Returns: %true if the connection has been closed successfully, %false
+ * otherwise.
+ */
+bool
+melo_rtsp_server_connection_close (MeloRtspServerConnection *conn)
+{
+  return g_socket_close (conn->sock, NULL);
+}
+
+/**
  * melo_rtsp_server_connection_basic_auth_check:
  * @conn: a RTSP connection handle
  * @username:  the required user name, or %NULL
