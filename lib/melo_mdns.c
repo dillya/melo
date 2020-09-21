@@ -48,7 +48,7 @@ struct _MeloMdns {
 
   GMutex mutex;
 
- /* Service publisher */
+  /* Service publisher */
   AvahiEntryGroup *group;
   GList *pservices;
 
