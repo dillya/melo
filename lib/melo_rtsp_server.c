@@ -693,10 +693,10 @@ melo_rtsp_accept (
   /* Fill connection */
   conn->sock = sock;
   conn->parent = g_object_ref (srv);
-  conn->state = MELO_RTSP_STATE_WAIT_HEADER,
+  conn->state = MELO_RTSP_STATE_WAIT_HEADER;
 
   /* Get server details */
-      addr = g_socket_get_local_address (sock, NULL);
+  addr = g_socket_get_local_address (sock, NULL);
   melo_rtsp_get_address (addr, conn->server_ip, NULL, &conn->server_port, NULL);
   g_object_unref (addr);
 
