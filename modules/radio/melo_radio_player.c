@@ -119,32 +119,29 @@ bus_cb (GstBus *bus, GstMessage *msg, gpointer user_data)
     /* Get tag list from message */
     gst_message_parse_tag (msg, &tag_list);
 
-    /* Create new tags */
-    tags = melo_tags_new ();
-    if (tags) {
-      /* Get title */
-      if (gst_tag_list_get_string (tag_list, GST_TAG_TITLE, &title)) {
-        char *artist;
+    /* Get title */
+    if (gst_tag_list_get_string (tag_list, GST_TAG_TITLE, &title)) {
+      char *artist;
 
-        MELO_LOGD ("radio title: %s", title);
+      MELO_LOGD ("radio title: %s", title);
 
-        /* Find title / artist separator */
-        artist = strstr (title, " - ");
-        if (artist) {
-          *artist = '\0';
-          artist += 3;
-        }
-
-        /* Set tags */
-        melo_tags_set_title (tags, title);
-        melo_tags_set_artist (tags, artist ? artist : "");
-      } else {
-        melo_tags_set_title (tags, "");
-        melo_tags_set_artist (tags, "");
+      /* Find title / artist separator */
+      artist = strstr (title, " - ");
+      if (artist) {
+        *artist = '\0';
+        artist += 3;
       }
 
-      /* Update player tags */
-      melo_player_update_tags (player, tags, MELO_TAGS_MERGE_FLAG_NONE);
+      /* Create new tags */
+      tags = melo_tags_new ();
+      if (tags) {
+        melo_tags_set_title (tags, title);
+        melo_tags_set_artist (tags, artist ? artist : "");
+
+        /* Update player tags */
+        melo_player_update_media (
+            player, NULL, tags, MELO_TAGS_MERGE_FLAG_SKIP_COVER);
+      }
     }
 
     /* Free tag list */
