@@ -149,29 +149,32 @@ melo_tags_new_from_taglist (GObject *obj, const GstTagList *tag_list)
  * melo_tags_merge:
  * @new: a #MeloTags to merge to
  * @old: a #MeloTags to merge from
+ * @flags: a combination of #MeloTagsMergeFlag
  *
  * This function can be used to merge the fields from @old into @new. If a field
- * of @new is already set, the field of @old will be discarded.
+ * of @new is already set, the field of @old will be discarded. The @flags
+ * parameter can be used to specify merge operations, like skipping some tags
+ * data copy.
  *
  * Returns: (transfer full): the newly #MeloTags with merged fields.
  */
 MeloTags *
-melo_tags_merge (MeloTags *new, MeloTags *old)
+melo_tags_merge (MeloTags *new, MeloTags *old, unsigned int flags)
 {
   if (!new || !old)
     return new;
 
-  if (!new->title)
+  if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_TITLE) && !new->title)
     new->title = g_strdup (old->title);
-  if (!new->artist)
+  if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_ARTIST) && !new->artist)
     new->artist = g_strdup (old->artist);
-  if (!new->album)
+  if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_ALBUM) && !new->album)
     new->album = g_strdup (old->album);
-  if (!new->genre)
+  if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_GENRE) && !new->genre)
     new->genre = g_strdup (old->genre);
-  if (!new->track)
+  if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_TRACK) && !new->track)
     new->track = old->track;
-  if (!new->cover)
+  if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_COVER) && !new->cover)
     new->cover = g_strdup (old->cover);
   melo_tags_unref (old);
 

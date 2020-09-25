@@ -1080,7 +1080,7 @@ melo_player_update_tags (MeloPlayer *player, MeloTags *tags)
 
   /* Merge tags */
   priv = melo_player_get_instance_private (player);
-  priv->tags = melo_tags_merge (tags, priv->tags);
+  priv->tags = melo_tags_merge (tags, priv->tags, MELO_TAGS_MERGE_FLAG_NONE);
 
   /* Broadcast media change */
   if (player == melo_player_current)
