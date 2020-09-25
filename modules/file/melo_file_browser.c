@@ -59,6 +59,16 @@ typedef struct {
   GstDiscoverer *disco;
 } MeloBrowserFileMediaList;
 
+typedef struct {
+  MeloRequest *req;
+  GCancellable *cancel;
+
+  Browser__Action__Type type;
+  char *uri;
+
+  GList *list;
+} MeloBrowserFileAction;
+
 struct _MeloFileBrowser {
   GObject parent_instance;
 
@@ -770,12 +780,129 @@ melo_file_browser_get_media_list (MeloFileBrowser *browser,
   return ret;
 }
 
+static void
+action_next_files_cb (
+    GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  GFileEnumerator *en = G_FILE_ENUMERATOR (source_object);
+  MeloBrowserFileAction *action = user_data;
+  GList *list;
+
+  /* Get next files list */
+  list = g_file_enumerator_next_files_finish (en, res, NULL);
+
+  /* Parse list */
+  if (list == NULL) {
+    MeloPlaylistEntry *entry;
+    char *name;
+
+    /* Create new playlist entry */
+    name = g_path_get_basename (action->uri);
+    entry = melo_playlist_entry_new (MELO_FILE_PLAYER_ID, NULL, name, NULL);
+    g_free (name);
+
+    /* Sort files by name */
+    action->list = g_list_sort (action->list, (GCompareFunc) ginfo_cmp);
+
+    /* Add medias to playlist entry */
+    while (action->list) {
+      GFileInfo *info = G_FILE_INFO (action->list->data);
+      char *path;
+
+      /* Build media path */
+      name = g_file_info_get_name (info);
+      path = g_build_path ("/", action->uri, name, NULL);
+
+      /* Add file to playlist entry */
+      melo_playlist_entry_add_media (
+          entry, path, g_file_info_get_display_name (info), NULL, NULL);
+      g_free (path);
+
+      /* Remove entry */
+      action->list = g_list_delete_link (action->list, action->list);
+      g_object_unref (info);
+    }
+
+    /* Do action */
+    if (action->type == BROWSER__ACTION__TYPE__PLAY)
+      melo_playlist_play_entry (entry);
+    else if (action->type == BROWSER__ACTION__TYPE__ADD)
+      melo_playlist_add_entry (entry);
+
+    /* Release request, source object and asynchronous object */
+    melo_request_unref (action->req);
+    g_free (action->uri);
+    g_object_unref (en);
+    free (action);
+  } else {
+    /* Extract files and directories */
+    while (list) {
+      GList *l = list;
+      GFileInfo *info = G_FILE_INFO (l->data);
+      const char *name;
+
+      /* Remove file info from list */
+      list = g_list_remove_link (list, l);
+
+      /* Skip all entries except regular files */
+      name = g_file_info_get_name (info);
+      if (!name || *name == '.' ||
+          g_file_info_get_file_type (info) != G_FILE_TYPE_REGULAR) {
+        /* Free entry */
+        g_object_unref (info);
+        g_list_free (l);
+      }
+
+      /* Save regular file */
+      action->list = g_list_concat (l, action->list);
+    }
+
+    /* Enumerate next ITEMS_PER_CALLBACK files */
+    g_file_enumerator_next_files_async (en, ITEMS_PER_CALLBACK,
+        G_PRIORITY_DEFAULT, action->cancel, action_next_files_cb, action);
+  }
+}
+
+static void
+action_children_cb (
+    GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  MeloBrowserFileAction *action = user_data;
+  GFile *file = G_FILE (source_object);
+  GFileEnumerator *en;
+
+  /* Enumeration started */
+  en = g_file_enumerate_children_finish (file, res, NULL);
+  if (!en) {
+    /* Do action as regular file */
+    if (action->type == BROWSER__ACTION__TYPE__PLAY)
+      melo_playlist_play_media (MELO_FILE_PLAYER_ID, action->uri, NULL, NULL);
+    else if (action->type == BROWSER__ACTION__TYPE__ADD)
+      melo_playlist_add_media (MELO_FILE_PLAYER_ID, action->uri, NULL, NULL);
+
+    /* Release riequest, source object and asynchronous object */
+    melo_request_unref (action->req);
+    g_object_unref (file);
+    g_free (action->uri);
+    free (action);
+    return;
+  }
+
+  /* Release file */
+  g_object_unref (file);
+
+  /* Enumerate ITEMS_PER_CALLBACK first files */
+  g_file_enumerator_next_files_async (en, ITEMS_PER_CALLBACK,
+      G_PRIORITY_DEFAULT, action->cancel, action_next_files_cb, action);
+}
+
 static bool
 melo_file_browser_do_action (
     MeloFileBrowser *browser, Browser__Request__DoAction *r, MeloRequest *req)
 {
-  bool ret = false;
+  MeloBrowserFileAction *action;
   char *uri = NULL;
+  GFile *file;
 
   /* Generate URI from path */
   if (!melo_file_browser_get_uri (browser, r->path, &uri) || !uri)
@@ -784,23 +911,44 @@ melo_file_browser_do_action (
   /* Do action */
   switch (r->type) {
   case BROWSER__ACTION__TYPE__PLAY:
-    ret = melo_playlist_play_media (MELO_FILE_PLAYER_ID, uri, NULL, NULL);
-    break;
   case BROWSER__ACTION__TYPE__ADD:
-    ret = melo_playlist_add_media (MELO_FILE_PLAYER_ID, uri, NULL, NULL);
     break;
   default:
     MELO_LOGE ("action %u not supported", r->type);
+    g_free (uri);
+    return false;
   }
 
-  /* Free URI */
-  g_free (uri);
+  /* Create file */
+  file = g_file_new_for_uri (uri);
+  if (!file) {
+    g_free (uri);
+    return false;
+  }
 
-  /* Request handled */
-  if (ret)
-    melo_request_unref (req);
+  /* Create asynchronous object */
+  action = calloc (1, sizeof (*action));
+  if (!file) {
+    g_object_unref (file);
+    g_free (uri);
+    return false;
+  }
+  action->uri = uri;
+  action->type = r->type;
+  action->req = req;
 
-  return ret;
+  /* Create and connect a cancellable for GIO */
+  action->cancel = g_cancellable_new ();
+  g_signal_connect (
+      req, "cancelled", G_CALLBACK (request_cancelled_cb), action->cancel);
+  g_signal_connect (
+      req, "destroyed", G_CALLBACK (request_destroyed_cb), action->cancel);
+
+  /* Start file enumeration */
+  g_file_enumerate_children_async (file, MELO_FILE_BROWSER_ATTRIBUTES, 0,
+      G_PRIORITY_DEFAULT, action->cancel, action_children_cb, action);
+
+  return true;
 }
 
 static bool
