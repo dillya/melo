@@ -6,8 +6,36 @@ import "tags.proto";
 
 package Playlist;
 
+/* Playlist media index */
+message MediaIndex {
+  /* Index of the media in the playlist */
+  uint32 index = 1;
+  /* Index of the sub-media from the current media (-1 if not applicable) */
+  int32 sub_index = 2;
+}
+
+/* Playlist sub-media */
+message SubMedia {
+  /* Sub-media index */
+  uint32 index = 1;
+  /* Parent index */
+  uint32 parent = 2;
+  /* Name to display */
+  string name = 3;
+  /* Media tags (optional) */
+  Tags.Tags tags = 4;
+  /* Media is playable */
+  bool playable = 5;
+  /* Media is movable */
+  bool movable = 6;
+  /* Media is deletable */
+  bool deletable = 7;
+}
+
 /* Playlist media */
 message Media {
+  /* Media index */
+  uint32 index = 1;
   /* Name to display */
   string name = 2;
   /* Media tags (optional) */
@@ -16,14 +44,28 @@ message Media {
   bool playable = 4;
   /* Media is deletable */
   bool deletable = 5;
+  /* List of sub-medias */
+  repeated SubMedia sub_medias = 6;
 }
 
 /* Playlist range */
 message Range {
+  /* Linear range or discontinuous range */
   bool linear = 1;
-  uint32 first = 2;
-  uint32 last = 3;
-  repeated uint32 list = 4;
+  /* First index for a linear range */
+  MediaIndex first = 2;
+  /* Last (inclusive) for a linear range */
+  MediaIndex last = 3;
+  /* List of indexes for discontinuous range */
+  repeated MediaIndex list = 4;
+}
+
+/* Move a range */
+message Move {
+  /* Range of medias to move */
+  Range range = 1;
+  /* Offset to move to */
+  int32 offset = 2;
 }
 
 /* Playlist event */
@@ -32,10 +74,18 @@ message Event {
   oneof event {
     /* A media has been added to list */
     Media add = 10;
+    /* A sub-media has been added to list */
+    SubMedia add_sub = 11;
+    /* A media has been updated */
+    Media update = 12;
+    /* A sub-media has been updated */
+    SubMedia update_sub = 13;
     /* Current playing media has changed, contains the ID of the new one */
-    uint32 play = 11;
+    MediaIndex play = 14;
+    /* Some medias have been moved */
+    Move move = 15;
     /* Some medias have been removed */
-    Range delete = 12;
+    Range delete = 16;
   }
 }
 
@@ -56,9 +106,11 @@ message Request {
     /* Get ID of the current playing media (resp: Playlist.Response.current) */
     bool get_current = 11;
     /* Play the media by ID (resp: none) */
-    uint32 play = 12;
+    MediaIndex play = 12;
+    /* Move a range of medias (resp: none) */
+    Move move = 13;
     /* Delete a range of medias (resp: none) */
-    Range delete = 13;
+    Range delete = 14;
   }
 }
 
@@ -71,7 +123,7 @@ message Response {
     /* Effective offset, can be smaller than request offset */
     uint32 offset = 2;
     /* ID of the current playing media */
-    uint32 current = 3;
+    MediaIndex current = 3;
     /* List of medias */
     repeated Media medias = 4;
   }
@@ -81,6 +133,6 @@ message Response {
     /* Medias in playlist req Playlist.Request.get_media_list) */
     MediaList media_list = 10;
     /* ID of current playing media (req Playlist.Request.get_current) */
-    uint32 current = 11;
+    MediaIndex current = 11;
   }
 }

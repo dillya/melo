@@ -144,7 +144,7 @@ bus_cb (GstBus *bus, GstMessage *msg, gpointer user_data)
       }
 
       /* Update player tags */
-      melo_player_update_tags (player, tags);
+      melo_player_update_tags (player, tags, MELO_TAGS_MERGE_FLAG_NONE);
     }
 
     /* Free tag list */

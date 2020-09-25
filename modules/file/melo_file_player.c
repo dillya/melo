@@ -143,7 +143,7 @@ bus_cb (GstBus *bus, GstMessage *msg, gpointer user_data)
 
     /* Generate new tags */
     tags = melo_tags_new_from_taglist (G_OBJECT (player), tag_list);
-    melo_player_update_tags (player, tags);
+    melo_player_update_tags (player, tags, MELO_TAGS_MERGE_FLAG_NONE);
 
     /* Free tag list */
     gst_tag_list_unref (tag_list);

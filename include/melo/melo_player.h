@@ -140,9 +140,10 @@ char *melo_player_get_asset (const char *id, const char *asset);
 
 GstElement *melo_player_get_sink (MeloPlayer *player, const char *name);
 
-void melo_player_update_media (
-    MeloPlayer *player, const char *name, MeloTags *tags);
-void melo_player_update_tags (MeloPlayer *player, MeloTags *tags);
+void melo_player_update_media (MeloPlayer *player, const char *name,
+    MeloTags *tags, unsigned int merge_flags);
+void melo_player_update_tags (
+    MeloPlayer *player, MeloTags *tags, unsigned int merge_flags);
 void melo_player_update_status (MeloPlayer *player, MeloPlayerState state,
     MeloPlayerStreamState stream_state, unsigned int stream_state_value);
 void melo_player_update_state (MeloPlayer *player, MeloPlayerState state);

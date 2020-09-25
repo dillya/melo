@@ -65,6 +65,10 @@ typedef struct _MeloPlayerPrivate {
   unsigned int stream_state_percent;
   unsigned int duration;
 
+  /* Playlist entry */
+  MeloPlaylistEntry *playlist_entry;
+  MeloPlaylistEntry *current_playlist_entry;
+
   /* Audio sink */
   GstElement *sink;
   GstElement *volume;
@@ -260,6 +264,10 @@ melo_player_finalize (GObject *object)
       MELO_LOGI ("player '%s' removed", priv->id);
     }
   }
+
+  /* Free playlist entries */
+  melo_playlist_entry_unref (priv->current_playlist_entry);
+  melo_playlist_entry_unref (priv->playlist_entry);
 
   /* Free ID */
   g_free (priv->id);
@@ -884,17 +892,19 @@ melo_player_get_asset (const char *id, const char *asset)
 }
 
 bool
-melo_player_play_media (
-    const char *id, const char *path, const char *name, MeloTags *tags)
+melo_player_play_media (const char *id, const char *path, const char *name,
+    MeloTags *tags, MeloPlaylistEntry *entry)
 {
   MeloPlayerClass *class;
   MeloPlayer *old, *player;
+  MeloPlayerPrivate *priv;
   bool ret = false;
 
   /* Find player */
   player = melo_player_get_by_id (id);
   if (!player)
     return false;
+  priv = melo_player_get_instance_private (player);
 
   /* Replace current player */
   G_LOCK (melo_player_mutex);
@@ -910,8 +920,27 @@ melo_player_play_media (
     g_object_unref (old);
   }
 
+  /* Replace playlist entry */
+  melo_playlist_entry_unref (priv->playlist_entry);
+  priv->playlist_entry = entry;
+
+  /* Replace current playlist entry */
+  melo_playlist_entry_unref (priv->current_playlist_entry);
+  priv->current_playlist_entry = melo_playlist_entry_ref (entry);
+
+  /* Replace player name */
+  g_free (priv->media_name);
+  priv->media_name = g_strdup (name);
+
+  /* Replace player tags */
+  melo_tags_unref (priv->tags);
+  priv->tags = tags;
+
+  /* Broadcast media change */
+  melo_events_broadcast (&melo_player_events,
+      melo_player_message_media (priv->media_name, priv->tags));
+
   /* Reset player */
-  melo_player_update_media (player, name, tags);
   melo_player_update_status (
       player, MELO_PLAYER_STATE_PLAYING, MELO_PLAYER_STREAM_STATE_LOADING, 0);
   melo_player_update_duration (player, 0, 0);
@@ -1023,21 +1052,30 @@ melo_player_get_sink (MeloPlayer *player, const char *name)
  * @player: a #MeloPlayer
  * @name: the display name
  * @tags: the #MeloTags to set
+ * @merge_flags: a combination of #MeloTagsMergeFlag to apply on player tags
  *
  * This function should be used by the derived #MeloPlayer class implementations
  * to update the current media: the displayed name and tags will be totally
- * replaced. If you only need to update a part of tags, the
+ * replaced and new sub-media will be added to the current playlist. If you only
+ * need to update a part of tags and avoid creating a new sub-media, the
  * melo_player_update_tags() should be called. The previously used name and
  * tags are freed by this function. The function takes owner-ship of the name
  * and the tags.
+ *
+ * The @merge_flags is used during merge of @tags and the current player tags:
+ * setting MELO_TAGS_MERGE_FLAG_SKIP_COVER can be useful if you want to preserve
+ * the initial player cover.
+ *
  * It will send an event to all listeners in order to notify of media change.
  *
  * This function is a protected function and is only intended for derived class.
  */
 void
-melo_player_update_media (MeloPlayer *player, const char *name, MeloTags *tags)
+melo_player_update_media (MeloPlayer *player, const char *name, MeloTags *tags,
+    unsigned int merge_flags)
 {
   MeloPlayerPrivate *priv;
+  MeloTags *t;
 
   if (!player)
     return;
@@ -1047,20 +1085,41 @@ melo_player_update_media (MeloPlayer *player, const char *name, MeloTags *tags)
   g_free (priv->media_name);
   priv->media_name = g_strdup (name);
 
-  /* Replace tags */
-  melo_tags_unref (priv->tags);
-  priv->tags = tags;
+  /* Replace player tags */
+  melo_tags_ref (tags);
+  t = melo_tags_new ();
+  melo_tags_merge (t, tags, merge_flags);
+  melo_tags_merge (
+      t, priv->tags, (~merge_flags & MELO_TAGS_MERGE_FLAG_SKIP_ALL));
+  priv->tags = t;
 
-  /* Broadcast media change */
-  if (player == melo_player_current)
+  /* Update current player */
+  if (player == melo_player_current) {
+    MeloPlaylistEntry *entry;
+
+    /* Update playlist current media */
+    melo_tags_ref (tags);
+    melo_playlist_entry_add_media (
+        priv->playlist_entry, NULL, name, tags, &entry);
+
+    /* Replace current playlist entry */
+    melo_playlist_entry_unref (priv->current_playlist_entry);
+    priv->current_playlist_entry = entry;
+
+    /* Broadcast media change */
     melo_events_broadcast (&melo_player_events,
         melo_player_message_media (priv->media_name, priv->tags));
+  }
+
+  /* Release tags */
+  melo_tags_unref (tags);
 }
 
 /**
  * melo_player_update_tags:
  * @player: a #MeloPlayer
  * @tags: the #MeloTags to set
+ * @merge_flags: a combination of #MeloTagsMergeFlag to apply on current tags
  *
  * This function should be used by the derived #MeloPlayer class implementations
  * to update the current media tags: the currently set tags will be merged with
@@ -1071,7 +1130,8 @@ melo_player_update_media (MeloPlayer *player, const char *name, MeloTags *tags)
  * This function is a protected function and is only intended for derived class.
  */
 void
-melo_player_update_tags (MeloPlayer *player, MeloTags *tags)
+melo_player_update_tags (
+    MeloPlayer *player, MeloTags *tags, unsigned int merge_flags)
 {
   MeloPlayerPrivate *priv;
 
@@ -1080,12 +1140,19 @@ melo_player_update_tags (MeloPlayer *player, MeloTags *tags)
 
   /* Merge tags */
   priv = melo_player_get_instance_private (player);
-  priv->tags = melo_tags_merge (tags, priv->tags, MELO_TAGS_MERGE_FLAG_NONE);
+  priv->tags = melo_tags_merge (tags, priv->tags, merge_flags);
 
-  /* Broadcast media change */
-  if (player == melo_player_current)
+  /* Update current player */
+  if (player == melo_player_current) {
+    /* Update playlist current media */
+    melo_tags_ref (tags);
+    melo_playlist_entry_update (
+        priv->current_playlist_entry, priv->media_name, tags, true);
+
+    /* Broadcast media change */
     melo_events_broadcast (&melo_player_events,
         melo_player_message_media (priv->media_name, priv->tags));
+  }
 }
 
 /**

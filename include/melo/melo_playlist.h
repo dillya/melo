@@ -23,6 +23,10 @@
 #include <melo/melo_async.h>
 #include <melo/melo_tags.h>
 
+G_BEGIN_DECLS
+
+typedef struct _MeloPlaylistEntry MeloPlaylistEntry;
+
 /**
  * MeloPlaylist:
  */
@@ -46,5 +50,21 @@ bool melo_playlist_add_media (
     const char *player_id, const char *path, const char *name, MeloTags *tags);
 bool melo_playlist_play_media (
     const char *player_id, const char *path, const char *name, MeloTags *tags);
+
+bool melo_playlist_add_entry (MeloPlaylistEntry *entry);
+bool melo_playlist_play_entry (MeloPlaylistEntry *entry);
+
+MeloPlaylistEntry *melo_playlist_entry_new (
+    const char *player_id, const char *path, const char *name, MeloTags *tags);
+MeloPlaylistEntry *melo_playlist_entry_ref (MeloPlaylistEntry *entry);
+void melo_playlist_entry_unref (MeloPlaylistEntry *entry);
+
+bool melo_playlist_entry_update (
+    MeloPlaylistEntry *entry, const char *name, MeloTags *tags, bool reset);
+
+bool melo_playlist_entry_add_media (MeloPlaylistEntry *entry, const char *path,
+    const char *name, MeloTags *tags, MeloPlaylistEntry **ref);
+
+G_END_DECLS
 
 #endif /* !_MELO_PLAYLIST_H_ */
