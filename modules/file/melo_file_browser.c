@@ -810,8 +810,7 @@ action_next_files_cb (
       char *path;
 
       /* Build media path */
-      name = g_file_info_get_name (info);
-      path = g_build_path ("/", action->uri, name, NULL);
+      path = g_build_path ("/", action->uri, g_file_info_get_name (info), NULL);
 
       /* Add file to playlist entry */
       melo_playlist_entry_add_media (
