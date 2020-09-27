@@ -157,6 +157,10 @@ melo_mdns_service_update_group (AvahiClient *client, MeloMdns *mdns)
   GList *l;
   int ret;
 
+  /* No client available */
+  if (!client)
+    return false;
+
   /* Create group if doesn't exist */
   if (!mdns->group) {
     mdns->group = avahi_entry_group_new (client, entry_group_cb, NULL);
