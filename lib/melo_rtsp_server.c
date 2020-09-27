@@ -1052,7 +1052,7 @@ melo_rtsp_server_connection_set_packet (MeloRtspServerConnection *conn,
   conn->packet_free = free;
 
   /* Add content length */
-  g_snprintf (str, sizeof (str), "%lu", len);
+  g_snprintf (str, sizeof (str), "%lu", (unsigned long) len);
   melo_rtsp_server_connection_add_header (conn, "Content-Length", str);
 
   return true;
