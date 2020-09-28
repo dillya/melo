@@ -66,3 +66,9 @@ pkgg.generate(
 	libmelo_proto,
 	requires: 'libprotobuf-c'
 )
+
+# Install proto files
+install_data(
+	proto_files,
+	install_dir : proto_path
+)

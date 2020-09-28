@@ -25,8 +25,9 @@ proto_gen = generator(
 		'@INPUT@'
 	]
 )
+proto_files = [ 'proto/network.proto' ]
 proto_gen_src = proto_gen.process(
-	'proto/network.proto',
+	proto_files,
 	preserve_path_from : meson.current_source_dir(),
 )
 
@@ -56,3 +57,9 @@ executable(
 	dependencies : [ libmelo_dep, libprotobuf_c_dep, libnm_dep ],
 	c_args : cflags,
 	install : true)
+
+# Install additional proto files
+install_data(
+	proto_files,
+	install_dir : proto_path
+)
