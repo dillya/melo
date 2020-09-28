@@ -1,0 +1,119 @@
+Source: melo
+Section: net
+Priority: optional
+Maintainer: Alexandre Dilly <dillya@sparod.com>
+Build-Depends: debhelper-compat (= 12),
+               libavahi-gobject-dev (>= 0.7),
+               libglib2.0-dev (>= 2.58.3),
+               libgstreamer-plugins-base1.0-dev (>= 1.14.4-2),
+               libjson-glib-dev (>= 1.4.4-2),
+               libprotobuf-c-dev (>= 1.3.1),
+               libsoup2.4-dev (>= 2.64.2-2),
+               meson (>= 0.49.2-1),
+               protobuf-c-compiler (>= 1.3.1)
+Standards-Version: 4.1.4
+Homepage: https://www.github.com/dillya/melo
+
+Package: melo
+Architecture: any
+Multi-Arch: foreign
+Recommends: avahi-daemon,
+            gstreamer1.0-plugins-base,
+Suggests: gstreamer1.0-alsa,
+          gstreamer1.0-plugins-good,
+          gstreamer1.0-plugins-bad,
+          gstreamer1.0-plugins-ugly,
+          gstreamer1.0-pulse,
+          gstreamer1.0-libav
+Depends: libmelo (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: The Melo daemon program
+ Melo is an embedded application to play music content from anywhere on any
+ speaker.
+
+Package: libmelo
+Architecture: any
+Multi-Arch: same
+Depends: libmelo-proto (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: The melo shared library
+ Melo is an embedded application to play music content from anywhere on any
+ speaker.
+
+Package: libmelo-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: libglib2.0-dev,
+         libgstreamer1.0-dev,
+         libjson-glib-dev,
+         libmelo (= ${binary:Version}),
+         libmelo-proto-dev (= ${binary:Version}),
+         pkg-config,
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: The melo shared library (development files)
+ Melo is an embedded application to play music content from anywhere on any
+ speaker.
+
+Package: libmelo-proto
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: The melo protobuf C library
+ Melo is an embedded application to play music content from anywhere on any
+ speaker.
+
+Package: libmelo-proto-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: libmelo-proto (= ${binary:Version}),
+         libprotobuf-c-dev (>= 1.3.1),
+         pkg-config,
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: The melo protobuf C library (development files)
+ Melo is an embedded application to play music content from anywhere on any
+ speaker.
+
+Package: melo-module-file
+Architecture: any
+Multi-Arch: same
+Suggests: gvfs-backends
+Depends: libgstreamer-plugins-base1.0-0 (>= 1.14.4-2),
+         libmelo (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: The melo File module
+ Melo is an embedded application to play music content from anywhere on any
+ speaker.
+ The File module brings local and remote file system browsing and a standard
+ file player which can be used by many other modules.
+
+Package: melo-module-library
+Architecture: any
+Multi-Arch: same
+Depends: libmelo (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: The melo Library module
+ Melo is an embedded application to play music content from anywhere on any
+ speaker.
+ The Library module brings media library management to Melo, by storing, sorting
+ and simplifying the media access.
+
+Package: melo-module-radio
+Architecture: any
+Multi-Arch: same
+Depends: libmelo (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: The melo Radio module
+ Melo is an embedded application to play music content from anywhere on any
+ speaker.
+ The Radio module brings webradio browsing (thanks to radio-browser.info) and a
+ shoutcast radio player which can be used by other modules.

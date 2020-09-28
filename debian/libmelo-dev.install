@@ -1,0 +1,3 @@
+usr/include/melo/*.h
+usr/lib/*/libmelo.so
+usr/lib/*/pkgconfig/melo.pc

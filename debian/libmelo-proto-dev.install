@@ -1,0 +1,4 @@
+usr/include/melo/proto/*
+usr/lib/*/libmelo_proto.so
+usr/lib/*/pkgconfig/melo_proto.pc
+usr/share/melo/proto/*
