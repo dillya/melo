@@ -69,6 +69,7 @@ libmelo = shared_library(
 		avahi_gobject_dep,
 		libmelo_proto_dep
 	],
+	version : meson.project_version(),
 	install : true)
 
 # Declare melo library dependency

@@ -20,5 +20,6 @@ libmelof_file = shared_library(
 		gio_dep,
 		gst_pbutils_dep
 	],
+	version : meson.project_version(),
 	install : true,
 	install_dir : module_path)

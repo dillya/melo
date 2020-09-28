@@ -12,5 +12,6 @@ libmelof_radio = shared_library(
 	'melo_radio',
 	libmelo_radio_sources,
 	dependencies : [libmelo_dep, libmelo_proto_dep],
+	version : meson.project_version(),
 	install : true,
 	install_dir : module_path)

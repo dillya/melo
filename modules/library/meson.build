@@ -11,5 +11,6 @@ libmelof_library = shared_library(
 	'melo_library',
 	libmelo_library_sources,
 	dependencies : [libmelo_dep],
+	version : meson.project_version(),
 	install : true,
 	install_dir : module_path)

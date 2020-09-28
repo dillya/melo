@@ -51,6 +51,7 @@ libmelo_proto = shared_library(
 	'melo_proto',
 	proto_gen_src,
 	dependencies : [libprotobuf_c_dep],
+	version : meson.project_version(),
 	install : true)
 
 # Export library
