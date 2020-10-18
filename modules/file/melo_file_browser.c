@@ -850,6 +850,7 @@ action_next_files_cb (
         /* Free entry */
         g_object_unref (info);
         g_list_free (l);
+        continue;
       }
 
       /* Save regular file */
