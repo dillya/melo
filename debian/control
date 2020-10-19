@@ -23,9 +23,11 @@ Suggests: gstreamer1.0-alsa,
           gstreamer1.0-plugins-good,
           gstreamer1.0-plugins-bad,
           gstreamer1.0-plugins-ugly,
-          gstreamer1.0-pulse,
+          gstreamer1.0-pulseaudio,
           gstreamer1.0-libav
-Depends: libmelo (= ${binary:Version}),
+Depends: adduser,
+         dbus,
+         libmelo (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Description: The Melo daemon program
