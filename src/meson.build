@@ -63,3 +63,14 @@ install_data(
 	proto_files,
 	install_dir : proto_path
 )
+
+# Generate systemd service
+conf = configuration_data()
+conf.set('bindir', join_paths(get_option('prefix'), get_option('bindir')))
+configure_file(
+	input: 'melo.service.in',
+	output: 'melo.service',
+	configuration: conf,
+	install: true,
+	install_dir: '/lib/systemd/system'
+)

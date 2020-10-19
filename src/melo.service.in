@@ -1,0 +1,11 @@
+[Unit]
+Description=Melo
+After=network.target
+
+[Service]
+User=melo
+Type=simple
+ExecStart=/usr/bin/dbus-run-session @bindir@/melo
+
+[Install]
+WantedBy=multi-user.target
