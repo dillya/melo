@@ -16,7 +16,7 @@
  */
 
 #define MELO_LOG_TAG "library_browser"
-#include <melo/melo_log.h>
+#include "melo/melo_log.h"
 
 #include "melo_library_browser.h"
 

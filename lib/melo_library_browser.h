@@ -18,7 +18,7 @@
 #ifndef _MELO_LIBRARY_BROWSER_H_
 #define _MELO_LIBRARY_BROWSER_H_
 
-#include <melo/melo_browser.h>
+#include "melo/melo_browser.h"
 
 G_BEGIN_DECLS
 
@@ -27,11 +27,6 @@ G_BEGIN_DECLS
 #define MELO_TYPE_LIBRARY_BROWSER melo_library_browser_get_type ()
 MELO_DECLARE_BROWSER (MeloLibraryBrowser, melo_library_browser, LIBRARY_BROWSER)
 
-/**
- * Create a new library browser.
- *
- * @return the newly library browser or NULL.
- */
 MeloLibraryBrowser *melo_library_browser_new (void);
 
 G_END_DECLS

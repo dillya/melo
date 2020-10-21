@@ -25,6 +25,8 @@ libmelo_sources = [
 	'melo_http_server.c',
 	'melo_http_server_file.c',
 	'melo_http_server_url.c',
+	'melo_library.c',
+	'melo_library_browser.c',
 	'melo_log.c',
 	'melo_mdns.c',
 	'melo_message.c',
@@ -50,6 +52,7 @@ libsoup_dep = dependency('libsoup-2.4', version : '>=2.56.0')
 json_glib_dep = dependency('json-glib-1.0', version : '>=1.4.4')
 avahi_client_dep = dependency('avahi-client', version : '>=0.7')
 avahi_gobject_dep = dependency('avahi-gobject', version : '>=0.7')
+sqlite_dep = dependency('sqlite3', version : '>=3.27.2')
 
 # Generate shared library
 libmelo = shared_library(
@@ -67,6 +70,7 @@ libmelo = shared_library(
 		json_glib_dep,
 		avahi_client_dep,
 		avahi_gobject_dep,
+		sqlite_dep,
 		libmelo_proto_dep
 	],
 	version : meson.project_version(),

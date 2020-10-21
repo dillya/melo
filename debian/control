@@ -96,18 +96,6 @@ Description: The melo File module
  The File module brings local and remote file system browsing and a standard
  file player which can be used by many other modules.
 
-Package: melo-module-library
-Architecture: any
-Multi-Arch: same
-Depends: libmelo (= ${binary:Version}),
-         ${misc:Depends},
-         ${shlibs:Depends}
-Description: The melo Library module
- Melo is an embedded application to play music content from anywhere on any
- speaker.
- The Library module brings media library management to Melo, by storing, sorting
- and simplifying the media access.
-
 Package: melo-module-radio
 Architecture: any
 Multi-Arch: same
