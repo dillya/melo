@@ -359,7 +359,7 @@ melo_playlist_message_sub_medias (
   unsigned int i;
 
   /* No need to add sub-media list */
-  if (!sub_medias->count)
+  if (!sub_medias->count || !sub_medias->list)
     return;
 
   /* Allocate buffer to store media list and tags */
