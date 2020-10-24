@@ -19,6 +19,7 @@
 #include <gst/pbutils/pbutils.h>
 
 #include <melo/melo_cover.h>
+#include <melo/melo_library.h>
 #include <melo/melo_playlist.h>
 #include <melo/melo_settings.h>
 
@@ -35,13 +36,20 @@
 #define MELO_FILE_BROWSER_ATTRIBUTES \
   G_FILE_ATTRIBUTE_STANDARD_TYPE "," G_FILE_ATTRIBUTE_STANDARD_DISPLAY_NAME \
                                  "," G_FILE_ATTRIBUTE_STANDARD_TARGET_URI \
-                                 "," G_FILE_ATTRIBUTE_STANDARD_NAME
+                                 "," G_FILE_ATTRIBUTE_STANDARD_NAME \
+                                 "," G_FILE_ATTRIBUTE_TIME_MODIFIED
 
 typedef enum _MeloFileBrowserType {
   MELO_FILE_BROWSER_TYPE_ROOT,
   MELO_FILE_BROWSER_TYPE_LOCAL,
   MELO_FILE_BROWSER_TYPE_NETWORK,
 } MeloFileBrowserType;
+
+typedef struct {
+  uint64_t timestamp;
+  Browser__Response__MediaItem *item;
+  MeloTags *tags;
+} MeloBrowserFileLib;
 
 typedef struct {
   MeloRequest *req;
@@ -57,6 +65,9 @@ typedef struct {
   unsigned int offset;
 
   GstDiscoverer *disco;
+
+  uint64_t player_id;
+  uint64_t path_id;
 } MeloBrowserFileMediaList;
 
 typedef struct {
@@ -177,7 +188,8 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
   Browser__Response resp = BROWSER__RESPONSE__INIT;
   Browser__Response__MediaItem item = BROWSER__RESPONSE__MEDIA_ITEM__INIT;
   Tags__Tags item_tags = TAGS__TAGS__INIT;
-  MeloRequest *req = user_data;
+  MeloBrowserFileMediaList *mlist = user_data;
+  struct timespec tp;
   MeloMessage *msg;
   MeloTags *tags;
 
@@ -188,8 +200,8 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
   item.tags = &item_tags;
 
   /* Get media tags */
-  tags = melo_tags_new_from_taglist (
-      melo_request_get_object (req), gst_discoverer_info_get_tags (info));
+  tags = melo_tags_new_from_taglist (melo_request_get_object (mlist->req),
+      gst_discoverer_info_get_tags (info));
   if (tags) {
     item_tags.title = (char *) melo_tags_get_title (tags);
     item_tags.artist = (char *) melo_tags_get_artist (tags);
@@ -198,6 +210,18 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
     item_tags.track = melo_tags_get_track (tags);
     item_tags.cover = (char *) melo_tags_get_cover (tags);
   }
+
+  /* Get timestamp for now */
+  clock_gettime (CLOCK_REALTIME, &tp);
+
+  /* Update media to library */
+  melo_library_add_media (NULL, mlist->player_id, NULL, mlist->path_id, item.id,
+      0,
+      MELO_LIBRARY_SELECT (TIMESTAMP) | MELO_LIBRARY_SELECT (TITLE) |
+          MELO_LIBRARY_SELECT (ARTIST) | MELO_LIBRARY_SELECT (ALBUM) |
+          MELO_LIBRARY_SELECT (GENRE) | MELO_LIBRARY_SELECT (TRACK) |
+          MELO_LIBRARY_SELECT (COVER),
+      NULL, tags, tp.tv_sec);
 
   /* Pack message */
   msg = melo_message_new (browser__response__get_packed_size (&resp));
@@ -209,24 +233,53 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
   melo_tags_unref (tags);
 
   /* Send media item */
-  if (!melo_request_send_response (req, msg)) {
+  if (!melo_request_send_response (mlist->req, msg)) {
     /* Stop and release discoverer */
     gst_discoverer_stop (disco);
     g_object_unref (disco);
 
     /* Release request */
-    melo_request_unref (req);
+    melo_request_unref (mlist->req);
+    free (mlist);
   }
 }
 
 static void
 discover_finished_cb (GstDiscoverer *disco, gpointer user_data)
 {
-  MeloRequest *req = user_data;
+  MeloBrowserFileMediaList *mlist = user_data;
 
   /* Release discoverer and request */
   g_object_unref (disco);
-  melo_request_unref (req);
+  melo_request_unref (mlist->req);
+  free (mlist);
+}
+
+static bool
+library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
+{
+  MeloBrowserFileLib *lib = user_data;
+  Tags__Tags *item_tags;
+
+  /* Save timestamp */
+  lib->timestamp = data->timestamp;
+
+  /* Generate tags */
+  if (tags) {
+    item_tags = malloc (sizeof (*item_tags));
+    if (item_tags) {
+      tags__tags__init (item_tags);
+      item_tags->title = g_strdup (melo_tags_get_title (tags));
+      item_tags->artist = g_strdup (melo_tags_get_artist (tags));
+      item_tags->album = g_strdup (melo_tags_get_album (tags));
+      item_tags->genre = g_strdup (melo_tags_get_genre (tags));
+      item_tags->track = melo_tags_get_track (tags);
+      item_tags->cover = g_strdup (melo_tags_get_cover (tags));
+      lib->item->tags = item_tags;
+    }
+  }
+
+  return true;
 }
 
 static void
@@ -293,7 +346,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     unsigned int i = 0;
     MeloMessage *msg;
     bool en_tags;
-    char *en_uri;
+    char *en_uri, *path;
     GList *l;
 
     /* Get tags settings */
@@ -304,6 +357,12 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 
     /* Get directory URI */
     en_uri = g_file_get_uri (g_file_enumerator_get_container (en));
+
+    /* Get player and path ID */
+    path = g_uri_unescape_string (en_uri, NULL);
+    mlist->player_id = melo_library_get_player_id (MELO_FILE_PLAYER_ID);
+    mlist->path_id = melo_library_get_path_id (path);
+    g_free (path);
 
     /* Prepare response */
     resp.resp_case = BROWSER__RESPONSE__RESP_MEDIA_LIST;
@@ -368,6 +427,8 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     /* Parse file list */
     for (l = mlist->files; l != NULL; l = l->next) {
       GFileInfo *info = G_FILE_INFO (l->data);
+      MeloBrowserFileLib lib;
+      uint64_t timestamp;
 
       /* Skip first and last items */
       if (mlist->offset) {
@@ -389,18 +450,44 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
       if (en_tags && !mlist->disco) {
         mlist->disco = gst_discoverer_new (GST_SECOND * 10, NULL);
         g_signal_connect (mlist->disco, "discovered",
-            G_CALLBACK (discover_discovered_cb), mlist->req);
-        g_signal_connect (mlist->disco, "finished",
-            G_CALLBACK (discover_finished_cb), mlist->req);
+            G_CALLBACK (discover_discovered_cb), mlist);
+        g_signal_connect (
+            mlist->disco, "finished", G_CALLBACK (discover_finished_cb), mlist);
         gst_discoverer_start (mlist->disco);
       }
 
-      /* Queue file to discoverer */
-      if (mlist->disco) {
-        char *uri =
-            g_build_path ("/", en_uri, g_file_info_get_name (info), NULL);
-        gst_discoverer_discover_uri_async (mlist->disco, uri);
-        g_free (uri);
+      /* Get last modified timestamp */
+      timestamp = g_file_info_get_attribute_uint64 (
+          info, G_FILE_ATTRIBUTE_TIME_MODIFIED);
+
+      /* Find media in library */
+      lib.timestamp = 0;
+      lib.item = &items[i];
+      melo_library_find (MELO_LIBRARY_TYPE_MEDIA, library_cb, &lib,
+          MELO_LIBRARY_SELECT (TIMESTAMP) | MELO_LIBRARY_SELECT (TITLE) |
+              MELO_LIBRARY_SELECT (ARTIST) | MELO_LIBRARY_SELECT (ALBUM) |
+              MELO_LIBRARY_SELECT (GENRE) | MELO_LIBRARY_SELECT (TRACK) |
+              MELO_LIBRARY_SELECT (COVER),
+          1, 0, MELO_LIBRARY_FIELD_NONE, false, false,
+          MELO_LIBRARY_FIELD_PLAYER_ID, mlist->player_id,
+          MELO_LIBRARY_FIELD_PATH_ID, mlist->path_id, MELO_LIBRARY_FIELD_MEDIA,
+          g_file_info_get_name (info), MELO_LIBRARY_FIELD_LAST);
+
+      /* Update library and tags */
+      if (lib.timestamp <= timestamp) {
+        /* Add media to library */
+        melo_library_add_media (NULL, mlist->player_id, NULL, mlist->path_id,
+            g_file_info_get_name (info), 0,
+            MELO_LIBRARY_SELECT (NAME) | MELO_LIBRARY_SELECT (TIMESTAMP),
+            g_file_info_get_display_name (info), NULL, timestamp);
+
+        /* Queue file to discoverer */
+        if (mlist->disco) {
+          char *uri =
+              g_build_path ("/", en_uri, g_file_info_get_name (info), NULL);
+          gst_discoverer_discover_uri_async (mlist->disco, uri);
+          g_free (uri);
+        }
       }
 
       /* Add item to list */
@@ -418,6 +505,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 
     /* Free message data */
     while (i--) {
+      tags__tags__free_unpacked (items[i].tags, NULL);
       g_free (items[i].id);
       g_free (items[i].name);
     }
@@ -431,15 +519,13 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     /* Send media list response */
     melo_request_send_response (mlist->req, msg);
 
-    /* Keep a reference for discoverer */
-    if (mlist->disco)
-      melo_request_ref (mlist->req);
-
     /* Release request, source object and asynchronous object */
-    melo_request_unref (mlist->req);
     g_object_unref (en);
     free (mlist->auth);
-    free (mlist);
+    if (!mlist->disco) {
+      melo_request_unref (mlist->req);
+      free (mlist);
+    }
   } else {
     /* Extract files and directories */
     while (list) {
@@ -780,6 +866,17 @@ melo_file_browser_get_media_list (MeloFileBrowser *browser,
   return ret;
 }
 
+static bool
+action_library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
+{
+  MeloBrowserFileLib *lib = user_data;
+
+  /* Save tags */
+  lib->tags = melo_tags_ref (tags);
+
+  return true;
+}
+
 static void
 action_next_files_cb (
     GObject *source_object, GAsyncResult *res, gpointer user_data)
@@ -793,8 +890,14 @@ action_next_files_cb (
 
   /* Parse list */
   if (list == NULL) {
+    uint64_t player_id, path_id;
     MeloPlaylistEntry *entry;
+    MeloBrowserFileLib lib;
     char *name;
+
+    /* Get player and path ID */
+    player_id = melo_library_get_player_id (MELO_FILE_PLAYER_ID);
+    path_id = melo_library_get_path_id (action->uri);
 
     /* Create new playlist entry */
     name = g_path_get_basename (action->uri);
@@ -812,9 +915,20 @@ action_next_files_cb (
       /* Build media path */
       path = g_build_path ("/", action->uri, g_file_info_get_name (info), NULL);
 
+      /* Find media in library */
+      lib.tags = NULL;
+      melo_library_find (MELO_LIBRARY_TYPE_MEDIA, action_library_cb, &lib,
+          MELO_LIBRARY_SELECT (TITLE) | MELO_LIBRARY_SELECT (ARTIST) |
+              MELO_LIBRARY_SELECT (ALBUM) | MELO_LIBRARY_SELECT (GENRE) |
+              MELO_LIBRARY_SELECT (TRACK) | MELO_LIBRARY_SELECT (COVER),
+          1, 0, MELO_LIBRARY_FIELD_NONE, false, false,
+          MELO_LIBRARY_FIELD_PLAYER_ID, player_id, MELO_LIBRARY_FIELD_PATH_ID,
+          path_id, MELO_LIBRARY_FIELD_MEDIA, g_file_info_get_name (info),
+          MELO_LIBRARY_FIELD_LAST);
+
       /* Add file to playlist entry */
       melo_playlist_entry_add_media (
-          entry, path, g_file_info_get_display_name (info), NULL, NULL);
+          entry, path, g_file_info_get_display_name (info), lib.tags, NULL);
       g_free (path);
 
       /* Remove entry */
@@ -874,11 +988,32 @@ action_children_cb (
   /* Enumeration started */
   en = g_file_enumerate_children_finish (file, res, NULL);
   if (!en) {
+    MeloBrowserFileLib lib;
+    char *path, *media;
+
+    /* Get dirname */
+    path = g_path_get_dirname (action->uri);
+    media = g_path_get_basename (action->uri);
+
+    /* Find media in library */
+    lib.tags = NULL;
+    melo_library_find (MELO_LIBRARY_TYPE_MEDIA, action_library_cb, &lib,
+        MELO_LIBRARY_SELECT (TITLE) | MELO_LIBRARY_SELECT (ARTIST) |
+            MELO_LIBRARY_SELECT (ALBUM) | MELO_LIBRARY_SELECT (GENRE) |
+            MELO_LIBRARY_SELECT (TRACK) | MELO_LIBRARY_SELECT (COVER),
+        1, 0, MELO_LIBRARY_FIELD_NONE, false, false, MELO_LIBRARY_FIELD_PLAYER,
+        MELO_FILE_PLAYER_ID, MELO_LIBRARY_FIELD_PATH, path,
+        MELO_LIBRARY_FIELD_MEDIA, media, MELO_LIBRARY_FIELD_LAST);
+    g_free (media);
+    g_free (path);
+
     /* Do action as regular file */
     if (action->type == BROWSER__ACTION__TYPE__PLAY)
-      melo_playlist_play_media (MELO_FILE_PLAYER_ID, action->uri, NULL, NULL);
+      melo_playlist_play_media (
+          MELO_FILE_PLAYER_ID, action->uri, NULL, lib.tags);
     else if (action->type == BROWSER__ACTION__TYPE__ADD)
-      melo_playlist_add_media (MELO_FILE_PLAYER_ID, action->uri, NULL, NULL);
+      melo_playlist_add_media (
+          MELO_FILE_PLAYER_ID, action->uri, NULL, lib.tags);
 
     /* Release riequest, source object and asynchronous object */
     melo_request_unref (action->req);
