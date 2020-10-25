@@ -89,6 +89,7 @@ enum _MeloLibraryType {
  * @MELO_LIBRARY_FIELD_DATE: the data of the media
  * @MELO_LIBRARY_FIELD_TRACK: the track of the media
  * @MELO_LIBRARY_FIELD_COVER: the cover of the entry
+ * @MELO_LIBRARY_FIELD_FAVORITE: the media is marked as 'favorite'
  *
  * This enumerator holds all possible fields which can be accessible from a
  * #MeloLibraryType entry in library database. See #MeloLibraryType for more
@@ -120,6 +121,8 @@ enum _MeloLibraryField {
   MELO_LIBRARY_FIELD_TRACK,
   MELO_LIBRARY_FIELD_COVER,
 
+  MELO_LIBRARY_FIELD_FAVORITE,
+
   MELO_LIBRARY_FIELD_COUNT
 };
 
@@ -134,6 +137,26 @@ enum _MeloLibraryField {
  * order to select multiple fields.
  */
 #define MELO_LIBRARY_SELECT(x) (1 << MELO_LIBRARY_FIELD_##x)
+
+/**
+ * MeloLibraryFlag:
+ * @MELO_LIBRARY_FLAG_NONE: no flag set
+ * @MELO_LIBRARY_FLAG_FAVORITE: set the media as favorite. It will be available
+ *     with #MELO_LIBRARY_FIELD_FAVORITE
+ * @MELO_LIBRARY_FLAG_FAVORITE_ONLY: set the media as favorite and if the media
+ *     doesn't exist in database, it will marked as 'to delete' if the favorite
+ *     field is removed with melo_library_remove_flags()
+ *
+ * This flags can be used to add some specificity to a media added in library
+ * database, such as it is marked as favorite.
+ * These values are used in melo_library_add_media() as a combination using the
+ * OR bit-operator.
+ */
+enum _MeloLibraryFlag {
+  MELO_LIBRARY_FLAG_NONE = 0,
+  MELO_LIBRARY_FLAG_FAVORITE = (1 << 0),
+  MELO_LIBRARY_FLAG_FAVORITE_ONLY = (1 << 1),
+};
 
 /**
  * MeloLibraryData:
@@ -155,6 +178,9 @@ enum _MeloLibraryField {
  *     #MELO_LIBRARY_SELECT(PATH)
  * @media: the media resource, only valid for media, selected with
  *     #MELO_LIBRARY_SELECT(MEDIA)
+ * @timestamp: the media timestamp, only valid for media, selected with
+ *     #MELO_LIBRARY_SELECT(TIMESTAMP)
+ * @flags: the media flags, only valid for media
  *
  * This structure contains the data fetched from the library database.
  *
@@ -174,6 +200,7 @@ struct _MeloLibraryData {
   const char *path;
   const char *media;
   uint64_t timestamp;
+  unsigned int flags;
 };
 
 /**
@@ -198,10 +225,19 @@ typedef bool (*MeloLibraryCb) (
 
 uint64_t melo_library_get_player_id (const char *player);
 uint64_t melo_library_get_path_id (const char *path);
+uint64_t melo_library_get_media_id (const char *player, uint64_t player_id,
+    const char *path, uint64_t path_id, const char *media);
+uint64_t melo_library_get_media_id_from_browser (
+    const char *tags_browser, const char *tags_media_id);
 
 bool melo_library_add_media (const char *player, uint64_t player_id,
     const char *path, uint64_t path_id, const char *media, uint64_t media_id,
-    unsigned int update, const char *name, MeloTags *tags, uint64_t timestamp);
+    unsigned int update, const char *name, MeloTags *tags, uint64_t timestamp,
+    unsigned int flags);
+
+unsigned int melo_library_media_get_flags (uint64_t media_id);
+bool melo_library_update_media_flags (
+    uint64_t media_id, unsigned int flags, bool unset);
 
 bool melo_library_find (MeloLibraryType type, MeloLibraryCb cb, void *user_data,
     unsigned int select, size_t count, off_t offset,

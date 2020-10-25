@@ -56,6 +56,10 @@ static const char *melo_library_sql =
     "    cover        TEXT UNIQUE"
     ");"
     ""
+    "CREATE TABLE browser ("
+    "    browser      TEXT UNIQUE"
+    ");"
+    ""
     "CREATE TABLE media ("
     "    player_id    INTEGER,"
     "    path_id      INTEGER,"
@@ -69,14 +73,19 @@ static const char *melo_library_sql =
     "    date         INTEGER,"
     "    track        INTEGER,"
     "    cover_id     INTEGER,"
+    "    browser_id   INTEGER,"
+    "    tags_id      TEXT,"
+    ""
     "    timestamp    INTEGER,"
+    "    flags        INTEGER,"
     ""
     "    FOREIGN KEY (player_id) REFERENCES player (rowid),"
     "    FOREIGN KEY (path_id) REFERENCES path (rowid),"
     "    FOREIGN KEY (album_id) REFERENCES album (rowid),"
     "    FOREIGN KEY (artist_id) REFERENCES artist (rowid),"
     "    FOREIGN KEY (genre_id) REFERENCES genre (rowid),"
-    "    FOREIGN KEY (cover_id) REFERENCES cover (rowid)"
+    "    FOREIGN KEY (cover_id) REFERENCES cover (rowid),"
+    "    FOREIGN KEY (browser_id) REFERENCES browser (rowid)"
     ");"
     ""
     "CREATE VIEW medias AS "
@@ -100,9 +109,14 @@ static const char *melo_library_sql =
     "       genre.name         AS genre,"
     "       media.date         AS date,"
     "       media.track        AS track,"
-    "       cover.cover        AS cover"
+    "       cover.cover        AS cover,"
+    "       browser.browser    AS browser,"
+    "       media.tags_id      AS tags_id,"
+    ""
+    "       media.flags        AS flags"
     "  FROM media"
     "  LEFT OUTER JOIN path       ON media.path_id = path.rowid"
+    "  LEFT OUTER JOIN browser    ON media.browser_id = browser.rowid"
     "  LEFT OUTER JOIN player     ON media.player_id = player.rowid"
     "  LEFT OUTER JOIN artist     ON media.artist_id = artist.rowid"
     "  LEFT OUTER JOIN album      ON media.album_id = album.rowid"
@@ -172,7 +186,8 @@ static const char *melo_library_sql =
     "INSERT INTO cover VALUES (NULL);"
     "INSERT INTO artist VALUES (NULL);"
     "INSERT INTO album VALUES (NULL);"
-    "INSERT INTO genre VALUES (NULL);";
+    "INSERT INTO genre VALUES (NULL);"
+    "INSERT INTO browser VALUES (NULL);";
 
 static const char *melo_library_type_str[MELO_LIBRARY_FIELD_COUNT] = {
     [MELO_LIBRARY_FIELD_NONE] = "none",
@@ -361,6 +376,73 @@ melo_library_get_path_id (const char *path)
 }
 
 /**
+ * melo_library_get_media_id:
+ * @player: the Melo player to use (overridden by @player_id)
+ * @player_id: the player ID in library database
+ * @path: the dirname of the media path (overridden by @path_id)
+ * @path_id: the path ID in library database
+ * @media: the basename of the media path
+ *
+ * This function can be used to get the media ID in library database from a
+ * combination of player (@player or @player_id), a dirname of the media path
+ * (@path or @path_id) and the media basename (@media).
+ * A trailing '/' is automatically added to @path.
+ *
+ * Returns: the media ID in the library database, 0 otherwise.
+ */
+uint64_t
+melo_library_get_media_id (const char *player, uint64_t player_id,
+    const char *path, uint64_t path_id, const char *media)
+{
+  uint64_t id = 0;
+  char *sql;
+
+  /* Get player ID and path ID */
+  if (player)
+    player_id = melo_library_get_player_id (player);
+  if (path)
+    path_id = melo_library_get_path_id (path);
+
+  /* Find media with player ID, path ID and media */
+  sql = sqlite3_mprintf ("SELECT rowid FROM media WHERE player_id = %llu AND "
+                         "path_id = %llu AND media = %Q;",
+      player_id, path_id, media);
+  melo_library_get_uint64 (sql, &id);
+  sqlite3_free (sql);
+
+  return id;
+}
+
+/**
+ * melo_library_get_media_id_from_browser:
+ * @browser: the browser from tags
+ * @media_id: the media ID from tags
+ *
+ * This function can be used to get the media ID in library database from a
+ * combination of the browser (@browser) and media ID (@media_id) from a
+ * #MeloTags. It is useful when the resource path is not yet known.
+ *
+ * Returns: the media ID in the library database, 0 otherwise.
+ */
+uint64_t
+melo_library_get_media_id_from_browser (
+    const char *browser, const char *media_id)
+{
+  uint64_t id = 0;
+  char *sql;
+
+  /* Find media with browser and tags_id */
+  sql = sqlite3_mprintf (
+      "SELECT media.rowid FROM media LEFT JOIN browser ON media.browser_id = "
+      "browser.rowid WHERE browser = %Q AND tags_id = %Q;",
+      browser, media_id);
+  melo_library_get_uint64 (sql, &id);
+  sqlite3_free (sql);
+
+  return id;
+}
+
+/**
  * melo_library_add_media:
  * @player: the Melo player to use (overridden by @player_id or @media_id)
  * @player_id: the player ID in library database
@@ -372,6 +454,7 @@ melo_library_get_path_id (const char *path)
  * @name: (nullable): the name to display
  * @tags: (nullable): the media tags
  * @timestamp: the timestamp of the media
+ * @flags: a combination of #MeloLibraryFlag to set
  *
  * This function can be used to add a media into the library and then be able to
  * retrieve it later with melo_library_find().
@@ -392,18 +475,29 @@ melo_library_get_path_id (const char *path)
  * operator to specify which fields should be updated when the media is not yet
  * present in database, otherwise, the parameter is skipped.
  *
+ * If the #MELO_LIBRARY_FLAG_FAVORITE_ONLY is set at creation of the media in
+ * database, it will be deleted if the flag #MELO_LIBRARY_FLAG_FAVORITE is
+ * removed with melo_library_remove_flags(). If a new call to this function is
+ * done without the #MELO_LIBRARY_FLAG_FAVORITE_ONLY flag set, the media will
+ * stay forever in the database.
+ *
  * Returns: %true if the media has been added successfully, %false otherwise.
  */
 bool
 melo_library_add_media (const char *player, uint64_t player_id,
     const char *path, uint64_t path_id, const char *media, uint64_t media_id,
-    unsigned int update, const char *name, MeloTags *tags, uint64_t timestamp)
+    unsigned int update, const char *name, MeloTags *tags, uint64_t timestamp,
+    unsigned int flags)
 {
-  uint64_t artist_id, album_id, genre_id, cover_id;
+  uint64_t artist_id, album_id, genre_id, cover_id, browser_id;
   bool ret = false;
   char *sql;
 
-  /* No media ID: find with player, path and media */
+  /* Set favorite flag */
+  if (flags & MELO_LIBRARY_FLAG_FAVORITE_ONLY)
+    flags |= MELO_LIBRARY_FLAG_FAVORITE;
+
+  /* Media ID not provided, use player + path + media */
   if (!media_id) {
     /* Get player ID and path ID */
     if (player)
@@ -411,12 +505,9 @@ melo_library_add_media (const char *player, uint64_t player_id,
     if (path)
       path_id = melo_library_get_path_id (path);
 
-    /* Find media with player ID, path ID and media */
-    sql = sqlite3_mprintf ("SELECT rowid FROM media WHERE player_id = %llu AND "
-                           "path_id = %llu AND media = %Q;",
-        player_id, path_id, media);
-    melo_library_get_uint64 (sql, &media_id);
-    sqlite3_free (sql);
+    /* Get media ID */
+    media_id =
+        melo_library_get_media_id (NULL, player_id, NULL, path_id, media);
   }
 
   /* Get IDs from tags */
@@ -428,12 +519,15 @@ melo_library_add_media (const char *player, uint64_t player_id,
       "genre", "name", melo_tags_get_genre (tags), false);
   cover_id = melo_library_insert_and_get (
       "cover", "cover", melo_tags_get_cover (tags), false);
+  browser_id = melo_library_insert_and_get (
+      "browser", "browser", melo_tags_get_browser (tags), false);
 
   /* Generate SQL request */
   if (media_id) {
     char temp[MELO_LIBRARY_SQL_CONDS_SIZE];
     char *optional;
     GString *opts;
+    unsigned int mask = ~0;
 
     /* Create optional string */
     opts = g_string_new_len (NULL, MELO_LIBRARY_SQL_CONDS_SIZE);
@@ -471,17 +565,24 @@ melo_library_add_media (const char *player, uint64_t player_id,
     /* Get optional string */
     optional = g_string_free (opts, FALSE);
 
+    /* Remove 'favorite only' flag */
+    if (!(flags & MELO_LIBRARY_FLAG_FAVORITE_ONLY))
+      mask = ~MELO_LIBRARY_FLAG_FAVORITE_ONLY;
+    flags &= ~MELO_LIBRARY_FLAG_FAVORITE_ONLY;
+
     /* Generate SQL update */
-    sql = sqlite3_mprintf ("UPDATE media SET %sdate = %u WHERE rowid = %llu;",
-        optional, 0, media_id);
+    sql = sqlite3_mprintf ("UPDATE media SET %sdate = %u,flags = (flags & %u | "
+                           "%u) WHERE rowid = %llu;",
+        optional, 0, mask, flags, media_id);
     g_free (optional);
   } else
     /* Generate SQL insert */
     sql = sqlite3_mprintf (
         "INSERT INTO media VALUES "
-        "(%llu,%llu,%Q,%Q,%Q,%llu,%llu,%llu,%u,%u,%llu,%llu);",
+        "(%llu,%llu,%Q,%Q,%Q,%llu,%llu,%llu,%u,%u,%llu,%llu,%Q,%llu,%u);",
         player_id, path_id, media, name, melo_tags_get_title (tags), artist_id,
-        album_id, genre_id, 0, melo_tags_get_track (tags), cover_id, timestamp);
+        album_id, genre_id, 0, melo_tags_get_track (tags), cover_id, browser_id,
+        melo_tags_get_media_id (tags), timestamp, flags);
   if (!sql)
     return ret;
 
@@ -491,6 +592,83 @@ melo_library_add_media (const char *player, uint64_t player_id,
   sqlite3_free (sql);
 
   return ret;
+}
+
+/**
+ * melo_library_media_get_media_flags:
+ * @media_id: the media ID in library database
+ *
+ * This function can be used to get the flags from a media identified by
+ * @media_id. The value can be retrieved from melo_library_get_media_id() and
+ * melo_library_get_media_id_from_browser().
+ *
+ * Returns: the media flags or 0 if not found.
+ */
+unsigned int
+melo_library_media_get_flags (uint64_t media_id)
+{
+  uint64_t flags = 0;
+  char sql[100];
+  ;
+
+  if (!media_id)
+    return flags;
+
+  /* Get flags from media */
+  snprintf (sql, sizeof (sql), "SELECT flags FROM media WHERE rowid = %llu;",
+      (unsigned long long) media_id);
+  melo_library_get_uint64 (sql, &flags);
+
+  return flags;
+}
+
+/**
+ * melo_library_update_media_flags:
+ * @media_id: the media ID in library database
+ * @flags: a combination of #MeloLibraryFlag
+ * @unset: set %true to unset the flags, %false to set
+ *
+ * This function can be used to update one or more #MeloLibraryFlag flags from a
+ * media identified by @media_id. If @unset is %true, the flags will be unset,
+ * otherwise, they will be set.
+ * The @media_id parameter value can be found with melo_library_get_media_id().
+ *
+ * If the flag #MELO_LIBRARY_FLAG_FAVORITE is removed and the flag
+ * #MELO_LIBRARY_FLAG_FAVORITE_ONLY was set, the media will be deleted from the
+ * library database.
+ *
+ * Returns: %true if the media flags have been updated successfully, %false
+ *     otherwise.
+ */
+bool
+melo_library_update_media_flags (
+    uint64_t media_id, unsigned int flags, bool unset)
+{
+  char sql[100];
+
+  /* Force 'favorite' when 'favorite only' set */
+  if (flags & MELO_LIBRARY_FLAG_FAVORITE_ONLY)
+    flags |= MELO_LIBRARY_FLAG_FAVORITE;
+  if (unset)
+    flags &= ~MELO_LIBRARY_FLAG_FAVORITE_ONLY;
+
+  /* Prepare SQL update */
+  snprintf (sql, sizeof (sql),
+      "UPDATE media SET flags = (flags %c %u) WHERE rowid = %llu;",
+      unset ? '&' : '|', unset ? ~flags : flags, (unsigned long long) media_id);
+  if (sqlite3_exec (melo_library_db, sql, NULL, NULL, NULL) != SQLITE_OK)
+    return false;
+
+  /* Remove media item if marked as 'favorite only' */
+  if (unset && (flags & MELO_LIBRARY_FLAG_FAVORITE) &&
+      (melo_library_media_get_flags (media_id) &
+          MELO_LIBRARY_FLAG_FAVORITE_ONLY)) {
+    snprintf (sql, sizeof (sql), "DELETE FROM media WHERE rowid = %llu;",
+        (unsigned long long) media_id);
+    sqlite3_exec (melo_library_db, sql, NULL, NULL, NULL);
+  }
+
+  return true;
 }
 
 static bool
@@ -532,6 +710,16 @@ melo_library_vfind (MeloLibraryType type, MeloLibraryCb cb, void *user_data,
 
   /* Select columns to query */
   end = fields;
+  if (select & MELO_LIBRARY_SELECT (PATH_ID))
+    end = g_stpcpy (end, "path_id,");
+  if (select & MELO_LIBRARY_SELECT (MEDIA_ID))
+    end = g_stpcpy (end, "media_id,");
+  if (select & MELO_LIBRARY_SELECT (ARTIST_ID))
+    end = g_stpcpy (end, "artist_id,");
+  if (select & MELO_LIBRARY_SELECT (ALBUM_ID))
+    end = g_stpcpy (end, "album_id,");
+  if (select & MELO_LIBRARY_SELECT (GENRE_ID))
+    end = g_stpcpy (end, "genre_id,");
   if (select & MELO_LIBRARY_SELECT (PLAYER))
     end = g_stpcpy (end, "player,");
   if (select & MELO_LIBRARY_SELECT (PATH))
@@ -554,7 +742,7 @@ melo_library_vfind (MeloLibraryType type, MeloLibraryCb cb, void *user_data,
     end = g_stpcpy (end, "track,");
   if (select & MELO_LIBRARY_SELECT (COVER))
     end = g_stpcpy (end, "cover,");
-  g_stpcpy (end, type == MELO_LIBRARY_TYPE_MEDIA ? "media_id" : "rowid");
+  g_stpcpy (end, type == MELO_LIBRARY_TYPE_MEDIA ? "media_id,flags" : "rowid");
 
   /* Prepare string for conditions */
   conds = g_string_new_len (NULL, MELO_LIBRARY_SQL_CONDS_SIZE);
@@ -662,6 +850,9 @@ melo_library_vfind (MeloLibraryType type, MeloLibraryCb cb, void *user_data,
       sqlite3_snprintf (
           sizeof (temp), temp, "cover = %Q", va_arg (args, const char *));
       break;
+    case MELO_LIBRARY_FIELD_FAVORITE:
+      sqlite3_snprintf (sizeof (temp), temp, "flags & %d", va_arg (args, int));
+      break;
     default:
       MELO_LOGE ("invalid field %d", field);
       if (match)
@@ -735,6 +926,16 @@ melo_library_vfind (MeloLibraryType type, MeloLibraryCb cb, void *user_data,
     char id_str[21];
 
     /* Set data */
+    if (select & MELO_LIBRARY_SELECT (PATH_ID))
+      data.path_id = sqlite3_column_int64 (req, i++);
+    if (select & MELO_LIBRARY_SELECT (MEDIA_ID))
+      data.media_id = sqlite3_column_int64 (req, i++);
+    if (select & MELO_LIBRARY_SELECT (ARTIST_ID))
+      data.artist_id = sqlite3_column_int64 (req, i++);
+    if (select & MELO_LIBRARY_SELECT (ALBUM_ID))
+      data.album_id = sqlite3_column_int64 (req, i++);
+    if (select & MELO_LIBRARY_SELECT (GENRE_ID))
+      data.genre_id = sqlite3_column_int64 (req, i++);
     if (select & MELO_LIBRARY_SELECT (PLAYER))
       data.player = (char *) sqlite3_column_text (req, i++);
     if (select & MELO_LIBRARY_SELECT (PATH))
@@ -778,6 +979,10 @@ melo_library_vfind (MeloLibraryType type, MeloLibraryCb cb, void *user_data,
     id = sqlite3_column_int64 (req, i++);
     snprintf (id_str, sizeof (id_str), "%llu", (unsigned long long) id);
     data.id = id_str;
+
+    /* Get flags */
+    if (type == MELO_LIBRARY_TYPE_MEDIA)
+      data.flags = sqlite3_column_int64 (req, i++);
 
     /* Call callback */
     cb (&data, tags, user_data);

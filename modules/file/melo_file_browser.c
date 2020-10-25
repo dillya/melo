@@ -264,7 +264,7 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
           MELO_LIBRARY_SELECT (ARTIST) | MELO_LIBRARY_SELECT (ALBUM) |
           MELO_LIBRARY_SELECT (GENRE) | MELO_LIBRARY_SELECT (TRACK) |
           MELO_LIBRARY_SELECT (COVER),
-      NULL, tags, tp.tv_sec);
+      NULL, tags, tp.tv_sec, MELO_LIBRARY_FLAG_NONE);
 
   /* Pack message */
   msg = melo_message_new (browser__response__get_packed_size (&resp));
@@ -524,7 +524,8 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         melo_library_add_media (NULL, mlist->player_id, NULL, mlist->path_id,
             g_file_info_get_name (info), 0,
             MELO_LIBRARY_SELECT (NAME) | MELO_LIBRARY_SELECT (TIMESTAMP),
-            g_file_info_get_display_name (info), NULL, timestamp);
+            g_file_info_get_display_name (info), NULL, timestamp,
+            MELO_LIBRARY_FLAG_NONE);
 
         /* Queue file to discoverer */
         if (mlist->disco) {
