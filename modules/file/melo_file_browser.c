@@ -54,7 +54,7 @@ typedef struct {
   uint64_t timestamp;
   Browser__Response__MediaItem *item;
   MeloTags *tags;
-} MeloBrowserFileLib;
+} MeloFileBrowserLib;
 
 typedef struct {
   MeloRequest *req;
@@ -73,7 +73,7 @@ typedef struct {
 
   uint64_t player_id;
   uint64_t path_id;
-} MeloBrowserFileMediaList;
+} MeloFileBrowserMediaList;
 
 typedef struct {
   MeloRequest *req;
@@ -83,7 +83,7 @@ typedef struct {
   char *uri;
 
   GList *list;
-} MeloBrowserFileAction;
+} MeloFileBrowserAction;
 
 struct _MeloFileBrowser {
   GObject parent_instance;
@@ -231,7 +231,7 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
   Browser__Response resp = BROWSER__RESPONSE__INIT;
   Browser__Response__MediaItem item = BROWSER__RESPONSE__MEDIA_ITEM__INIT;
   Tags__Tags item_tags = TAGS__TAGS__INIT;
-  MeloBrowserFileMediaList *mlist = user_data;
+  MeloFileBrowserMediaList *mlist = user_data;
   struct timespec tp;
   MeloMessage *msg;
   MeloTags *tags;
@@ -290,7 +290,7 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
 static void
 discover_finished_cb (GstDiscoverer *disco, gpointer user_data)
 {
-  MeloBrowserFileMediaList *mlist = user_data;
+  MeloFileBrowserMediaList *mlist = user_data;
 
   /* Release discoverer and request */
   g_object_unref (disco);
@@ -301,7 +301,7 @@ discover_finished_cb (GstDiscoverer *disco, gpointer user_data)
 static bool
 library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
 {
-  MeloBrowserFileLib *lib = user_data;
+  MeloFileBrowserLib *lib = user_data;
   Tags__Tags *item_tags;
 
   /* Save timestamp */
@@ -329,7 +329,7 @@ static void
 next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
   GFileEnumerator *en = G_FILE_ENUMERATOR (source_object);
-  MeloBrowserFileMediaList *mlist = user_data;
+  MeloFileBrowserMediaList *mlist = user_data;
   MeloFileBrowser *browser;
   GList *list;
 
@@ -472,7 +472,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     /* Parse file list */
     for (l = mlist->files; l != NULL; l = l->next) {
       GFileInfo *info = G_FILE_INFO (l->data);
-      MeloBrowserFileLib lib;
+      MeloFileBrowserLib lib;
       uint64_t timestamp;
 
       /* Skip first and last items */
@@ -614,7 +614,7 @@ static void children_cb (
 static void
 mount_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
-  MeloBrowserFileMediaList *mlist = user_data;
+  MeloFileBrowserMediaList *mlist = user_data;
   GFile *file = G_FILE (source_object);
 
   /* Finalize mount operation */
@@ -654,7 +654,7 @@ static void
 ask_password_cb (GMountOperation *op, gchar *message, gchar *default_user,
     gchar *default_domain, GAskPasswordFlags flags, gpointer user_data)
 {
-  MeloBrowserFileMediaList *mlist = user_data;
+  MeloFileBrowserMediaList *mlist = user_data;
 
   /* Anonymous connection failed */
   if (g_mount_operation_get_anonymous (op)) {
@@ -694,7 +694,7 @@ ask_password_cb (GMountOperation *op, gchar *message, gchar *default_user,
 static void
 children_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
-  MeloBrowserFileMediaList *mlist = user_data;
+  MeloFileBrowserMediaList *mlist = user_data;
   GFile *file = G_FILE (source_object);
   GFileEnumerator *en;
   GError *err = NULL;
@@ -753,7 +753,7 @@ static bool
 melo_file_browser_get_file_list (
     GFile *file, Browser__Request__GetMediaList *r, MeloRequest *req)
 {
-  MeloBrowserFileMediaList *mlist;
+  MeloFileBrowserMediaList *mlist;
 
   /* Create asynchronous object */
   mlist = calloc (1, sizeof (*mlist));
@@ -916,7 +916,7 @@ melo_file_browser_get_media_list (MeloFileBrowser *browser,
 static bool
 action_library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
 {
-  MeloBrowserFileLib *lib = user_data;
+  MeloFileBrowserLib *lib = user_data;
 
   /* Save tags */
   lib->tags = melo_tags_ref (tags);
@@ -929,7 +929,7 @@ action_next_files_cb (
     GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
   GFileEnumerator *en = G_FILE_ENUMERATOR (source_object);
-  MeloBrowserFileAction *action = user_data;
+  MeloFileBrowserAction *action = user_data;
   GList *list;
 
   /* Get next files list */
@@ -939,7 +939,7 @@ action_next_files_cb (
   if (list == NULL) {
     uint64_t player_id, path_id;
     MeloPlaylistEntry *entry;
-    MeloBrowserFileLib lib;
+    MeloFileBrowserLib lib;
     char *name;
 
     /* Get player and path ID */
@@ -1028,14 +1028,14 @@ static void
 action_children_cb (
     GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
-  MeloBrowserFileAction *action = user_data;
+  MeloFileBrowserAction *action = user_data;
   GFile *file = G_FILE (source_object);
   GFileEnumerator *en;
 
   /* Enumeration started */
   en = g_file_enumerate_children_finish (file, res, NULL);
   if (!en) {
-    MeloBrowserFileLib lib;
+    MeloFileBrowserLib lib;
     char *path, *media;
 
     /* Get dirname */
@@ -1082,7 +1082,7 @@ static bool
 melo_file_browser_do_action (
     MeloFileBrowser *browser, Browser__Request__DoAction *r, MeloRequest *req)
 {
-  MeloBrowserFileAction *action;
+  MeloFileBrowserAction *action;
   char *uri = NULL;
   GFile *file;
 
