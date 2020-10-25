@@ -33,6 +33,8 @@ struct _MeloTags {
   char *genre;
   unsigned int track;
   char *cover;
+  char *browser;
+  char *media_id;
 };
 
 /**
@@ -98,6 +100,8 @@ melo_tags_unref (MeloTags *tags)
     g_free (tags->album);
     g_free (tags->genre);
     g_free (tags->cover);
+    g_free (tags->browser);
+    g_free (tags->media_id);
     free (tags);
   } else if (ref_count < 1)
     MELO_LOGC ("negative reference counter %d", ref_count - 1);
@@ -176,6 +180,10 @@ melo_tags_merge (MeloTags *new, MeloTags *old, unsigned int flags)
     new->track = old->track;
   if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_COVER) && !new->cover)
     new->cover = g_strdup (old->cover);
+  if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_BROWSER) && !new->browser)
+    new->browser = g_strdup (old->browser);
+  if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_MEDIA_ID) && !new->media_id)
+    new->media_id = g_strdup (old->media_id);
   melo_tags_unref (old);
 
   return new;
@@ -327,6 +335,54 @@ melo_tags_set_cover (MeloTags *tags, GObject *obj, const char *cover)
 }
 
 /**
+ * melo_tags_set_browser:
+ * @tags: a #MeloTags
+ * @browser: the browser to set
+ *
+ * This function can be used to set the browser from which the @tags is
+ * coming from. If the browser is already set, the functions will return
+ * %false. To update a #MeloTags, please consider melo_tags_merge().
+ *
+ * Returns: %true if the browser has been set, %false otherwise.
+ */
+bool
+melo_tags_set_browser (MeloTags *tags, const char *browser)
+{
+  if (!tags || tags->browser)
+    return false;
+
+  /* Set browser */
+  tags->browser = g_strdup (browser);
+
+  return true;
+}
+
+/**
+ * melo_tags_set_media_id:
+ * @tags: a #MeloTags
+ * @id: the media ID to set
+ *
+ * This function can be used to set the media ID in the environment of the tags
+ * generator. If a browser generates a tags from a resource with a different ID
+ * from the resource path, it can set this value with the specific ID. If the
+ * media ID is already set, the functions will return %false. To update a
+ * #MeloTags, please consider melo_tags_merge().
+ *
+ * Returns: %true if the media ID has been set, %false otherwise.
+ */
+bool
+melo_tags_set_media_id (MeloTags *tags, const char *id)
+{
+  if (!tags || tags->media_id)
+    return false;
+
+  /* Set media ID */
+  tags->media_id = g_strdup (id);
+
+  return true;
+}
+
+/**
  * melo_tags_get_title:
  * @tags: a #MeloTags
  *
@@ -396,6 +452,30 @@ const char *
 melo_tags_get_cover (MeloTags *tags)
 {
   return tags ? tags->cover : NULL;
+}
+
+/**
+ * melo_tags_get_browser:
+ * @tags: a #MeloTags
+ *
+ * Returns: the browser or %NULL.
+ */
+const char *
+melo_tags_get_browser (MeloTags *tags)
+{
+  return tags ? tags->browser : NULL;
+}
+
+/**
+ * melo_tags_get_media_id:
+ * @tags: a #MeloTags
+ *
+ * Returns: the media ID or %NULL.
+ */
+const char *
+melo_tags_get_media_id (MeloTags *tags)
+{
+  return tags ? tags->media_id : NULL;
 }
 
 /**

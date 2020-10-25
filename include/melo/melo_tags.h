@@ -34,6 +34,8 @@ typedef enum _MeloTagsMergeFlag MeloTagsMergeFlag;
  * @MELO_TAGS_MERGE_FLAG_SKIP_GENRE: skip genre, others are merged
  * @MELO_TAGS_MERGE_FLAG_SKIP_TRACK: skip track, others are merged
  * @MELO_TAGS_MERGE_FLAG_SKIP_COVER: skip cover, others are merged
+ * @MELO_TAGS_MERGE_FLAG_SKIP_BROWSER: skip browser, others are merged
+ * @MELO_TAGS_MERGE_FLAG_SKIP_MEDIA_ID: skip media ID, others are merged
  * @MELO_TAGS_MERGE_FLAG_SKIP_ALL: skip all tags, none are merged
  *
  * This flags can be used to specify which tags data will be merged from old
@@ -51,6 +53,8 @@ enum _MeloTagsMergeFlag {
   MELO_TAGS_MERGE_FLAG_SKIP_GENRE = (1 << 3),
   MELO_TAGS_MERGE_FLAG_SKIP_TRACK = (1 << 4),
   MELO_TAGS_MERGE_FLAG_SKIP_COVER = (1 << 5),
+  MELO_TAGS_MERGE_FLAG_SKIP_BROWSER = (1 << 6),
+  MELO_TAGS_MERGE_FLAG_SKIP_MEDIA_ID = (1 << 7),
   MELO_TAGS_MERGE_FLAG_SKIP_ALL = ((1 << 6) - 1),
 };
 
@@ -68,6 +72,8 @@ bool melo_tags_set_album (MeloTags *tags, const char *album);
 bool melo_tags_set_genre (MeloTags *tags, const char *genre);
 bool melo_tags_set_track (MeloTags *tags, unsigned int track);
 bool melo_tags_set_cover (MeloTags *tags, GObject *obj, const char *cover);
+bool melo_tags_set_browser (MeloTags *tags, const char *browser);
+bool melo_tags_set_media_id (MeloTags *tags, const char *id);
 
 const char *melo_tags_get_title (MeloTags *tags);
 const char *melo_tags_get_artist (MeloTags *tags);
@@ -75,6 +81,8 @@ const char *melo_tags_get_album (MeloTags *tags);
 const char *melo_tags_get_genre (MeloTags *tags);
 unsigned int melo_tags_get_track (MeloTags *tags);
 const char *melo_tags_get_cover (MeloTags *tags);
+const char *melo_tags_get_browser (MeloTags *tags);
+const char *melo_tags_get_media_id (MeloTags *tags);
 
 char *melo_tags_gen_cover (GObject *obj, const char *cover);
 
