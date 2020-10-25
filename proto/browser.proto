@@ -30,6 +30,10 @@ message Action {
     PLAY = 1;
     /* Add media to top of playlist */
     ADD = 2;
+    /* Add media to library favorites */
+    SET_FAVORITE = 3;
+    /* Remove media from library favorites */
+    UNSET_FAVORITE = 4;
     /* Custom action: Browser.Request.DoAction.action_id must be with the custom
      * action ID
      */
@@ -163,6 +167,9 @@ message Response {
 
     /* Item actions */
     repeated Action actions = 5;
+
+    /* Media is marked as favorite */
+    bool favorite = 6;
   }
 
   /* Media list response */
