@@ -251,6 +251,88 @@ static Browser__Action *media_actions_ptr[2] = {
     &media_actions[1],
 };
 
+static Browser__SortMenu__Item sort_menu_items[6] = {
+    {.base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
+        .id = "n",
+        .name = "Name"},
+    {
+        .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
+        .id = "t",
+        .name = "Title",
+    },
+    {
+        .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
+        .id = "a",
+        .name = "Artistt",
+    },
+    {
+        .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
+        .id = "l",
+        .name = "Album",
+    },
+    {
+        .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
+        .id = "g",
+        .name = "Genre",
+    },
+    {
+        .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
+        .id = "k",
+        .name = "Track",
+    },
+};
+static Browser__SortMenu__Item sort_dir_menu_items[2] = {
+    {.base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
+        .id = "a",
+        .name = "Ascending"},
+    {
+        .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
+        .id = "d",
+        .name = "Descending",
+    },
+};
+
+static Browser__SortMenu__Item *sort_dir_menu_items_ptr[2] = {
+    &sort_dir_menu_items[0],
+    &sort_dir_menu_items[1],
+};
+static Browser__SortMenu sort_dir_menus = {
+    .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__descriptor),
+    .n_items = G_N_ELEMENTS (sort_dir_menu_items_ptr),
+    .items = sort_dir_menu_items_ptr,
+};
+
+static Browser__SortMenu__Item *sort_category_menu_items_ptr[1] = {
+    &sort_menu_items[0],
+};
+static Browser__SortMenu sort_category_menus = {
+    .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__descriptor),
+    .n_items = G_N_ELEMENTS (sort_category_menu_items_ptr),
+    .items = sort_category_menu_items_ptr,
+};
+static Browser__SortMenu *sort_category_menus_ptr[2] = {
+    &sort_category_menus,
+    &sort_dir_menus,
+};
+
+static Browser__SortMenu__Item *sort_media_menu_items_ptr[6] = {
+    &sort_menu_items[0],
+    &sort_menu_items[1],
+    &sort_menu_items[2],
+    &sort_menu_items[3],
+    &sort_menu_items[4],
+    &sort_menu_items[5],
+};
+static Browser__SortMenu sort_media_menus = {
+    .base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__descriptor),
+    .n_items = G_N_ELEMENTS (sort_media_menu_items_ptr),
+    .items = sort_media_menu_items_ptr,
+};
+static Browser__SortMenu *sort_media_menus_ptr[2] = {
+    &sort_media_menus,
+    &sort_dir_menus,
+};
+
 static bool
 media_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
 {
@@ -329,6 +411,7 @@ melo_library_browser_get_media_list (MeloLibraryBrowser *browser,
 {
   Browser__Response resp = BROWSER__RESPONSE__INIT;
   Browser__Response__MediaList media_list = BROWSER__RESPONSE__MEDIA_LIST__INIT;
+  MeloLibraryField sort_field = MELO_LIBRARY_FIELD_NAME;
   MeloLibraryField fields[3] = {0};
   MeloLibraryBrowserAsync async;
   MeloLibraryType type;
@@ -338,6 +421,8 @@ melo_library_browser_get_media_list (MeloLibraryBrowser *browser,
   unsigned int i;
   size_t count;
   bool search = false;
+  bool sort_desc = false;
+  char *sort[2] = {"n", "a"};
 
   /* Root media list */
   if (!g_strcmp0 (query, "/"))
@@ -353,6 +438,38 @@ melo_library_browser_get_media_list (MeloLibraryBrowser *browser,
   /* Parse query */
   if (!search && !melo_library_parse_query (query, &type, fields, ids))
     return false;
+
+  /* Set sort field */
+  if (r->n_sort && (search || type == MELO_LIBRARY_TYPE_MEDIA)) {
+    switch (*r->sort[0]) {
+    case 't':
+      sort_field = MELO_LIBRARY_FIELD_TITLE;
+      sort[0] = "t";
+      break;
+    case 'a':
+      sort_field = MELO_LIBRARY_FIELD_ARTIST;
+      sort[0] = "a";
+      break;
+    case 'l':
+      sort_field = MELO_LIBRARY_FIELD_ALBUM;
+      sort[0] = "l";
+      break;
+    case 'g':
+      sort_field = MELO_LIBRARY_FIELD_GENRE;
+      sort[0] = "g";
+      break;
+    case 'k':
+      sort_field = MELO_LIBRARY_FIELD_TRACK;
+      sort[0] = "k";
+      break;
+    }
+  }
+
+  /* Set sort order */
+  if (r->n_sort > 1 && *r->sort[1] == 'd') {
+    sort[1] = "d";
+    sort_desc = true;
+  }
 
   /* Limit count */
   count = r->count < MELO_LIBRARY_MAX_COUNT ? r->count : MELO_LIBRARY_MAX_COUNT;
@@ -373,29 +490,38 @@ melo_library_browser_get_media_list (MeloLibraryBrowser *browser,
             MELO_LIBRARY_SELECT (ARTIST) | MELO_LIBRARY_SELECT (ALBUM) |
             MELO_LIBRARY_SELECT (GENRE) | MELO_LIBRARY_SELECT (TRACK) |
             MELO_LIBRARY_SELECT (COVER),
-        count, r->offset, MELO_LIBRARY_FIELD_NONE, false, true,
-        MELO_LIBRARY_FIELD_MEDIA, query, MELO_LIBRARY_FIELD_NAME, query,
-        MELO_LIBRARY_FIELD_TITLE, query, MELO_LIBRARY_FIELD_ARTIST, query,
-        MELO_LIBRARY_FIELD_ALBUM, query, MELO_LIBRARY_FIELD_LAST);
+        count, r->offset, sort_field, sort_desc, true, MELO_LIBRARY_FIELD_MEDIA,
+        query, MELO_LIBRARY_FIELD_NAME, query, MELO_LIBRARY_FIELD_TITLE, query,
+        MELO_LIBRARY_FIELD_ARTIST, query, MELO_LIBRARY_FIELD_ALBUM, query,
+        MELO_LIBRARY_FIELD_LAST);
   } else if (type == MELO_LIBRARY_TYPE_MEDIA) {
     melo_library_find (MELO_LIBRARY_TYPE_MEDIA, media_cb, &async,
         MELO_LIBRARY_SELECT (NAME) | MELO_LIBRARY_SELECT (TITLE) |
             MELO_LIBRARY_SELECT (ARTIST) | MELO_LIBRARY_SELECT (ALBUM) |
             MELO_LIBRARY_SELECT (GENRE) | MELO_LIBRARY_SELECT (TRACK) |
             MELO_LIBRARY_SELECT (COVER),
-        count, r->offset, MELO_LIBRARY_FIELD_NONE, false, false, fields[0],
-        ids[0], fields[1], ids[1], MELO_LIBRARY_FIELD_LAST);
+        count, r->offset, sort_field, sort_desc, false, fields[0], ids[0],
+        fields[1], ids[1], MELO_LIBRARY_FIELD_LAST);
   } else {
     melo_library_find (type, category_cb, &async, MELO_LIBRARY_SELECT (NAME),
-        count, r->offset, MELO_LIBRARY_FIELD_NAME, false, false, fields[0],
-        ids[0], MELO_LIBRARY_FIELD_LAST);
+        count, r->offset, sort_field, sort_desc, false, fields[0], ids[0],
+        MELO_LIBRARY_FIELD_LAST);
   }
 
-  /* Add actions */
+  /* Add actions and sort menu */
   if (!search && type == MELO_LIBRARY_TYPE_MEDIA) {
     media_list.n_actions = G_N_ELEMENTS (category_actions_ptr);
     media_list.actions = category_actions_ptr;
+    media_list.n_sort_menus = G_N_ELEMENTS (sort_media_menus_ptr);
+    media_list.sort_menus = sort_media_menus_ptr;
+  } else {
+    media_list.n_sort_menus = G_N_ELEMENTS (sort_category_menus_ptr);
+    media_list.sort_menus = sort_category_menus_ptr;
   }
+
+  /* Set current sort setting */
+  media_list.n_sort = 2;
+  media_list.sort = sort;
 
   /* Update count and offset */
   media_list.count = media_list.n_items;
