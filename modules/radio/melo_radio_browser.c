@@ -16,6 +16,7 @@
  */
 
 #include <melo/melo_http_client.h>
+#include <melo/melo_library.h>
 #include <melo/melo_playlist.h>
 
 #define MELO_LOG_TAG "radio_browser"
@@ -180,7 +181,7 @@ list_category_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
 static void
 list_station_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
 {
-  static Browser__Action actions[2] = {
+  static Browser__Action actions[4] = {
       {
           .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
           .type = BROWSER__ACTION__TYPE__PLAY,
@@ -193,10 +194,28 @@ list_station_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
           .name = "Add radio to playlist",
           .icon = "fa:plus",
       },
+      {
+          .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+          .type = BROWSER__ACTION__TYPE__SET_FAVORITE,
+          .name = "Add radio to favorites",
+          .icon = "fa:star",
+      },
+      {
+          .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+          .type = BROWSER__ACTION__TYPE__UNSET_FAVORITE,
+          .name = "Remove radio from favorites",
+          .icon = "fa:star",
+      },
   };
-  static Browser__Action *actions_ptr[2] = {
+  static Browser__Action *set_fav_actions_ptr[3] = {
       &actions[0],
       &actions[1],
+      &actions[2],
+  };
+  static Browser__Action *unset_fav_actions_ptr[3] = {
+      &actions[0],
+      &actions[1],
+      &actions[3],
   };
   MeloRequest *req = user_data;
 
@@ -237,6 +256,7 @@ list_station_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
     for (i = 0; i < len; i++) {
       const char *cover;
       JsonObject *obj;
+      uint64_t id;
 
       /* Init media item */
       browser__response__media_item__init (&items[i]);
@@ -252,8 +272,19 @@ list_station_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
       items[i].id = (char *) json_object_get_string_member (obj, "stationuuid");
       items[i].name = (char *) json_object_get_string_member (obj, "name");
       items[i].type = BROWSER__RESPONSE__MEDIA_ITEM__TYPE__MEDIA;
-      items[i].n_actions = G_N_ELEMENTS (actions_ptr);
-      items[i].actions = actions_ptr;
+
+      /* Set favorite and actions */
+      id = melo_library_get_media_id_from_browser (
+          MELO_RADIO_BROWSER_ID, items[i].id);
+      items[i].favorite =
+          melo_library_media_get_flags (id) & MELO_LIBRARY_FLAG_FAVORITE;
+      if (items[i].favorite) {
+        items[i].n_actions = G_N_ELEMENTS (unset_fav_actions_ptr);
+        items[i].actions = unset_fav_actions_ptr;
+      } else {
+        items[i].n_actions = G_N_ELEMENTS (set_fav_actions_ptr);
+        items[i].actions = set_fav_actions_ptr;
+      }
 
       /* Set tags */
       items[i].tags = &tags[i];
@@ -469,8 +500,12 @@ action_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
       cover = json_object_get_string_member (obj, "favicon");
       if (cover) {
         tags = melo_tags_new ();
-        if (tags)
+        if (tags) {
           melo_tags_set_cover (tags, melo_request_get_object (req), cover);
+          melo_tags_set_browser (tags, MELO_RADIO_BROWSER_ID);
+          melo_tags_set_media_id (
+              tags, json_object_get_string_member (obj, "stationuuid"));
+        }
       }
 
       MELO_LOGD ("play radio %s: %s", name, url);
@@ -483,6 +518,36 @@ action_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
         melo_playlist_play_media (MELO_RADIO_PLAYER_ID, url, name, tags);
       else if (type == BROWSER__ACTION__TYPE__ADD)
         melo_playlist_add_media (MELO_RADIO_PLAYER_ID, url, name, tags);
+      else {
+        char *path, *media;
+
+        /* Separate path */
+        path = g_strdup (url);
+        media = strrchr (path, '/');
+        if (media)
+          *media++ = '\0';
+
+        /* Set / unset favorite marker */
+        if (type == BROWSER__ACTION__TYPE__UNSET_FAVORITE) {
+          uint64_t id;
+
+          /* Get media ID */
+          id = melo_library_get_media_id (
+              MELO_RADIO_PLAYER_ID, 0, path, 0, media);
+
+          /* Unset favorite */
+          melo_library_update_media_flags (
+              id, MELO_LIBRARY_FLAG_FAVORITE_ONLY, true);
+        } else if (type == BROWSER__ACTION__TYPE__SET_FAVORITE)
+          /* Set favorite */
+          melo_library_add_media (MELO_RADIO_PLAYER_ID, 0, path, 0, media, 0,
+              MELO_LIBRARY_SELECT (COVER), name, tags, 0,
+              MELO_LIBRARY_FLAG_FAVORITE_ONLY);
+
+        /* Free resources */
+        g_free (path);
+        melo_tags_unref (tags);
+      }
     }
   }
 
@@ -501,7 +566,9 @@ melo_radio_browser_do_action (
 
   /* Check action type */
   if (r->type != BROWSER__ACTION__TYPE__PLAY &&
-      r->type != BROWSER__ACTION__TYPE__ADD)
+      r->type != BROWSER__ACTION__TYPE__ADD &&
+      r->type != BROWSER__ACTION__TYPE__SET_FAVORITE &&
+      r->type != BROWSER__ACTION__TYPE__UNSET_FAVORITE)
     return false;
 
   /* Action on search item */
