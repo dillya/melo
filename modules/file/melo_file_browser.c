@@ -39,6 +39,11 @@
                                  "," G_FILE_ATTRIBUTE_STANDARD_NAME \
                                  "," G_FILE_ATTRIBUTE_TIME_MODIFIED
 
+#define MELO_FILE_BROWSER_DEFAULT_FILTER \
+  "3g2,3gp,aa,aac,aax,act,aiff,alac,amv,ape,asf,au,avi,cda,flac,flv,m2ts,m2v," \
+  "m4a,m4b,m4p,m4v,mkv,mmf,mogg,mov,mp2,mp3,mp4,mpc,mpe,mpeg,mpg,mpv,mts,nsv," \
+  "oga,ogg,ogv,opus,qt,ra,raw,rm,rmvb,ts,vob,wav,webm,wma,wmv,wv"
+
 typedef enum _MeloFileBrowserType {
   MELO_FILE_BROWSER_TYPE_ROOT,
   MELO_FILE_BROWSER_TYPE_LOCAL,
@@ -88,6 +93,7 @@ struct _MeloFileBrowser {
   /* Settings */
   MeloSettingsEntry *en_network;
   MeloSettingsEntry *en_tags;
+  MeloSettingsEntry *filter;
 };
 
 MELO_DEFINE_BROWSER (MeloFileBrowser, melo_file_browser)
@@ -169,9 +175,9 @@ melo_file_browser_settings (MeloBrowser *browser, MeloSettings *settings)
       melo_settings_group_add_boolean (group, "tags", "Display media file tags",
           "Find media tags (title, artist, album, cover) and display them",
           true, NULL, MELO_SETTINGS_FLAG_NONE);
-  melo_settings_group_add_string (group, "filter", "File extension filter",
-      "File extension to display", ".mp3,.mp4", NULL,
-      MELO_SETTINGS_FLAG_READ_ONLY);
+  fbrowser->filter = melo_settings_group_add_string (group, "filter",
+      "File extension filter", "File extension to display",
+      MELO_FILE_BROWSER_DEFAULT_FILTER, NULL, MELO_SETTINGS_FLAG_NONE);
 }
 
 static gint
@@ -179,6 +185,43 @@ ginfo_cmp (const GFileInfo *a, const GFileInfo *b)
 {
   return g_strcmp0 (g_file_info_get_display_name ((GFileInfo *) a),
       g_file_info_get_display_name ((GFileInfo *) b));
+}
+
+static bool
+melo_file_browser_filter (MeloFileBrowser *browser, const char *name)
+{
+  const char *exts, *ext;
+  size_t len, n = 0;
+
+  /* Get extension list */
+  if (!melo_settings_entry_get_string (browser->filter, &exts, NULL))
+    return true;
+
+  /* Get extension */
+  ext = strrchr (name, '.');
+  if (!ext)
+    return false;
+  len = strlen (++ext);
+
+  /* Check extension */
+  while (*exts != '\0') {
+    if (*exts == ext[n]) {
+      n++;
+      exts++;
+      if (n < len)
+        continue;
+      else if (*exts == ',' || *exts == '\0')
+        return true;
+    }
+
+    n = 0;
+    exts = strchr (exts, ',');
+    if (!exts)
+      break;
+    exts++;
+  }
+
+  return false;
 }
 
 static void
@@ -287,7 +330,11 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
   GFileEnumerator *en = G_FILE_ENUMERATOR (source_object);
   MeloBrowserFileMediaList *mlist = user_data;
+  MeloFileBrowser *browser;
   GList *list;
+
+  /* Get browser */
+  browser = MELO_FILE_BROWSER (melo_request_get_object (mlist->req));
 
   /* Get next files list */
   list = g_file_enumerator_next_files_finish (en, res, NULL);
@@ -342,7 +389,6 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     Browser__Response__MediaList media_list =
         BROWSER__RESPONSE__MEDIA_LIST__INIT;
     Browser__Response__MediaItem *items;
-    MeloFileBrowser *browser;
     unsigned int i = 0;
     MeloMessage *msg;
     bool en_tags;
@@ -350,7 +396,6 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     GList *l;
 
     /* Get tags settings */
-    browser = MELO_FILE_BROWSER (melo_request_get_object (mlist->req));
     if (!browser ||
         !melo_settings_entry_get_boolean (browser->en_tags, &en_tags, NULL))
       en_tags = true;
@@ -531,22 +576,24 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     while (list) {
       GList *l = list;
       GFileInfo *info = G_FILE_INFO (l->data);
+      GFileType type = g_file_info_get_file_type (info);
       const char *name;
 
       /* Remove file info from list */
       list = g_list_remove_link (list, l);
 
-      /* Filter file by name */
+      /* Filter file by name and extension */
       name = g_file_info_get_name (info);
-      if (!name || *name == '.') {
-        /* Drop file starting with '.' */
+      if (!name || *name == '.' ||
+          (type == G_FILE_TYPE_REGULAR &&
+              !melo_file_browser_filter (browser, name))) {
         g_object_unref (info);
         g_list_free (l);
         continue;
       }
 
       /* Add file to internal lists */
-      if (g_file_info_get_file_type (info) == G_FILE_TYPE_REGULAR)
+      if (type == G_FILE_TYPE_REGULAR)
         mlist->files = g_list_concat (l, mlist->files);
       else
         mlist->dirs = g_list_concat (l, mlist->dirs);
