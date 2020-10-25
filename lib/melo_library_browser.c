@@ -72,6 +72,7 @@ melo_library_browser_get_root (MeloRequest *req)
     const char *name;
     const char *icon;
   } root[] = {
+      {"favorites", "Favorites", "fa:star"},
       {"artists", "Artists", "fa:user"},
       {"albums", "Albums", "fa:compact-disc"},
       {"songs", "Songs", "fa:music"},
@@ -206,6 +207,18 @@ melo_library_parse_query (const char *query, MeloLibraryType *type,
       ids[0] = strtoull (frag[1], NULL, 10);
       return true;
     }
+  } else if (len[0] == 9 && !strncmp (frag[0], "favorites", len[0])) {
+    if (count == 1) {
+      *type = MELO_LIBRARY_TYPE_MEDIA;
+      fields[0] = MELO_LIBRARY_FIELD_FAVORITE;
+      ids[0] = true;
+      return true;
+    } else if (count == 2) {
+      *type = MELO_LIBRARY_TYPE_MEDIA;
+      fields[0] = MELO_LIBRARY_FIELD_MEDIA_ID;
+      ids[0] = strtoull (frag[1], NULL, 10);
+      return true;
+    }
   }
 
   return false;
@@ -226,7 +239,7 @@ static Browser__Action category_actions[2] = {
     },
 };
 
-static Browser__Action media_actions[2] = {
+static Browser__Action media_actions[4] = {
     {
         .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
         .type = BROWSER__ACTION__TYPE__PLAY,
@@ -239,6 +252,18 @@ static Browser__Action media_actions[2] = {
         .name = "Add media to playlist",
         .icon = "fa:plus",
     },
+    {
+        .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+        .type = BROWSER__ACTION__TYPE__SET_FAVORITE,
+        .name = "Add media to favorites",
+        .icon = "fa:star",
+    },
+    {
+        .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+        .type = BROWSER__ACTION__TYPE__UNSET_FAVORITE,
+        .name = "Remove media from favorites",
+        .icon = "fa:star",
+    },
 };
 
 static Browser__Action *category_actions_ptr[2] = {
@@ -246,9 +271,15 @@ static Browser__Action *category_actions_ptr[2] = {
     &category_actions[1],
 };
 
-static Browser__Action *media_actions_ptr[2] = {
+static Browser__Action *media_set_fav_actions_ptr[3] = {
     &media_actions[0],
     &media_actions[1],
+    &media_actions[2],
+};
+static Browser__Action *media_unset_fav_actions_ptr[3] = {
+    &media_actions[0],
+    &media_actions[1],
+    &media_actions[3],
 };
 
 static Browser__SortMenu__Item sort_menu_items[6] = {
@@ -368,8 +399,14 @@ media_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
   }
 
   /* Add actions */
-  item->n_actions = G_N_ELEMENTS (media_actions_ptr);
-  item->actions = media_actions_ptr;
+  if (data->flags & MELO_LIBRARY_FLAG_FAVORITE) {
+    item->n_actions = G_N_ELEMENTS (media_unset_fav_actions_ptr);
+    item->actions = media_unset_fav_actions_ptr;
+  } else {
+    item->n_actions = G_N_ELEMENTS (media_set_fav_actions_ptr);
+    item->actions = media_set_fav_actions_ptr;
+  }
+  item->favorite = data->flags & MELO_LIBRARY_FLAG_FAVORITE;
 
   /* Add item to list */
   async->media_list->items[async->media_list->n_items] = item;
@@ -582,7 +619,9 @@ melo_library_browser_do_action (MeloLibraryBrowser *browser,
 
   /* Check action type */
   if (r->type != BROWSER__ACTION__TYPE__PLAY &&
-      r->type != BROWSER__ACTION__TYPE__ADD)
+      r->type != BROWSER__ACTION__TYPE__ADD &&
+      r->type != BROWSER__ACTION__TYPE__SET_FAVORITE &&
+      r->type != BROWSER__ACTION__TYPE__UNSET_FAVORITE)
     return false;
 
   /* Action on search item */
@@ -596,16 +635,21 @@ melo_library_browser_do_action (MeloLibraryBrowser *browser,
   if (type != MELO_LIBRARY_TYPE_MEDIA)
     return false;
 
-  /* Get files */
-  melo_library_find (MELO_LIBRARY_TYPE_MEDIA, action_cb, &action,
-      MELO_LIBRARY_SELECT (PLAYER) | MELO_LIBRARY_SELECT (PATH) |
-          MELO_LIBRARY_SELECT (MEDIA) | MELO_LIBRARY_SELECT (NAME) |
-          MELO_LIBRARY_SELECT (TITLE) | MELO_LIBRARY_SELECT (ARTIST) |
-          MELO_LIBRARY_SELECT (ALBUM) | MELO_LIBRARY_SELECT (GENRE) |
-          MELO_LIBRARY_SELECT (TRACK) | MELO_LIBRARY_SELECT (COVER),
-      fields[0] != MELO_LIBRARY_FIELD_MEDIA_ID ? MELO_LIBRARY_MAX_COUNT : 1, 0,
-      MELO_LIBRARY_FIELD_NONE, false, false, fields[0], ids[0],
-      MELO_LIBRARY_FIELD_LAST);
+  /* Do action */
+  if (r->type == BROWSER__ACTION__TYPE__SET_FAVORITE)
+    melo_library_update_media_flags (ids[0], MELO_LIBRARY_FLAG_FAVORITE, false);
+  else if (r->type == BROWSER__ACTION__TYPE__UNSET_FAVORITE)
+    melo_library_update_media_flags (ids[0], MELO_LIBRARY_FLAG_FAVORITE, true);
+  else
+    melo_library_find (MELO_LIBRARY_TYPE_MEDIA, action_cb, &action,
+        MELO_LIBRARY_SELECT (PLAYER) | MELO_LIBRARY_SELECT (PATH) |
+            MELO_LIBRARY_SELECT (MEDIA) | MELO_LIBRARY_SELECT (NAME) |
+            MELO_LIBRARY_SELECT (TITLE) | MELO_LIBRARY_SELECT (ARTIST) |
+            MELO_LIBRARY_SELECT (ALBUM) | MELO_LIBRARY_SELECT (GENRE) |
+            MELO_LIBRARY_SELECT (TRACK) | MELO_LIBRARY_SELECT (COVER),
+        fields[0] != MELO_LIBRARY_FIELD_MEDIA_ID ? MELO_LIBRARY_MAX_COUNT : 1,
+        0, MELO_LIBRARY_FIELD_NONE, false, false, fields[0], ids[0],
+        MELO_LIBRARY_FIELD_LAST);
 
   return ret;
 }
