@@ -54,6 +54,7 @@ typedef struct {
   uint64_t timestamp;
   Browser__Response__MediaItem *item;
   MeloTags *tags;
+  uint64_t id;
 } MeloFileBrowserLib;
 
 typedef struct {
@@ -80,7 +81,6 @@ typedef struct {
   GCancellable *cancel;
 
   Browser__Action__Type type;
-  char *uri;
 
   GList *list;
 } MeloFileBrowserAction;
@@ -322,6 +322,9 @@ library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
     }
   }
 
+  /* Set favorite status */
+  lib->item->favorite = data->flags & MELO_LIBRARY_FLAG_FAVORITE;
+
   return true;
 }
 
@@ -362,7 +365,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
             .icon = "fa:search",
         },
     };
-    static Browser__Action file_actions[2] = {
+    static Browser__Action file_actions[4] = {
         {
             .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
             .type = BROWSER__ACTION__TYPE__PLAY,
@@ -375,15 +378,33 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
             .name = "Add file to playlist",
             .icon = "fa:plus",
         },
+        {
+            .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+            .type = BROWSER__ACTION__TYPE__SET_FAVORITE,
+            .name = "Add media to favorites",
+            .icon = "fa:star",
+        },
+        {
+            .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+            .type = BROWSER__ACTION__TYPE__UNSET_FAVORITE,
+            .name = "Remove media from favorites",
+            .icon = "fa:star",
+        },
     };
     static Browser__Action *folder_actions_ptr[3] = {
         &folder_actions[0],
         &folder_actions[1],
         &folder_actions[2],
     };
-    static Browser__Action *file_actions_ptr[2] = {
+    static Browser__Action *file_set_fav_actions_ptr[3] = {
         &file_actions[0],
         &file_actions[1],
+        &file_actions[2],
+    };
+    static Browser__Action *file_unset_fav_actions_ptr[3] = {
+        &file_actions[0],
+        &file_actions[1],
+        &file_actions[3],
     };
     Browser__Response resp = BROWSER__RESPONSE__INIT;
     Browser__Response__MediaList media_list =
@@ -488,8 +509,6 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
       items[i].id = g_strdup (g_file_info_get_name (info));
       items[i].name = g_strdup (g_file_info_get_display_name (info));
       items[i].type = BROWSER__RESPONSE__MEDIA_ITEM__TYPE__MEDIA;
-      items[i].n_actions = G_N_ELEMENTS (file_actions_ptr);
-      items[i].actions = file_actions_ptr;
 
       /* Create discoverer */
       if (en_tags && !mlist->disco) {
@@ -534,6 +553,15 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
           gst_discoverer_discover_uri_async (mlist->disco, uri);
           g_free (uri);
         }
+      }
+
+      /* Set actions */
+      if (items[i].favorite) {
+        items[i].n_actions = G_N_ELEMENTS (file_unset_fav_actions_ptr);
+        items[i].actions = file_unset_fav_actions_ptr;
+      } else {
+        items[i].n_actions = G_N_ELEMENTS (file_set_fav_actions_ptr);
+        items[i].actions = file_set_fav_actions_ptr;
       }
 
       /* Add item to list */
@@ -921,6 +949,7 @@ action_library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
 
   /* Save tags */
   lib->tags = melo_tags_ref (tags);
+  lib->id = data->media_id;
 
   return true;
 }
@@ -941,16 +970,22 @@ action_next_files_cb (
     uint64_t player_id, path_id;
     MeloPlaylistEntry *entry;
     MeloFileBrowserLib lib;
-    char *name;
+    char *name, *uri, *path;
+
+    /* Get directory URI */
+    uri = g_file_get_uri (g_file_enumerator_get_container (en));
 
     /* Get player and path ID */
+    path = g_uri_unescape_string (uri, NULL);
     player_id = melo_library_get_player_id (MELO_FILE_PLAYER_ID);
-    path_id = melo_library_get_path_id (action->uri);
+    path_id = melo_library_get_path_id (path);
 
     /* Create new playlist entry */
-    name = g_path_get_basename (action->uri);
+    name = strrchr (path, '/');
+    if (name)
+      name++;
     entry = melo_playlist_entry_new (MELO_FILE_PLAYER_ID, NULL, name, NULL);
-    g_free (name);
+    g_free (path);
 
     /* Sort files by name */
     action->list = g_list_sort (action->list, (GCompareFunc) ginfo_cmp);
@@ -961,7 +996,7 @@ action_next_files_cb (
       char *path;
 
       /* Build media path */
-      path = g_build_path ("/", action->uri, g_file_info_get_name (info), NULL);
+      path = g_build_path ("/", uri, g_file_info_get_name (info), NULL);
 
       /* Find media in library */
       lib.tags = NULL;
@@ -992,10 +1027,15 @@ action_next_files_cb (
 
     /* Release request, source object and asynchronous object */
     melo_request_unref (action->req);
-    g_free (action->uri);
     g_object_unref (en);
     free (action);
+    g_free (uri);
   } else {
+    MeloFileBrowser *browser;
+
+    /* Get browser */
+    browser = MELO_FILE_BROWSER (melo_request_get_object (action->req));
+
     /* Extract files and directories */
     while (list) {
       GList *l = list;
@@ -1008,7 +1048,8 @@ action_next_files_cb (
       /* Skip all entries except regular files */
       name = g_file_info_get_name (info);
       if (!name || *name == '.' ||
-          g_file_info_get_file_type (info) != G_FILE_TYPE_REGULAR) {
+          g_file_info_get_file_type (info) != G_FILE_TYPE_REGULAR ||
+          !melo_file_browser_filter (browser, name)) {
         /* Free entry */
         g_object_unref (info);
         g_list_free (l);
@@ -1036,38 +1077,51 @@ action_children_cb (
   /* Enumeration started */
   en = g_file_enumerate_children_finish (file, res, NULL);
   if (!en) {
+    char *uri, *path, *media;
     MeloFileBrowserLib lib;
-    char *path, *media;
 
-    /* Get dirname */
-    path = g_path_get_dirname (action->uri);
-    media = g_path_get_basename (action->uri);
+    /* Get file URI */
+    uri = g_file_get_uri (file);
+
+    /* Get path and media from URI */
+    path = g_uri_unescape_string (uri, NULL);
+    media = strrchr (path, '/');
+    if (media)
+      *media++ = '\0';
 
     /* Find media in library */
+    lib.id = 0;
     lib.tags = NULL;
     melo_library_find (MELO_LIBRARY_TYPE_MEDIA, action_library_cb, &lib,
-        MELO_LIBRARY_SELECT (TITLE) | MELO_LIBRARY_SELECT (ARTIST) |
-            MELO_LIBRARY_SELECT (ALBUM) | MELO_LIBRARY_SELECT (GENRE) |
-            MELO_LIBRARY_SELECT (TRACK) | MELO_LIBRARY_SELECT (COVER),
+        MELO_LIBRARY_SELECT (MEDIA_ID) | MELO_LIBRARY_SELECT (TITLE) |
+            MELO_LIBRARY_SELECT (ARTIST) | MELO_LIBRARY_SELECT (ALBUM) |
+            MELO_LIBRARY_SELECT (GENRE) | MELO_LIBRARY_SELECT (TRACK) |
+            MELO_LIBRARY_SELECT (COVER),
         1, 0, MELO_LIBRARY_FIELD_NONE, false, false, MELO_LIBRARY_FIELD_PLAYER,
         MELO_FILE_PLAYER_ID, MELO_LIBRARY_FIELD_PATH, path,
         MELO_LIBRARY_FIELD_MEDIA, media, MELO_LIBRARY_FIELD_LAST);
-    g_free (media);
     g_free (path);
 
     /* Do action as regular file */
     if (action->type == BROWSER__ACTION__TYPE__PLAY)
-      melo_playlist_play_media (
-          MELO_FILE_PLAYER_ID, action->uri, NULL, lib.tags);
+      melo_playlist_play_media (MELO_FILE_PLAYER_ID, uri, NULL, lib.tags);
     else if (action->type == BROWSER__ACTION__TYPE__ADD)
-      melo_playlist_add_media (
-          MELO_FILE_PLAYER_ID, action->uri, NULL, lib.tags);
+      melo_playlist_add_media (MELO_FILE_PLAYER_ID, uri, NULL, lib.tags);
+    else {
+      if (action->type == BROWSER__ACTION__TYPE__SET_FAVORITE && lib.id)
+        melo_library_update_media_flags (
+            lib.id, MELO_LIBRARY_FLAG_FAVORITE, false);
+      else if (action->type == BROWSER__ACTION__TYPE__UNSET_FAVORITE && lib.id)
+        melo_library_update_media_flags (
+            lib.id, MELO_LIBRARY_FLAG_FAVORITE, true);
+      melo_tags_unref (lib.tags);
+    }
 
     /* Release riequest, source object and asynchronous object */
     melo_request_unref (action->req);
     g_object_unref (file);
-    g_free (action->uri);
     free (action);
+    g_free (uri);
     return;
   }
 
@@ -1087,25 +1141,26 @@ melo_file_browser_do_action (
   char *uri = NULL;
   GFile *file;
 
-  /* Generate URI from path */
-  if (!melo_file_browser_get_uri (browser, r->path, &uri) || !uri)
-    return false;
-
   /* Do action */
   switch (r->type) {
   case BROWSER__ACTION__TYPE__PLAY:
   case BROWSER__ACTION__TYPE__ADD:
+  case BROWSER__ACTION__TYPE__SET_FAVORITE:
+  case BROWSER__ACTION__TYPE__UNSET_FAVORITE:
     break;
   default:
     MELO_LOGE ("action %u not supported", r->type);
-    g_free (uri);
     return false;
   }
 
+  /* Generate URI from path */
+  if (!melo_file_browser_get_uri (browser, r->path, &uri) || !uri)
+    return false;
+
   /* Create file */
   file = g_file_new_for_uri (uri);
+  g_free (uri);
   if (!file) {
-    g_free (uri);
     return false;
   }
 
@@ -1113,10 +1168,8 @@ melo_file_browser_do_action (
   action = calloc (1, sizeof (*action));
   if (!file) {
     g_object_unref (file);
-    g_free (uri);
     return false;
   }
-  action->uri = uri;
   action->type = r->type;
   action->req = req;
 
