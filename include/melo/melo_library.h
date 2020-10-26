@@ -24,6 +24,7 @@
 
 typedef enum _MeloLibraryType MeloLibraryType;
 typedef enum _MeloLibraryField MeloLibraryField;
+typedef enum _MeloLibraryFlag MeloLibraryFlag;
 typedef struct _MeloLibraryData MeloLibraryData;
 
 /**
@@ -228,7 +229,7 @@ uint64_t melo_library_get_path_id (const char *path);
 uint64_t melo_library_get_media_id (const char *player, uint64_t player_id,
     const char *path, uint64_t path_id, const char *media);
 uint64_t melo_library_get_media_id_from_browser (
-    const char *tags_browser, const char *tags_media_id);
+    const char *browser, const char *media_id);
 
 bool melo_library_add_media (const char *player, uint64_t player_id,
     const char *path, uint64_t path_id, const char *media, uint64_t media_id,
