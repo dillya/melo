@@ -905,15 +905,16 @@ melo_library_vfind (MeloLibraryType type, MeloLibraryCb cb, void *user_data,
     order = order_col = order_dir = "";
 
   /* Create SQL request */
-  sql = sqlite3_mprintf ("SELECT %s FROM %s WHERE %s %s%s%s LIMIT %u,%u;",
-      fields, table, conditions, order, order_col, order_dir, offset, count);
+  sql = g_strdup_printf ("SELECT %s FROM %s WHERE %s %s%s%s LIMIT %llu,%llu;",
+      fields, table, conditions, order, order_col, order_dir,
+      (unsigned long long) offset, (unsigned long long) count);
   g_free (conditions);
   if (!sql)
     return false;
 
   /* Prepare request */
   ret = sqlite3_prepare_v2 (melo_library_db, sql, -1, &req, NULL);
-  sqlite3_free (sql);
+  g_free (sql);
   if (ret != SQLITE_OK)
     return false;
 
