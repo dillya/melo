@@ -34,6 +34,12 @@ protocol buffers have been chosen for their scalability and the versioning of
 protocol removal. The C compiler version from protobuf-c project has been
 chosen.
 
+The embedded media library database is using sqlite3 to store and fetch related
+data such as artist, album, genre.
+
+An optional network manager for IP addresses and WiFi configuration can be
+enabled with Network Manager library (libnm).
+
 You may need to install some development libraries and build tools before
 starting with Melo build.
 
@@ -42,8 +48,14 @@ following command:
 
 ```sh
 apt install meson libglib2.0-dev libgstreamer-plugins-base1.0-dev \
-    libsoup2.4-dev libjson-glib-dev libavahi-gobject-dev libprotobuf-c-dev \
-    protobuf-c-compiler
+    libsoup2.4-dev libjson-glib-dev libavahi-gobject-dev libsqlite3-dev \
+    libprotobuf-c-dev protobuf-c-compiler
+```
+
+To enable network support, the following command should be additionally used:
+
+```sh
+apt install libnm-dev
 ```
 
 Then, you are ready to build Melo:
