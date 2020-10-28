@@ -28,6 +28,8 @@ struct _MeloRadioPlayer {
   GstElement *pipeline;
   GstElement *src;
   guint bus_id;
+
+  MeloTags *tags;
 };
 
 MELO_DEFINE_PLAYER (MeloRadioPlayer, melo_radio_player)
@@ -51,6 +53,9 @@ melo_radio_player_finalize (GObject *object)
   /* Stop and release pipeline */
   gst_element_set_state (player->pipeline, GST_STATE_NULL);
   gst_object_unref (player->pipeline);
+
+  /* Release tags */
+  melo_tags_unref (player->tags);
 
   /* Chain finalize */
   G_OBJECT_CLASS (melo_radio_player_parent_class)->finalize (object);
@@ -113,35 +118,46 @@ bus_cb (GstBus *bus, GstMessage *msg, gpointer user_data)
   switch (GST_MESSAGE_TYPE (msg)) {
   case GST_MESSAGE_TAG: {
     GstTagList *tag_list;
-    MeloTags *tags;
-    char *title;
+    char *stream_title;
 
     /* Get tag list from message */
     gst_message_parse_tag (msg, &tag_list);
 
     /* Get title */
-    if (gst_tag_list_get_string (tag_list, GST_TAG_TITLE, &title)) {
-      char *artist;
+    if (gst_tag_list_get_string (tag_list, GST_TAG_TITLE, &stream_title)) {
+      char *artist, *title;
 
-      MELO_LOGD ("radio title: %s", title);
+      MELO_LOGD ("radio stream title: %s", stream_title);
 
       /* Find title / artist separator */
-      artist = strstr (title, " - ");
-      if (artist) {
-        *artist = '\0';
-        artist += 3;
+      title = strstr (stream_title, " - ");
+      if (title) {
+        *title = '\0';
+        title += 3;
+        artist = stream_title;
+      } else {
+        title = stream_title;
+        artist = NULL;
       }
 
-      /* Create new tags */
-      tags = melo_tags_new ();
-      if (tags) {
-        melo_tags_set_title (tags, title);
-        melo_tags_set_artist (tags, artist ? artist : "");
+      /* Check duplicate tags */
+      if (g_strcmp0 (melo_tags_get_title (rplayer->tags), title) ||
+          g_strcmp0 (melo_tags_get_artist (rplayer->tags), artist)) {
+        /* Release previous tags */
+        melo_tags_unref (rplayer->tags);
 
-        /* Update player tags */
-        melo_player_update_media (
-            player, NULL, tags, MELO_TAGS_MERGE_FLAG_SKIP_COVER);
+        /* Create new tags */
+        rplayer->tags = melo_tags_new ();
+        if (rplayer->tags) {
+          melo_tags_set_title (rplayer->tags, title);
+          melo_tags_set_artist (rplayer->tags, artist);
+
+          /* Update player tags */
+          melo_player_update_media (player, NULL, melo_tags_ref (rplayer->tags),
+              MELO_TAGS_MERGE_FLAG_SKIP_COVER);
+        }
       }
+      g_free (stream_title);
     }
 
     /* Free tag list */
