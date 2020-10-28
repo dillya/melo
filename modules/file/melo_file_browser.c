@@ -15,6 +15,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
  */
 
+#include <ctype.h>
+
 #include <gio/gio.h>
 #include <gst/pbutils/pbutils.h>
 
@@ -53,9 +55,13 @@ typedef enum _MeloFileBrowserType {
 typedef struct {
   uint64_t timestamp;
   Browser__Response__MediaItem *item;
+  bool en_tags;
+} MeloFileBrowserLib;
+
+typedef struct {
   MeloTags *tags;
   uint64_t id;
-} MeloFileBrowserLib;
+} MeloFileBrowserActLib;
 
 typedef struct {
   MeloRequest *req;
@@ -205,7 +211,7 @@ melo_file_browser_filter (MeloFileBrowser *browser, const char *name)
 
   /* Check extension */
   while (*exts != '\0') {
-    if (*exts == ext[n]) {
+    if (tolower (*exts) == tolower (ext[n])) {
       n++;
       exts++;
       if (n < len)
@@ -308,7 +314,7 @@ library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
   lib->timestamp = data->timestamp;
 
   /* Generate tags */
-  if (tags) {
+  if (lib->en_tags && tags) {
     item_tags = malloc (sizeof (*item_tags));
     if (item_tags) {
       tags__tags__init (item_tags);
@@ -527,6 +533,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
       /* Find media in library */
       lib.timestamp = 0;
       lib.item = &items[i];
+      lib.en_tags = en_tags;
       melo_library_find (MELO_LIBRARY_TYPE_MEDIA, library_cb, &lib,
           MELO_LIBRARY_SELECT (TIMESTAMP) | MELO_LIBRARY_SELECT (TITLE) |
               MELO_LIBRARY_SELECT (ARTIST) | MELO_LIBRARY_SELECT (ALBUM) |
@@ -945,7 +952,7 @@ melo_file_browser_get_media_list (MeloFileBrowser *browser,
 static bool
 action_library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
 {
-  MeloFileBrowserLib *lib = user_data;
+  MeloFileBrowserActLib *lib = user_data;
 
   /* Save tags */
   lib->tags = melo_tags_ref (tags);
@@ -969,7 +976,7 @@ action_next_files_cb (
   if (list == NULL) {
     uint64_t player_id, path_id;
     MeloPlaylistEntry *entry;
-    MeloFileBrowserLib lib;
+    MeloFileBrowserActLib lib;
     char *name, *uri, *path;
 
     /* Get directory URI */
@@ -1078,7 +1085,7 @@ action_children_cb (
   en = g_file_enumerate_children_finish (file, res, NULL);
   if (!en) {
     char *uri, *path, *media;
-    MeloFileBrowserLib lib;
+    MeloFileBrowserActLib lib;
 
     /* Get file URI */
     uri = g_file_get_uri (file);
