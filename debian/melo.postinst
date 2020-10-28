@@ -11,7 +11,7 @@ case "$1" in
 		if ! getent passwd melo > /dev/null; then
 			adduser --quiet --system --home /var/lib/melo \
 				--shell /usr/sbin/nologin \
-				--gecos "Melo daemon" --groups audio melo
+				--gecos "Melo daemon" --ingroup audio melo
 		fi
 		;;
 
