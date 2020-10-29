@@ -2,3 +2,4 @@
 
 subdir('file')
 subdir('radio')
+subdir('upnp')
