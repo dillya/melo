@@ -59,6 +59,8 @@ MeloPlaylistEntry *melo_playlist_entry_new (
 MeloPlaylistEntry *melo_playlist_entry_ref (MeloPlaylistEntry *entry);
 void melo_playlist_entry_unref (MeloPlaylistEntry *entry);
 
+MeloPlaylistEntry *melo_playlist_entry_get_parent (MeloPlaylistEntry *entry);
+
 bool melo_playlist_entry_update (
     MeloPlaylistEntry *entry, const char *name, MeloTags *tags, bool reset);
 

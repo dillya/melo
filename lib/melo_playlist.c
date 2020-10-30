@@ -1203,6 +1203,27 @@ melo_playlist_entry_unref (MeloPlaylistEntry *entry)
 }
 
 /**
+ * melo_playlist_entry_get_parent:
+ * @entry: a sub #MeloPlaylistEntry
+ *
+ * This function returns the parent #MeloPlaylistEntry if applicable, otherwise,
+ * %NULL is returned. It should be used only on an entry returned by
+ * melo_playlist_entry_add_media().
+ *
+ * Returns: a #MeloPlaylistEntry reference of the @entry parent, %NULL
+ *     otherwise. The reference should be released after usage with
+ *     melo_playlist_entry_unref().
+ */
+MeloPlaylistEntry *
+melo_playlist_entry_get_parent (MeloPlaylistEntry *entry)
+{
+  if (!entry || entry->player || !entry->parent)
+    return NULL;
+
+  return melo_playlist_entry_ref (entry->parent);
+}
+
+/**
  * melo_playlist_entry_update:
  * @entry: (nullable): a #MeloPlaylistEntry
  * @name: (nullable): the display name

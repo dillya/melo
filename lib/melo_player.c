@@ -1095,12 +1095,17 @@ melo_player_update_media (MeloPlayer *player, const char *name, MeloTags *tags,
 
   /* Update current player */
   if (player == melo_player_current) {
-    MeloPlaylistEntry *entry;
+    MeloPlaylistEntry *entry, *parent;
+
+    /* Get parent entry */
+    parent = melo_playlist_entry_get_parent (priv->playlist_entry);
+    if (!parent)
+      parent = melo_playlist_entry_ref (priv->playlist_entry);
 
     /* Update playlist current media */
     melo_tags_ref (tags);
-    melo_playlist_entry_add_media (
-        priv->playlist_entry, NULL, name, tags, &entry);
+    melo_playlist_entry_add_media (parent, NULL, name, tags, &entry);
+    melo_playlist_entry_unref (parent);
 
     /* Replace current playlist entry */
     melo_playlist_entry_unref (priv->current_playlist_entry);
