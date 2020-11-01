@@ -145,8 +145,8 @@ melo_upnp_player_new ()
 {
   return g_object_new (MELO_TYPE_UPNP_PLAYER, "id", MELO_UPNP_PLAYER_ID, "name",
       "UPnP / DLNA", "description",
-      "Play any media wireless on Melo with UPnP / DLNA", "icon", "fa:tv",
-      NULL);
+      "Play any media wireless on Melo with UPnP / DLNA", "icon",
+      MELO_UPNP_PLAYER_ICON, NULL);
 }
 
 static bool
@@ -387,10 +387,15 @@ notify_cb (GObject *object, GParamSpec *pspec, gpointer user_data)
     /* First media to play */
     if (!uplayer->started) {
       MeloPlaylistEntry *entry;
+      MeloTags *tags;
+
+      /* Set player icon */
+      tags = melo_tags_new ();
+      melo_tags_set_cover (tags, NULL, MELO_UPNP_PLAYER_ICON);
 
       /* Add new UPnP / DLNA entry to playlist */
       entry = melo_playlist_entry_new (
-          MELO_UPNP_PLAYER_ID, NULL, "UPNP / DNLA player", NULL);
+          MELO_UPNP_PLAYER_ID, NULL, "UPNP / DNLA player", tags);
       melo_playlist_play_entry (entry);
       uplayer->started = true;
     }
