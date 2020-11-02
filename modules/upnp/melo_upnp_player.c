@@ -48,6 +48,7 @@ struct _MeloUpnpPlayer {
 
   /* Internal player status */
   bool started;
+  bool eos;
   MeloTags *tags;
 
   /* Settings */
@@ -154,16 +155,20 @@ settings_update_cb (MeloSettings *settings, MeloSettingsGroup *group,
     char **error, void *user_data)
 {
   MeloUpnpPlayer *player = MELO_UPNP_PLAYER (user_data);
-  const char *name = NULL;
+  const char *name = NULL, *old_name = NULL;
   bool en = false;
 
   /* Get enable status and name */
   melo_settings_entry_get_boolean (player->enable, &en, NULL);
-  melo_settings_entry_get_string (player->name, &name, NULL);
+  melo_settings_entry_get_string (player->name, &name, &old_name);
 
   /* Set default name */
   if (!name || *name == '\0')
     name = "Melo";
+
+  /* Stop to set new name */
+  if (g_strcmp0 (name, old_name) && en)
+    melo_upnp_player_stop (player);
 
   /* Start / stop UPnP server */
   if (en)
@@ -203,7 +208,7 @@ melo_upnp_player_set_state (MeloPlayer *player, MeloPlayerState state)
   switch (state) {
   case MELO_PLAYER_STATE_NONE:
     uplayer->started = false;
-    pstate = "EOS";
+    pstate = "STOPPED";
     break;
   case MELO_PLAYER_STATE_PLAYING:
     pstate = "PLAYING";
@@ -338,7 +343,7 @@ notify_cb (GObject *object, GParamSpec *pspec, gpointer user_data)
 
   /* Parse property changes */
   if (!g_strcmp0 (pspec->name, "playback-state")) {
-    MeloPlayerState state;
+    MeloPlayerState state = MELO_PLAYER_STATE_NONE;
     const gchar *pstate;
 
     /* Get new state */
@@ -351,10 +356,19 @@ notify_cb (GObject *object, GParamSpec *pspec, gpointer user_data)
       state = MELO_PLAYER_STATE_PAUSED;
     else if (!g_strcmp0 (pstate, "STOPPED"))
       state = MELO_PLAYER_STATE_STOPPED;
-    else
-      state = MELO_PLAYER_STATE_NONE;
-    melo_player_update_status (
-        MELO_PLAYER (uplayer), state, MELO_PLAYER_STREAM_STATE_NONE, 0);
+    else if (!g_strcmp0 (pstate, "EOS"))
+      uplayer->eos = true;
+
+    /* End of stream detected */
+    if (uplayer->eos && state == MELO_PLAYER_STATE_STOPPED) {
+      melo_player_eos (MELO_PLAYER (uplayer));
+      uplayer->eos = false;
+    }
+
+    /* Update only with valid state */
+    if (state != MELO_PLAYER_STATE_NONE)
+      melo_player_update_status (
+          MELO_PLAYER (uplayer), state, MELO_PLAYER_STREAM_STATE_NONE, 0);
 
     /* Get position */
     melo_player_update_position (
@@ -401,8 +415,9 @@ notify_cb (GObject *object, GParamSpec *pspec, gpointer user_data)
     }
 
     /* Add new media to player */
-    melo_player_update_media (
-        MELO_PLAYER (uplayer), NULL, uplayer->tags, MELO_TAGS_MERGE_FLAG_NONE);
+    if (uplayer->tags)
+      melo_player_update_media (MELO_PLAYER (uplayer), NULL, uplayer->tags,
+          MELO_TAGS_MERGE_FLAG_NONE);
     uplayer->tags = NULL;
   }
 }
