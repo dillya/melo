@@ -587,19 +587,51 @@ melo_library_browser_get_media_list (MeloLibraryBrowser *browser,
   return true;
 }
 
+typedef struct {
+  MeloPlaylistEntry *entry;
+  MeloLibraryField field;
+} MeloLibraryBrowserAction;
+
 static bool
 action_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
 {
-  Browser__Action__Type *action = user_data;
+  MeloLibraryBrowserAction *action = user_data;
   char *path;
 
   path = g_build_filename (data->path, data->media, NULL);
-  if (*action == BROWSER__ACTION__TYPE__PLAY) {
-    melo_playlist_play_media (
-        data->player, path, data->name, melo_tags_ref (tags));
-    *action = BROWSER__ACTION__TYPE__ADD;
+  if (action->entry) {
+    /* First media */
+    if (action->field != MELO_LIBRARY_FIELD_NONE) {
+      const char *name;
+
+      /* Generate name */
+      switch (action->field) {
+      case MELO_LIBRARY_FIELD_ARTIST_ID:
+        name = melo_tags_get_artist (tags);
+        break;
+      case MELO_LIBRARY_FIELD_ALBUM_ID:
+        name = melo_tags_get_album (tags);
+        break;
+      case MELO_LIBRARY_FIELD_GENRE_ID:
+        name = melo_tags_get_genre (tags);
+        break;
+      case MELO_LIBRARY_FIELD_FAVORITE:
+        name = "Favorites";
+        break;
+      default:
+        name = NULL;
+      }
+
+      /* Update entry name and tags */
+      melo_playlist_entry_update (action->entry, name, NULL, true);
+      action->field = MELO_LIBRARY_FIELD_NONE;
+    }
+
+    /* Add media */
+    melo_playlist_entry_add_media (action->entry, data->player, path,
+        data->name, melo_tags_ref (tags), NULL);
   } else
-    melo_playlist_add_media (
+    action->entry = melo_playlist_entry_new (
         data->player, path, data->name, melo_tags_ref (tags));
   g_free (path);
 
@@ -611,7 +643,6 @@ melo_library_browser_do_action (MeloLibraryBrowser *browser,
     Browser__Request__DoAction *r, MeloRequest *req)
 {
   MeloLibraryType type = MELO_LIBRARY_TYPE_MEDIA;
-  Browser__Action__Type action = r->type;
   MeloLibraryField fields[3] = {0};
   const char *path = r->path;
   uint64_t ids[3] = {0};
@@ -640,7 +671,17 @@ melo_library_browser_do_action (MeloLibraryBrowser *browser,
     melo_library_update_media_flags (ids[0], MELO_LIBRARY_FLAG_FAVORITE, false);
   else if (r->type == BROWSER__ACTION__TYPE__UNSET_FAVORITE)
     melo_library_update_media_flags (ids[0], MELO_LIBRARY_FLAG_FAVORITE, true);
-  else
+  else {
+    MeloLibraryBrowserAction action;
+
+    /* Create playlist entry to handle multiple medias */
+    action.entry =
+        fields[0] != MELO_LIBRARY_FIELD_MEDIA_ID
+            ? melo_playlist_entry_new (NULL, NULL, "Library selection", NULL)
+            : NULL;
+    action.field = fields[0];
+
+    /* Prepare media(s) */
     melo_library_find (MELO_LIBRARY_TYPE_MEDIA, action_cb, &action,
         MELO_LIBRARY_SELECT (PLAYER) | MELO_LIBRARY_SELECT (PATH) |
             MELO_LIBRARY_SELECT (MEDIA) | MELO_LIBRARY_SELECT (NAME) |
@@ -650,6 +691,15 @@ melo_library_browser_do_action (MeloLibraryBrowser *browser,
         fields[0] != MELO_LIBRARY_FIELD_MEDIA_ID ? MELO_LIBRARY_MAX_COUNT : 1,
         0, MELO_LIBRARY_FIELD_NONE, false, false, fields[0], ids[0],
         MELO_LIBRARY_FIELD_LAST);
+
+    /* Do action */
+    if (action.entry) {
+      if (r->type == BROWSER__ACTION__TYPE__PLAY)
+        melo_playlist_play_entry (action.entry);
+      else
+        melo_playlist_add_entry (action.entry);
+    }
+  }
 
   return ret;
 }
