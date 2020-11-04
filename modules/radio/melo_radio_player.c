@@ -294,6 +294,10 @@ melo_radio_player_play (MeloPlayer *player, const char *path)
   /* Stop previously playing radio */
   gst_element_set_state (rplayer->pipeline, GST_STATE_NULL);
 
+  /* Reset tags */
+  melo_tags_unref (rplayer->tags);
+  rplayer->tags = NULL;
+
   /* Check for m3u files */
   if (g_str_has_suffix (path, ".m3u")) {
     MeloHttpClient *client;
