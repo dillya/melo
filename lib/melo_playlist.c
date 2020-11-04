@@ -28,6 +28,7 @@
 #include "melo/melo_playlist.h"
 
 #define DEFAULT_PLAYLIST_ID "default"
+#define PLAYLIST_MAX_DEPTH 10
 
 /* Global playlist list */
 G_LOCK_DEFINE_STATIC (melo_playlist_mutex);
@@ -38,6 +39,12 @@ static MeloEvents melo_playlist_events;
 
 /* Current playlist */
 static MeloPlaylist *melo_playlist_current;
+
+typedef enum _MeloPlaylistFlag {
+  MELO_PLAYLIST_FLAG_NONE = 0,
+  MELO_PLAYLIST_FLAG_PLAYABLE = (1 << 0),
+  MELO_PLAYLIST_FLAG_SORTABLE = (1 << 1),
+} MeloPlaylistFlag;
 
 typedef struct _MeloPlaylistList {
   MeloPlaylistEntry *list;
@@ -55,11 +62,10 @@ struct _MeloPlaylistEntry {
   char *path;
   char *name;
   MeloTags *tags;
+  unsigned int flags;
 
-  union {
-    MeloPlaylistList sub_medias;
-    MeloPlaylistEntry *parent;
-  };
+  MeloPlaylistEntry *parent;
+  MeloPlaylistList children;
 
   MeloPlaylistEntry *prev;
   MeloPlaylistEntry *next;
@@ -191,7 +197,7 @@ melo_playlist_finalize (GObject *object)
   gboolean removed = FALSE;
 
   /* Free playlist list */
-  while (entries->list) {
+  while (entries->count--) {
     MeloPlaylistEntry *entry = entries->list;
 
     /* Remove from list */
@@ -271,6 +277,10 @@ melo_playlist_list_nth (MeloPlaylistList *list, unsigned int index)
 
   if (!index)
     return entry;
+  else if (index == list->count - 1)
+    return entry->prev;
+  else if (index >= list->count)
+    return NULL;
 
   while (index-- && entry)
     entry = entry->next;
@@ -299,10 +309,13 @@ melo_playlist_list_is_last (MeloPlaylistList *list, MeloPlaylistEntry *entry)
 static void
 melo_playlist_list_prepend (MeloPlaylistList *list, MeloPlaylistEntry *entry)
 {
-  entry->prev = list->list ? list->list->prev : entry;
-  entry->next = list->list;
-  if (list->list)
+  if (list->list) {
+    entry->prev = list->list->prev;
+    entry->next = list->list;
+    list->list->prev->next = entry;
     list->list->prev = entry;
+  } else
+    entry->prev = entry->next = entry;
   list->list = entry;
   list->count++;
 }
@@ -327,14 +340,58 @@ melo_playlist_list_get_index (
 static void
 melo_playlist_list_clear (MeloPlaylistList *list)
 {
-  while (list->list) {
+  while (list->count--) {
     MeloPlaylistEntry *entry = list->list;
     list->list = entry->next;
     melo_playlist_entry_unref (entry);
   }
+  list->list = NULL;
   list->count = 0;
   list->current = NULL;
   list->current_index = 0;
+}
+
+static bool
+melo_playlist_extract_entry (MeloPlaylist *playlist, MeloPlaylistEntry *entry,
+    unsigned int idx, unsigned int *count, MeloPlaylistEntry **current)
+{
+  MeloPlaylistList *list;
+  MeloPlaylistEntry *end;
+  unsigned int len = 1;
+
+  /* Get list */
+  list = entry->parent ? &entry->parent->children : &playlist->entries;
+
+  /* Find last entry */
+  for (end = entry;
+       len < *count && end && !melo_playlist_list_is_last (list, end);
+       end = end->next)
+    len++;
+  if (!end)
+    return false;
+
+  /* Remove sub-list from list */
+  entry->prev->next = end->next;
+  end->next->prev = entry->prev;
+  if (entry == list->list)
+    list->list = entry != entry->next ? entry->next : NULL;
+  list->count -= len;
+
+  /* Update current index */
+  if (list->current_index >= idx) {
+    if (list->current_index <= idx) {
+      *current = list->current;
+      list->current = NULL;
+    } else
+      list->current_index -= len;
+  }
+
+  /* Finalize sub-list */
+  entry->prev = end;
+  end->next = entry;
+  *count = len;
+
+  return true;
 }
 
 static void
@@ -349,52 +406,139 @@ melo_playlist_message_tags (MeloTags *tags, Tags__Tags *media_tags)
 }
 
 static void
-melo_playlist_message_sub_medias (
-    MeloPlaylistList *sub_medias, Playlist__Media *media)
+melo_playlist_message_current (
+    Playlist__MediaIndex *idx, MeloPlaylist *playlist)
 {
-  Playlist__SubMedia **list_ptr = NULL;
-  Playlist__SubMedia *list = NULL;
+  MeloPlaylistEntry *e = playlist->entries.current;
+  MeloPlaylistList *list = &playlist->entries;
+  unsigned int i;
+
+  /* No current */
+  if (!e)
+    return;
+
+  /* Count current indices */
+  idx->n_indices = 1;
+  while (e->children.current) {
+    idx->n_indices++;
+    e = e->children.current;
+  }
+
+  /* Allocate indices */
+  idx->indices = malloc (sizeof (*idx->indices) * idx->n_indices);
+  if (!idx->indices) {
+    idx->n_indices = 0;
+    return;
+  }
+
+  /* Fill array */
+  for (i = 0; i < idx->n_indices; i++) {
+    idx->indices[i] = list ? list->current_index : -1;
+    list = &list->current->children;
+  }
+}
+
+static void
+melo_playlist_message_indices (
+    Playlist__MediaIndex *idx, MeloPlaylistEntry *entry)
+{
+  MeloPlaylistEntry *e = entry;
+  unsigned int count = 0;
+
+  /* Count current indices */
+  while (e->parent) {
+    count++;
+    e = e->parent;
+  }
+
+  /* Allocate indices */
+  idx->indices = malloc (sizeof (*idx->indices) * count);
+  if (!idx->indices) {
+    return;
+  }
+  idx->n_indices = count;
+
+  /* Fill array */
+  entry = entry->parent;
+  while (count-- && entry) {
+    MeloPlaylistList *entries =
+        entry->parent ? &entry->parent->children : &entry->playlist->entries;
+    melo_playlist_list_get_index (entries, entry, &idx->indices[count]);
+    entry = entry->parent;
+  }
+}
+
+static void
+melo_playlist_message_children_add (
+    Playlist__Media *media, MeloPlaylistList *children)
+{
+  Playlist__Media **list_ptr = NULL;
+  Playlist__Media *list = NULL;
   Tags__Tags *tags = NULL;
   MeloPlaylistEntry *e;
   unsigned int i;
 
-  /* No need to add sub-media list */
-  if (!sub_medias->count || !sub_medias->list)
+  /* No children to add */
+  if (!children->count || !children->list)
     return;
 
   /* Allocate buffer to store media list and tags */
-  list_ptr = malloc (sizeof (*list_ptr) * sub_medias->count);
-  list = malloc (sizeof (*list) * sub_medias->count);
-  tags = malloc (sizeof (*tags) * sub_medias->count);
+  list_ptr = malloc (sizeof (*list_ptr) * children->count);
+  list = malloc (sizeof (*list) * children->count);
+  tags = malloc (sizeof (*tags) * children->count);
 
   /* Set list */
-  media->n_sub_medias = sub_medias->count;
-  media->sub_medias = list_ptr;
+  media->n_children = children->count;
+  media->children = list_ptr;
 
   /* Fill list */
-  for (e = sub_medias->list, i = 0; e != NULL; e = e->next, i++) {
-
-    /* Set sub-media */
-    playlist__sub_media__init (&list[i]);
+  for (e = children->list, i = 0; i < children->count; e = e->next, i++) {
+    /* Set media */
+    playlist__media__init (&list[i]);
     list[i].name = (char *) e->name;
-    list[i].parent = media->index;
+    list_ptr[i] = &list[i];
+
+    /* Set doable flags */
+    list[i].playable = e->flags & MELO_PLAYLIST_FLAG_PLAYABLE;
+    list[i].sortable = e->flags & MELO_PLAYLIST_FLAG_SORTABLE;
+
+    /* Set tags */
     tags__tags__init (&tags[i]);
     if (e->tags)
       melo_playlist_message_tags (e->tags, &tags[i]);
     list[i].tags = &tags[i];
-    list_ptr[i] = &list[i];
+
+    /* Add recursively children */
+    melo_playlist_message_children_add (&list[i], &e->children);
   }
 }
 
+static void
+melo_playlist_message_children_remove (Playlist__Media *media)
+{
+  unsigned int i;
+
+  /* No children in current media */
+  if (!media->children)
+    return;
+
+  /* Free recursively children */
+  for (i = 0; i < media->n_children; i++)
+    melo_playlist_message_children_remove (media->children[i]);
+
+  /* Free children */
+  free (media->children[0]->tags);
+  free (media->children[0]);
+  free (media->children);
+}
+
 static MeloMessage *
-melo_playlist_message_media (
-    unsigned int idx, MeloPlaylistEntry *entry, bool add)
+melo_playlist_message_media (MeloPlaylistEntry *entry, bool add)
 {
   Playlist__Event pmsg = PLAYLIST__EVENT__INIT;
   Playlist__Media media = PLAYLIST__MEDIA__INIT;
+  Playlist__MediaIndex parent = PLAYLIST__MEDIA_INDEX__INIT;
   Tags__Tags media_tags = TAGS__TAGS__INIT;
-  const char *name = entry->name;
-  MeloTags *tags = entry->tags;
   MeloMessage *msg;
 
   /* Set event type */
@@ -407,63 +551,26 @@ melo_playlist_message_media (
   }
 
   /* Set media */
-  media.index = idx;
-  media.name = (char *) name;
+  melo_playlist_list_get_index (
+      entry->parent ? &entry->parent->children : &entry->playlist->entries,
+      entry, &media.index);
+  melo_playlist_message_indices (&parent, entry);
+  media.parent = &parent;
+  media.name = (char *) entry->name;
 
-  /* Set tags */
-  if (tags) {
-    melo_playlist_message_tags (tags, &media_tags);
-    media.tags = &media_tags;
-  }
-
-  /* Add sub-medias */
-  if (add)
-    melo_playlist_message_sub_medias (&entry->sub_medias, &media);
-
-  /* Generate message */
-  msg = melo_message_new (playlist__event__get_packed_size (&pmsg));
-  if (msg)
-    melo_message_set_size (
-        msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
-
-  /* Destroy allocated memory to handle sub-medias */
-  if (add && media.sub_medias) {
-    free (media.sub_medias[0]->tags);
-    free (media.sub_medias[0]);
-    free (media.sub_medias);
-  }
-
-  return msg;
-}
-
-static MeloMessage *
-melo_playlist_message_sub_media (
-    unsigned int idx, unsigned int parent, MeloPlaylistEntry *entry, bool add)
-{
-  Playlist__Event pmsg = PLAYLIST__EVENT__INIT;
-  Playlist__SubMedia sub_media = PLAYLIST__SUB_MEDIA__INIT;
-  Tags__Tags media_tags = TAGS__TAGS__INIT;
-  MeloMessage *msg;
-
-  /* Set event type */
-  if (add) {
-    pmsg.event_case = PLAYLIST__EVENT__EVENT_ADD_SUB;
-    pmsg.add_sub = &sub_media;
-  } else {
-    pmsg.event_case = PLAYLIST__EVENT__EVENT_UPDATE_SUB;
-    pmsg.update_sub = &sub_media;
-  }
-
-  /* Set media */
-  sub_media.index = idx;
-  sub_media.parent = parent;
-  sub_media.name = (char *) entry->name;
+  /* Set doable flags */
+  media.playable = entry->flags & MELO_PLAYLIST_FLAG_PLAYABLE;
+  media.sortable = entry->flags & MELO_PLAYLIST_FLAG_SORTABLE;
 
   /* Set tags */
   if (entry->tags) {
     melo_playlist_message_tags (entry->tags, &media_tags);
-    sub_media.tags = &media_tags;
+    media.tags = &media_tags;
   }
+
+  /* Add children */
+  if (add)
+    melo_playlist_message_children_add (&media, &entry->children);
 
   /* Generate message */
   msg = melo_message_new (playlist__event__get_packed_size (&pmsg));
@@ -471,11 +578,18 @@ melo_playlist_message_sub_media (
     melo_message_set_size (
         msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
 
+  /* Destroy children */
+  if (add)
+    melo_playlist_message_children_remove (&media);
+
+  /* Free parent */
+  free (parent.indices);
+
   return msg;
 }
 
 static MeloMessage *
-melo_playlist_message_play (unsigned int index, int sub_index)
+melo_playlist_message_play (MeloPlaylist *playlist)
 {
   Playlist__Event pmsg = PLAYLIST__EVENT__INIT;
   Playlist__MediaIndex idx = PLAYLIST__MEDIA_INDEX__INIT;
@@ -484,9 +598,8 @@ melo_playlist_message_play (unsigned int index, int sub_index)
   /* Set event type */
   pmsg.event_case = PLAYLIST__EVENT__EVENT_PLAY;
 
-  /* Set current index */
-  idx.index = index;
-  idx.sub_index = sub_index;
+  /* Set current indices */
+  melo_playlist_message_current (&idx, playlist);
   pmsg.play = &idx;
 
   /* Generate message */
@@ -494,6 +607,7 @@ melo_playlist_message_play (unsigned int index, int sub_index)
   if (msg)
     melo_message_set_size (
         msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
+  free (idx.indices);
 
   return msg;
 }
@@ -614,15 +728,21 @@ melo_playlist_update_player_control (MeloPlaylistList *entries)
   MeloPlaylistEntry *current = entries->current;
   bool prev = false, next = false;
 
-  if (current) {
-    MeloPlaylistEntry *sub_current = current->sub_medias.current;
+  while (current) {
+    MeloPlaylistEntry *child = current->children.current;
 
-    if (current->next || (sub_current && sub_current->next))
+    if (!melo_playlist_list_is_last (entries, current) ||
+        (child && !melo_playlist_list_is_last (&current->children, child)))
       prev = true;
     if (!melo_playlist_list_is_first (entries, current) ||
-        (sub_current &&
-            !melo_playlist_list_is_first (&current->sub_medias, sub_current)))
+        (child && !melo_playlist_list_is_first (&current->children, child)))
       next = true;
+
+    if (prev && next)
+      break;
+
+    entries = &current->children;
+    current = child;
   }
 
   /* Update player controls */
@@ -649,11 +769,7 @@ melo_playlist_get_media_list (MeloPlaylist *playlist,
   resp.media_list = &media_list;
 
   /* Set current index */
-  media_index.index = entries->current_index;
-  if (entries->current && entries->current->sub_medias.current)
-    media_index.sub_index = entries->current->sub_medias.current_index;
-  else
-    media_index.sub_index = -1;
+  melo_playlist_message_current (&media_index, playlist);
   media_list.current = &media_index;
 
   /* Generate media list */
@@ -674,21 +790,28 @@ melo_playlist_get_media_list (MeloPlaylist *playlist,
     media_list.medias = medias_ptr;
 
     /* Fill list */
-    for (e = melo_playlist_list_nth (entries, req->offset), i = 0; e != NULL;
-         e = e->next, i++) {
+    for (e = melo_playlist_list_nth (entries, req->offset), i = 0;
+         i < media_list.count; e = e->next, i++) {
 
       /* Set media */
       playlist__media__init (&medias[i]);
+      medias[i].index = req->offset + i;
       medias[i].name = (char *) e->name;
+      media_list.medias[i] = &medias[i];
+
+      /* Set doable flags */
+      medias[i].playable = e->flags & MELO_PLAYLIST_FLAG_PLAYABLE;
+      medias[i].sortable = e->flags & MELO_PLAYLIST_FLAG_SORTABLE;
+
+      /* Set tags */
       if (e->tags) {
         tags__tags__init (&tags[i]);
         melo_playlist_message_tags (e->tags, &tags[i]);
         medias[i].tags = &tags[i];
       }
-      media_list.medias[i] = &medias[i];
 
-      /* Add sub-medias */
-      melo_playlist_message_sub_medias (&e->sub_medias, &medias[i]);
+      /* Add children */
+      melo_playlist_message_children_add (&medias[i], &e->children);
     }
   } else {
     /* Set default message */
@@ -702,19 +825,17 @@ melo_playlist_get_media_list (MeloPlaylist *playlist,
     melo_message_set_size (
         msg, playlist__response__pack (&resp, melo_message_get_data (msg)));
 
-  /* Destroy allocated memory to handle sub-medias */
-  for (i = 0; i < media_list.count; i++) {
-    if (media_list.medias[i] && media_list.medias[i]->sub_medias) {
-      free (media_list.medias[i]->sub_medias[0]->tags);
-      free (media_list.medias[i]->sub_medias[0]);
-      free (media_list.medias[i]->sub_medias);
-    }
-  }
+  /* Destroy children */
+  for (i = 0; i < media_list.count; i++)
+    melo_playlist_message_children_remove (media_list.medias[i]);
 
   /* Free buffer */
   free (medias_ptr);
   free (medias);
   free (tags);
+
+  /* Free indices */
+  free (media_index.indices);
 
   /* Send message */
   if (async->cb)
@@ -731,18 +852,13 @@ melo_playlist_get_current (MeloPlaylist *playlist, MeloAsyncData *async)
 {
   Playlist__Response resp = PLAYLIST__RESPONSE__INIT;
   Playlist__MediaIndex idx = PLAYLIST__MEDIA_INDEX__INIT;
-  MeloPlaylistList *entries = &playlist->entries;
   MeloMessage *msg;
 
   /* Set response type */
   resp.resp_case = PLAYLIST__RESPONSE__RESP_CURRENT;
 
   /* Set current media index */
-  idx.index = entries->current_index;
-  if (entries->current && entries->current->sub_medias.current)
-    idx.sub_index = entries->current->sub_medias.current_index;
-  else
-    idx.sub_index = -1;
+  melo_playlist_message_current (&idx, playlist);
   resp.current = &idx;
 
   /* Generate message */
@@ -761,35 +877,94 @@ melo_playlist_get_current (MeloPlaylist *playlist, MeloAsyncData *async)
   return true;
 }
 
-static bool
-melo_playlist_play (MeloPlaylist *playlist, unsigned int index, int sub_index)
+static MeloPlaylistEntry *
+melo_playlist_get_entry (MeloPlaylist *playlist, unsigned int *indices,
+    unsigned int count, MeloPlaylistEntry **parent)
 {
-  MeloPlaylistList *entries = &playlist->entries;
-  MeloPlaylistEntry *entry, *media = NULL;
+  MeloPlaylistList *es = &playlist->entries;
+  MeloPlaylistEntry *entry = NULL, *p;
+  unsigned int i;
+
+  if (!parent)
+    parent = &p;
 
   /* Find entry */
-  entry = melo_playlist_list_nth (entries, index);
-  if (!entry)
+  for (i = 0; i < count; i++) {
+    *parent = entry;
+    if (indices[i] < 0 || indices[i] > es->count)
+      return NULL;
+    entry = melo_playlist_list_nth (es, indices[i]);
+    if (!entry)
+      return NULL;
+    es = &entry->children;
+  }
+
+  return entry;
+}
+
+static void
+melo_playlist_reset_current (MeloPlaylist *playlist)
+{
+  MeloPlaylistList *entries = &playlist->entries;
+  MeloPlaylistEntry *entry = entries->current;
+
+  /* Reset current */
+  while (entry) {
+    entries->current = NULL;
+    entries = &entry->children;
+    entry = entries->current;
+  }
+}
+
+static bool
+melo_playlist_play (MeloPlaylist *playlist, unsigned int *indices,
+    unsigned int count, MeloPlaylistEntry *entry, bool limit)
+{
+  MeloPlaylistList *entries;
+  MeloPlaylistEntry *e;
+  unsigned int depth = count;
+
+  /* No indices */
+  if (!count)
     return false;
 
-  /* Invalid sub-index */
-  if (sub_index >= 0 && !entry->sub_medias.list)
-    return false;
-
-  /* Find media */
-  if (sub_index < 0) {
-    media = melo_playlist_list_get_last (&entry->sub_medias);
-    if (media) {
-      if (!media->path) {
-        melo_playlist_list_clear (&entry->sub_medias);
-        media = NULL;
-      } else
-        sub_index = entry->sub_medias.count - 1;
-    }
-  } else if (entry->sub_medias.list) {
-    media = melo_playlist_list_nth (&entry->sub_medias, sub_index);
-    if (!media || !media->path)
+  /* Find entry to play */
+  if (!entry) {
+    entry = melo_playlist_get_entry (playlist, indices, count, NULL);
+    if (!entry)
       return false;
+  }
+
+  /* Move to last child */
+  while ((e = melo_playlist_list_get_last (&entry->children))) {
+    depth++;
+    entry = e;
+  }
+
+  /* Update current index */
+  while (!entry->player) {
+    /* No parent: cannot play */
+    if (!entry->parent) {
+      /* First / last item: finished */
+      if (melo_playlist_list_is_first (&playlist->entries, entry) ||
+          melo_playlist_list_is_last (&playlist->entries, entry)) {
+        melo_playlist_reset_current (playlist);
+        melo_player_reset ();
+        goto end;
+      } else
+        return false;
+    }
+
+    /* Limit reached */
+    if (limit && count >= depth)
+      return false;
+
+    /* Move to parent */
+    entry = entry->parent;
+    depth--;
+
+    /* Clear children list */
+    melo_playlist_list_clear (&entry->children);
   }
 
   /* Switch playlist */
@@ -798,39 +973,314 @@ melo_playlist_play (MeloPlaylist *playlist, unsigned int index, int sub_index)
     melo_playlist_current = playlist;
   G_UNLOCK (melo_playlist_mutex);
 
-  /* Play this media */
-  entries->current = entry;
-  entries->current_index = index;
-  if (media) {
-    entry->sub_medias.current = media;
-    entry->sub_medias.current_index = sub_index;
-  } else
-    media = entry;
-  melo_player_play_media (entry->player, media->path, media->name,
-      melo_tags_ref (media->tags), melo_playlist_entry_ref (media));
+  /* Update parents indices */
+  e = entry;
+  while (e) {
+    MeloPlaylistEntry *parent = e->parent;
+    entries = parent ? &parent->children : &playlist->entries;
 
+    /* Update current entry */
+    melo_playlist_list_get_index (entries, e, &entries->current_index);
+    entries->current = e;
+
+    /* Move to next parent */
+    e = parent;
+  }
+
+  /* Play media */
+  melo_player_play_media (entry->player, entry->path, entry->name,
+      melo_tags_ref (entry->tags), melo_playlist_entry_ref (entry));
+
+end:
   /* Broadcast media addition */
   melo_events_broadcast (
-      &melo_playlist_events, melo_playlist_message_play (index, sub_index));
+      &melo_playlist_events, melo_playlist_message_play (playlist));
 
   /* Update player controls */
-  melo_playlist_update_player_control (entries);
+  melo_playlist_update_player_control (&playlist->entries);
 
   return true;
+}
+
+static bool
+melo_playlist_play_recursive (MeloPlaylist *playlist, MeloPlaylistList *entries,
+    MeloPlaylistEntry *entry, unsigned int *indices, unsigned int count,
+    bool next)
+{
+  bool ret;
+
+  /* Move to next / previous entry */
+  if (next) {
+    /* Try playing until success */
+    do {
+      /* Move to parent */
+      while (melo_playlist_list_is_first (entries, entry)) {
+        if (!entry->parent || !count)
+          return false;
+        entry = entry->parent;
+        entries = entry->parent ? &entry->parent->children : &playlist->entries;
+        count--;
+      }
+      entry = entry->prev;
+      indices[count - 1]--;
+
+      /* Try to play media */
+      ret = melo_playlist_play (playlist, indices, count, entry, true);
+    } while (!ret);
+  } else {
+    /* Try playing until success */
+    do {
+      /* Move to parent */
+      while (melo_playlist_list_is_last (entries, entry)) {
+        if (!entry->parent || !count)
+          return false;
+        entry = entry->parent;
+        entries = entry->parent ? &entry->parent->children : &playlist->entries;
+        count--;
+      }
+      entry = entry->next;
+      indices[count - 1]++;
+
+      /* Try to play media */
+      ret = melo_playlist_play (playlist, indices, count, entry, true);
+    } while (!ret);
+  }
+
+  return true;
+}
+
+static MeloPlaylistEntry *
+melo_playlist_extract (MeloPlaylist *playlist, Playlist__Range *range,
+    unsigned int *count, MeloPlaylistEntry **current)
+{
+  MeloPlaylistEntry *entry = NULL;
+
+  /* Extract range of entries */
+  if (range->linear) {
+    /* No entry to extract */
+    if (!range->first || !range->first->n_indices)
+      return NULL;
+
+    /* Find first entry to extract */
+    entry = melo_playlist_get_entry (
+        playlist, range->first->indices, range->first->n_indices, NULL);
+    if (!entry)
+      return entry;
+
+    /* Extract entries */
+    *count = range->length;
+    if (!melo_playlist_extract_entry (playlist, entry,
+            range->first->indices[range->first->n_indices - 1], count, current))
+      return NULL;
+  } else {
+    MeloPlaylistEntry **map, *cur = NULL;
+    unsigned int i, len = 0, cur_depth = 0;
+
+    /* Allocate temporary entry map */
+    map = malloc (sizeof (*map) * range->n_list);
+    if (!map)
+      return NULL;
+
+    /* Populate map with entries */
+    for (i = 0; i < range->n_list; i++) {
+      /* No entry */
+      if (!range->list[i] || !range->list[i]->n_indices) {
+        map[i] = NULL;
+        continue;
+      }
+
+      /* Add entry to map */
+      map[i] = melo_playlist_get_entry (
+          playlist, range->list[i]->indices, range->list[i]->n_indices, NULL);
+    }
+
+    /* Reset current */
+    *current = NULL;
+
+    /* Extract entries */
+    for (i = 0; i < range->n_list; i++) {
+      /* No entry to extract */
+      if (!map[i])
+        continue;
+
+      /* Extract entry */
+      *count = 1;
+      if (!melo_playlist_extract_entry (playlist, map[i],
+              range->list[i]->indices[range->list[i]->n_indices - 1], count,
+              &cur))
+        continue;
+      len += *count;
+
+      /* Current */
+      if (cur && cur_depth < range->list[i]->n_indices) {
+        *current = cur;
+        cur_depth = range->list[i]->n_indices;
+      }
+
+      /* Append to list */
+      if (entry) {
+        map[i]->prev = entry->prev;
+        entry->prev->next = map[i];
+        entry->prev = map[i];
+        map[i]->next = entry;
+      } else
+        entry = map[i];
+    }
+    *count = len;
+
+    /* Free map */
+    free (map);
+  }
+
+  return entry;
 }
 
 static bool
 melo_playlist_move (
     MeloPlaylist *playlist, Playlist__Move *req, MeloAsyncData *async)
 {
-  return false;
+  Playlist__Event event = PLAYLIST__EVENT__INIT;
+  MeloPlaylistEntry *parent = NULL, *list, *entry, *current;
+  MeloPlaylistList *entries;
+  unsigned int count, i;
+  MeloMessage *msg;
+
+  /* No destination */
+  if (!req->dest || !req->dest->n_indices)
+    return false;
+
+  /* Extract entries to temporary list */
+  list = melo_playlist_extract (playlist, req->range, &count, &current);
+  if (!list)
+    return false;
+
+  /* Find destination entry */
+  entry = melo_playlist_get_entry (
+      playlist, req->dest->indices, req->dest->n_indices, &parent);
+  entries = parent ? &parent->children : &playlist->entries;
+
+  /* Insert temporary list into destination */
+  if (!entry) {
+    MeloPlaylistEntry *list_end = list->prev;
+
+    /* Append to list */
+    if (entries->list) {
+      entry = entries->list->prev;
+      list->prev->next = entry->next;
+      list->prev = entry;
+      entry->next->prev = list_end;
+      entry->next = list;
+    } else
+      entries->list = list;
+  } else {
+    MeloPlaylistEntry *list_end = list->prev;
+
+    /* Insert before */
+    list->prev->next = entry;
+    entry->prev->next = list;
+    list->prev = entry->prev;
+    entry->prev = list_end;
+    if (entries->list == entry)
+      entries->list = list;
+  }
+  entries->count += count;
+  if (entries->current &&
+      req->dest->indices[req->dest->n_indices - 1] <= entries->current_index)
+    entries->current_index += count;
+
+  /* Update parent */
+  for (i = 0; i < count; i++) {
+    list->parent = parent;
+    list = list->next;
+  }
+
+  /* Update current recursively */
+  while (current && melo_playlist_list_get_index (entries, current, &i)) {
+    /* Update current */
+    entries->current = current;
+    entries->current_index = i;
+
+    /* Move to parent */
+    current = current->parent;
+    entries = current && current->parent ? &current->parent->children
+                                         : &playlist->entries;
+  }
+
+  /* Set event */
+  event.event_case = PLAYLIST__EVENT__EVENT_MOVE;
+  event.move = req;
+
+  /* Generate message */
+  msg = melo_message_new (playlist__event__get_packed_size (&event));
+  if (msg) {
+    /* Pack event */
+    melo_message_set_size (
+        msg, playlist__event__pack (&event, melo_message_get_data (msg)));
+
+    /* Broadcast move event */
+    melo_events_broadcast (&playlist->events, melo_message_ref (msg));
+
+    /* Broadcast move event to current playlist */
+    if (melo_playlist_current == playlist) {
+      melo_events_broadcast (&melo_playlist_events, msg);
+      melo_playlist_update_player_control (&playlist->entries);
+    } else
+      melo_message_unref (msg);
+  }
+
+  return true;
 }
 
 static bool
 melo_playlist_delete (
     MeloPlaylist *playlist, Playlist__Range *req, MeloAsyncData *async)
 {
-  return false;
+  Playlist__Event event = PLAYLIST__EVENT__INIT;
+  MeloPlaylistEntry *list, *e, *current;
+  unsigned int count;
+  MeloMessage *msg;
+
+  /* Extract entries to temporary list */
+  list = melo_playlist_extract (playlist, req, &count, &current);
+  if (!list)
+    return false;
+
+  /* Reset player */
+  if (current) {
+    melo_playlist_reset_current (playlist);
+    melo_player_reset ();
+  }
+
+  /* Delete list */
+  while (count--) {
+    e = list;
+    list = list->next;
+    melo_playlist_entry_unref (e);
+  }
+
+  /* Set event */
+  event.event_case = PLAYLIST__EVENT__EVENT_DELETE;
+  event.delete_ = req;
+
+  /* Generate message */
+  msg = melo_message_new (playlist__event__get_packed_size (&event));
+  if (msg) {
+    /* Pack event */
+    melo_message_set_size (
+        msg, playlist__event__pack (&event, melo_message_get_data (msg)));
+
+    /* Broadcast delete event */
+    melo_events_broadcast (&playlist->events, melo_message_ref (msg));
+
+    /* Broadcast delete event to current playlist */
+    if (melo_playlist_current == playlist) {
+      melo_events_broadcast (&melo_playlist_events, msg);
+      melo_playlist_update_player_control (&playlist->entries);
+    } else
+      melo_message_unref (msg);
+  }
+
+  return true;
 }
 
 /**
@@ -841,12 +1291,14 @@ melo_playlist_delete (
  * @user_data: data to pass to @cb
  *
  * This function is called when a new playlist request is received by the
- * application. This function will handle the request for a playlist pointed by
+ * application. This function will handle the request for a playlist pointed
+ by
  * @id, or the current playlist if @id is NULL.
 
  * If the request is malformed or an internal error occurs, the function will
  * return %false, otherwise %true will be returned.
- * After returning, many asynchronous tasks related to the request can still be
+ * After returning, many asynchronous tasks related to the request can still
+ be
  * pending, so @cb and @user_data should not be destroyed. If the request need
  * to stopped / cancelled, melo_playlist_cancel_request() is intended for.
  *
@@ -892,9 +1344,28 @@ melo_playlist_handle_request (
     ret = melo_playlist_get_current (playlist, &async);
     break;
   case PLAYLIST__REQUEST__REQ_PLAY:
-    if (request->play)
-      ret = melo_playlist_play (
-          playlist, request->play->index, request->play->sub_index);
+    if (request->play) {
+      MeloPlaylistEntry *entry;
+
+      /* Get entry */
+      entry = melo_playlist_get_entry (
+          playlist, request->play->indices, request->play->n_indices, NULL);
+
+      /* Play media */
+      ret = melo_playlist_play (playlist, request->play->indices,
+          request->play->n_indices, entry, false);
+
+      /* Failed to play media */
+      if (!ret && entry) {
+        unsigned int count = request->play->n_indices;
+        MeloPlaylistList *entries =
+            entry->parent ? &entry->parent->children : &playlist->entries;
+
+        /* Try to play next medias */
+        ret = melo_playlist_play_recursive (
+            playlist, entries, entry, request->play->indices, count, true);
+      }
+    }
     break;
   case PLAYLIST__REQUEST__REQ_MOVE:
     ret = melo_playlist_move (playlist, request->move, &async);
@@ -925,11 +1396,11 @@ melo_playlist_handle_request (
  * @cb: the function used during call to melo_playlist_handle_request()
  * @user_data: data passed with @cb
  *
- * This function can be called to cancel a running or a pending request. If the
- * request exists, the asynchronous tasks will be cancelled and @cb will be
- * called with a NULL-message to signal end of request. If the request is
- * already finished or a cancellation is already pending, this function will do
- * nothing.
+ * This function can be called to cancel a running or a pending request. If
+ * the request exists, the asynchronous tasks will be cancelled and @cb will
+ * be called with a NULL-message to signal end of request. If the request is
+ * already finished or a cancellation is already pending, this function will
+ * do nothing.
  */
 void
 melo_playlist_cancel_request (const char *id, MeloAsyncCb cb, void *user_data)
@@ -950,16 +1421,31 @@ melo_playlist_cancel_request (const char *id, MeloAsyncCb cb, void *user_data)
   g_object_unref (playlist);
 }
 
+static void
+melo_playlist_entry_set_playlist (
+    MeloPlaylistEntry *entry, MeloPlaylist *playlist)
+{
+  MeloPlaylistEntry *e;
+  unsigned int i;
+
+  entry->playlist = playlist;
+
+  e = entry->children.list;
+  for (i = 0; i < entry->children.count; i++) {
+    melo_playlist_entry_set_playlist (e, playlist);
+    e = e->next;
+  }
+}
+
 static bool
 melo_playlist_handle_entry (MeloPlaylistEntry *entry, bool play)
 {
   MeloPlaylistList *entries;
   MeloPlaylist *playlist;
-  int sub_index = -1;
 
   /* Invalid entry */
-  if (!entry || !entry->player) {
-    MELO_LOGE ("invalid playlist entry to %s: no player ID set",
+  if (!entry || entry->parent) {
+    MELO_LOGE ("invalid playlist entry to %s: entry has a parent",
         play ? "play" : "add");
     return false;
   }
@@ -979,38 +1465,20 @@ melo_playlist_handle_entry (MeloPlaylistEntry *entry, bool play)
   /* Add media item to list */
   entries = &playlist->entries;
   melo_playlist_list_prepend (entries, entry);
-  entry->playlist = playlist;
+  melo_playlist_entry_set_playlist (entry, playlist);
 
   /* Broadcast media addition */
   melo_events_broadcast (
-      &melo_playlist_events, melo_playlist_message_media (0, entry, true));
+      &melo_playlist_events, melo_playlist_message_media (entry, true));
 
   /* Play media */
   if (play) {
-    MeloPlaylistEntry *media;
+    unsigned int idx = 0;
 
-    /* Set current entry */
-    entries->current = entry;
-    entries->current_index = 0;
-
-    /* Select sub-media */
-    if (!entry->path && entry->sub_medias.list) {
-      media = melo_playlist_list_get_last (&entry->sub_medias);
-      entry->sub_medias.current = media;
-      entry->sub_medias.current_index = entry->sub_medias.count - 1;
-      sub_index = entry->sub_medias.current_index;
-    } else
-      media = entry;
-
-    melo_player_play_media (entry->player, media->path, media->name,
-        melo_tags_ref (media->tags), melo_playlist_entry_ref (media));
+    /* Play media on top of playlist */
+    melo_playlist_play (playlist, &idx, 1, entry, false);
   } else
     entries->current_index++;
-
-  /* Broadcast media playing */
-  if (play)
-    melo_events_broadcast (&melo_playlist_events,
-        melo_playlist_message_play (entries->current_index, sub_index));
 
   /* Update player controls */
   melo_playlist_update_player_control (entries);
@@ -1057,8 +1525,8 @@ melo_playlist_add_media (
  * @name: the display name
  * @tags: (nullable): the media tags
  *
- * This function will add the media to the current playlist and will play it on
- * the player pointed by @player_id. It takes the ownership of @tags.
+ * This function will add the media to the current playlist and will play it
+ * on the player pointed by @player_id. It takes the ownership of @tags.
  *
  * Returns: %true if the media has been sent added to the current playlist,
  *     %false otherwise.
@@ -1099,8 +1567,8 @@ melo_playlist_add_entry (MeloPlaylistEntry *entry)
  * melo_playlist_play_entry:
  * @entry: the entry to add and play
  *
- * This function will add the entry to the current playlist and will play it on
- * the player pointed by the entry. It takes the ownership of @entry.
+ * This function will add the entry to the current playlist and will play it
+ * on the player pointed by the entry. It takes the ownership of @entry.
  *
  * Returns: %true if the entry has been sent added to the current playlist,
  *     %false otherwise.
@@ -1113,7 +1581,7 @@ melo_playlist_play_entry (MeloPlaylistEntry *entry)
 
 /**
  * melo_playlist_entry_new:
- * @player_id: the ID of the media player to use
+ * @player_id: (nullable): the ID of the media player to use
  * @path: (nullable): the media path / URI / URL
  * @name: the display name
  * @tags: (nullable): the media tags
@@ -1121,6 +1589,9 @@ melo_playlist_play_entry (MeloPlaylistEntry *entry)
  * Creates a new #MeloPlaylistEntry which will contain a media to hold in the
  * playlist. The newly created entry should be added to the playlist with
  * melo_playlist_add_entry() or melo_playlist_play_entry().
+ *
+ * If @player_id is %NULL, the entry is seen as a sortable collection of media
+ * entries.
  *
  * Returns: (transfer full): a new #MeloPlaylistEntry.
  */
@@ -1150,6 +1621,11 @@ melo_playlist_entry_new (
   entry->path = g_strdup (path);
   entry->name = g_strdup (name);
   entry->tags = tags;
+
+  /* Set flags */
+  entry->flags = MELO_PLAYLIST_FLAG_PLAYABLE;
+  if (!player_id)
+    entry->flags |= MELO_PLAYLIST_FLAG_SORTABLE;
 
   return entry;
 }
@@ -1189,10 +1665,7 @@ melo_playlist_entry_unref (MeloPlaylistEntry *entry)
 
   ref_count = atomic_fetch_sub (&entry->ref_count, 1);
   if (ref_count == 1) {
-    /* Clear sub-medias list */
-    if (entry->player)
-      melo_playlist_list_clear (&entry->sub_medias);
-
+    melo_playlist_list_clear (&entry->children);
     melo_tags_unref (entry->tags);
     g_free (entry->name);
     g_free (entry->path);
@@ -1204,11 +1677,11 @@ melo_playlist_entry_unref (MeloPlaylistEntry *entry)
 
 /**
  * melo_playlist_entry_get_parent:
- * @entry: a sub #MeloPlaylistEntry
+ * @entry: a #MeloPlaylistEntry
  *
- * This function returns the parent #MeloPlaylistEntry if applicable, otherwise,
- * %NULL is returned. It should be used only on an entry returned by
- * melo_playlist_entry_add_media().
+ * This function returns the parent #MeloPlaylistEntry if applicable,
+ * otherwise, %NULL is returned. It should be used only on an entry returned
+ * by melo_playlist_entry_add_media().
  *
  * Returns: a #MeloPlaylistEntry reference of the @entry parent, %NULL
  *     otherwise. The reference should be released after usage with
@@ -1217,10 +1690,24 @@ melo_playlist_entry_unref (MeloPlaylistEntry *entry)
 MeloPlaylistEntry *
 melo_playlist_entry_get_parent (MeloPlaylistEntry *entry)
 {
-  if (!entry || entry->player || !entry->parent)
+  if (!entry || !entry->parent)
     return NULL;
 
   return melo_playlist_entry_ref (entry->parent);
+}
+
+/**
+ * melo_playlist_entry_has_player:
+ * @entry: a #MeloPlaylistEntry
+ *
+ * This function can be used to check if @entry has a player ID set or not.
+ *
+ * Returns: %true if the entry has a player ID set, %false otherwise.
+ */
+bool
+melo_playlist_entry_has_player (MeloPlaylistEntry *entry)
+{
+  return entry && entry->player;
 }
 
 /**
@@ -1232,10 +1719,11 @@ melo_playlist_entry_get_parent (MeloPlaylistEntry *entry)
  *
  * The current entry will be updated with the @name and @tags provided in
  * parameters. If @reset is set to %true, the name and tags will be replaced,
- * otherwise, the name will not be replaces and tags will be merged with current
- * one thanks to melo_tags_merge().
+ * otherwise, the name will not be replaces and tags will be merged with
+ * current one thanks to melo_tags_merge().
  *
- * Returns: %true if the entry has been updated successfully, %false otherwise.
+ * Returns: %true if the entry has been updated successfully, %false
+ * otherwise.
  */
 bool
 melo_playlist_entry_update (
@@ -1243,7 +1731,6 @@ melo_playlist_entry_update (
 {
   MeloPlaylist *playlist;
   MeloMessage *msg = NULL;
-  unsigned int index;
 
   if (!entry)
     return false;
@@ -1263,22 +1750,12 @@ melo_playlist_entry_update (
   }
 
   /* Get playlist */
-  playlist = entry->player ? entry->playlist : entry->parent->playlist;
+  playlist = entry->playlist;
   if (!playlist)
     return true;
 
   /* Generate entry update event */
-  if (entry->player) {
-    if (melo_playlist_list_get_index (&playlist->entries, entry, &index))
-      msg = melo_playlist_message_media (index, entry, false);
-  } else {
-    unsigned int sub_index;
-    if (melo_playlist_list_get_index (
-            &playlist->entries, entry->parent, &index) &&
-        melo_playlist_list_get_index (
-            &entry->parent->sub_medias, entry, &sub_index))
-      msg = melo_playlist_message_sub_media (sub_index, index, entry, false);
-  }
+  msg = melo_playlist_message_media (entry, false);
 
   /* Broadcast message */
   if (msg) {
@@ -1297,74 +1774,79 @@ melo_playlist_entry_update (
 
 /**
  * melo_playlist_entry_add_media:
+ * @player_id: (nullable): the ID of the media player to use
  * @entry: (nullable): a #MeloPlaylistEntry
  * @path: (nullable): the media path / URI / URL
  * @name: the display name
  * @tags: (nullable): the media tags
  * @ref: (nullable): a pointer to store a reference of the media
  *
- * This function can be used to add a sub-media to an existing playlist entry.
- * The media will be added on top of the current list. If @path is set to %NULL,
- * the newly added media will not be playable.
- * This function takes the ownership of @tags.
+ * This function can be used to add a media to an existing playlist entry.
+ * The media will be added on top of the current list. If @path is set to
+ * %NULL, the newly added media will not be playable. This function takes the
+ * ownership of @tags.
  *
- * Returns: %true if the media has been added to the entry successfully, %false
- *     otherwise.
+ * Returns: %true if the media has been added to the entry successfully,
+ * %false otherwise.
  */
 bool
-melo_playlist_entry_add_media (MeloPlaylistEntry *entry, const char *path,
-    const char *name, MeloTags *tags, MeloPlaylistEntry **ref)
+melo_playlist_entry_add_media (MeloPlaylistEntry *entry, const char *player_id,
+    const char *path, const char *name, MeloTags *tags, MeloPlaylistEntry **ref)
 {
-  MeloPlaylistEntry *media;
+  MeloPlaylistEntry *media, *e;
   MeloPlaylist *playlist;
-  unsigned int index;
+  MeloMessage *msg;
 
   /* Cannot add entry to invalid entry */
-  if (!entry || !entry->player) {
+  if (!entry) {
     MELO_LOGE ("cannot add media to entry");
     return false;
   }
 
   /* Allocate new entry to hold media */
-  media = melo_playlist_entry_new (NULL, path, name, tags);
+  media = melo_playlist_entry_new (player_id, path, name, tags);
   if (!media) {
     MELO_LOGE ("failed to add media to entry");
     return false;
   }
 
+  /* Not playable / sortable when one of parents have a player set */
+  for (e = entry; e; e = e->parent) {
+    if (e->player) {
+      media->flags = 0;
+      break;
+    }
+  }
+
   /* Add parent */
   media->parent = entry;
+  media->playlist = entry->playlist;
 
   /* Export media reference */
   if (ref)
     *ref = melo_playlist_entry_ref (media);
 
   /* Add media item to entry */
-  melo_playlist_list_prepend (&entry->sub_medias, media);
-  entry->sub_medias.current_index = 0;
-  entry->sub_medias.current = media;
+  melo_playlist_list_prepend (&entry->children, media);
+  entry->children.current_index = 0;
+  entry->children.current = media;
 
   /* Get playlist */
   playlist = entry->playlist;
   if (!playlist)
     return true;
 
-  /* Find index of parent */
-  if (melo_playlist_list_get_index (&playlist->entries, entry, &index)) {
-    MeloMessage *msg;
+  /* Generate media add event */
+  msg = melo_playlist_message_media (media, true);
+  if (msg) {
+    /* Broadcast entry update */
+    melo_events_broadcast (&playlist->events, melo_message_ref (msg));
 
-    /* Generate media add event */
-    msg = melo_playlist_message_sub_media (0, index, media, true);
-    if (msg) {
-      /* Broadcast entry update */
-      melo_events_broadcast (&playlist->events, melo_message_ref (msg));
-
-      /* Broadcast entry update to current playlist */
-      if (melo_playlist_current == playlist)
-        melo_events_broadcast (&melo_playlist_events, msg);
-      else
-        melo_message_unref (msg);
-    }
+    /* Broadcast entry update to current playlist */
+    if (melo_playlist_current == playlist)
+      melo_events_broadcast (&melo_playlist_events, msg);
+    else
+      melo_message_unref (msg);
   }
 
   return true;
@@ -1373,10 +1855,11 @@ melo_playlist_entry_add_media (MeloPlaylistEntry *entry, const char *path,
 static bool
 melo_playlist_handle_control (bool next)
 {
+  unsigned int indices[PLAYLIST_MAX_DEPTH] = {0}, count = 0;
   MeloPlaylistList *entries;
-  MeloPlaylistEntry *entry, *media;
+  MeloPlaylistEntry *entry;
   MeloPlaylist *playlist;
-  int sub_index = -1;
+  bool ret = false;
 
   /* Get current playlist */
   G_LOCK (melo_playlist_mutex);
@@ -1398,72 +1881,22 @@ melo_playlist_handle_control (bool next)
     return false;
   }
 
-  /* Find next / previous media */
-  do {
-    MeloPlaylistList *sub_medias = &entry->sub_medias;
-    MeloPlaylistEntry *sub_current = sub_medias->current;
+  /* Get current media */
+  indices[count++] = entries->current_index;
+  while (entry->children.current && count < PLAYLIST_MAX_DEPTH) {
+    entries = &entry->children;
+    entry = entry->children.current;
+    indices[count++] = entries->current_index;
+  }
 
-    /* Select entry and sub-media to play */
-    if (next) {
-      if (sub_current &&
-          !melo_playlist_list_is_first (sub_medias, sub_current) &&
-          sub_current->prev) {
-        sub_medias->current = sub_current->prev;
-        sub_medias->current_index--;
-        sub_index = sub_medias->current_index;
-        media = sub_medias->current;
-      } else if (!melo_playlist_list_is_first (entries, entry) && entry->prev) {
-        entries->current = entry->prev;
-        entries->current_index--;
-        media = entries->current;
-      } else
-        return false;
-    } else {
-      if (sub_current &&
-          !melo_playlist_list_is_last (sub_medias, sub_current) &&
-          sub_current->next) {
-        sub_medias->current = sub_current->next;
-        sub_medias->current_index++;
-        sub_index = sub_medias->current_index;
-        media = sub_medias->current;
-      } else if (!melo_playlist_list_is_last (entries, entry) && entry->next) {
-        entries->current = entry->next;
-        entries->current_index++;
-        media = entries->current;
-      } else
-        return false;
-    }
-    entry = entries->current;
-
-    /* Reset sub-medias current position */
-    if (entry == media && entry->sub_medias.list) {
-      if (entry->sub_medias.list->path) {
-        media = melo_playlist_list_get_last (&entry->sub_medias);
-        sub_index = entry->sub_medias.count - 1;
-        entry->sub_medias.current = media;
-      } else {
-        melo_playlist_list_clear (&entry->sub_medias);
-        sub_index = -1;
-      }
-      entry->sub_medias.current_index = sub_index;
-    }
-  } while (media->path == NULL);
-
-  /* Broadcast media playing */
-  melo_events_broadcast (&melo_playlist_events,
-      melo_playlist_message_play (entries->current_index, sub_index));
-
-  /* Play previous / next media in playlist */
-  melo_player_play_media (entry->player, media->path, media->name,
-      melo_tags_ref (media->tags), melo_playlist_entry_ref (media));
-
-  /* Update player controls */
-  melo_playlist_update_player_control (entries);
+  /* Play recursively */
+  ret = melo_playlist_play_recursive (
+      playlist, entries, entry, indices, count, next);
 
   /* Release playlist reference */
   g_object_unref (playlist);
 
-  return true;
+  return ret;
 }
 
 /**
@@ -1486,8 +1919,8 @@ melo_playlist_play_previous (void)
  * melo_playlist_play_next:
  *
  * The current player is stopped and the next media in playlist is sent to its
- * player for playing. If no next media is found in the playlist, the functions
- * will return %false.
+ * player for playing. If no next media is found in the playlist, the
+ * functions will return %false.
  *
  * Returns: %true if the next media in playlist is now playing, %false
  *     otherwise.

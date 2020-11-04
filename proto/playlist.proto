@@ -8,44 +8,26 @@ package Playlist;
 
 /* Playlist media index */
 message MediaIndex {
-  /* Index of the media in the playlist */
-  uint32 index = 1;
-  /* Index of the sub-media from the current media (-1 if not applicable) */
-  int32 sub_index = 2;
-}
-
-/* Playlist sub-media */
-message SubMedia {
-  /* Sub-media index */
-  uint32 index = 1;
-  /* Parent index */
-  uint32 parent = 2;
-  /* Name to display */
-  string name = 3;
-  /* Media tags (optional) */
-  Tags.Tags tags = 4;
-  /* Media is playable */
-  bool playable = 5;
-  /* Media is movable */
-  bool movable = 6;
-  /* Media is deletable */
-  bool deletable = 7;
+  /* Array of indices of the media in the playlist */
+  repeated uint32 indices = 1;
 }
 
 /* Playlist media */
 message Media {
   /* Media index */
   uint32 index = 1;
+  /* Parent(s) index */
+  MediaIndex parent = 2;
   /* Name to display */
-  string name = 2;
+  string name = 3;
   /* Media tags (optional) */
-  Tags.Tags tags = 3;
+  Tags.Tags tags = 4;
   /* Media is playable */
-  bool playable = 4;
-  /* Media is deletable */
-  bool deletable = 5;
-  /* List of sub-medias */
-  repeated SubMedia sub_medias = 6;
+  bool playable = 5;
+  /* Media handle movable children */
+  bool sortable = 6;
+  /* List of children */
+  repeated Media children = 10;
 }
 
 /* Playlist range */
@@ -54,9 +36,9 @@ message Range {
   bool linear = 1;
   /* First index for a linear range */
   MediaIndex first = 2;
-  /* Last (inclusive) for a linear range */
-  MediaIndex last = 3;
-  /* List of indexes for discontinuous range */
+  /* Length for a linear range (includes only siblings to first media) */
+  uint32 length = 3;
+  /* List of indices for discontinuous range */
   repeated MediaIndex list = 4;
 }
 
@@ -64,8 +46,8 @@ message Range {
 message Move {
   /* Range of medias to move */
   Range range = 1;
-  /* Offset to move to */
-  int32 offset = 2;
+  /* Destination index */
+  MediaIndex dest = 2;
 }
 
 /* Playlist event */
@@ -74,18 +56,14 @@ message Event {
   oneof event {
     /* A media has been added to list */
     Media add = 10;
-    /* A sub-media has been added to list */
-    SubMedia add_sub = 11;
     /* A media has been updated */
-    Media update = 12;
-    /* A sub-media has been updated */
-    SubMedia update_sub = 13;
+    Media update = 11;
     /* Current playing media has changed, contains the ID of the new one */
-    MediaIndex play = 14;
+    MediaIndex play = 12;
     /* Some medias have been moved */
-    Move move = 15;
+    Move move = 13;
     /* Some medias have been removed */
-    Range delete = 16;
+    Range delete = 14;
   }
 }
 

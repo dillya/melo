@@ -60,12 +60,14 @@ MeloPlaylistEntry *melo_playlist_entry_ref (MeloPlaylistEntry *entry);
 void melo_playlist_entry_unref (MeloPlaylistEntry *entry);
 
 MeloPlaylistEntry *melo_playlist_entry_get_parent (MeloPlaylistEntry *entry);
+bool melo_playlist_entry_has_player (MeloPlaylistEntry *entry);
 
 bool melo_playlist_entry_update (
     MeloPlaylistEntry *entry, const char *name, MeloTags *tags, bool reset);
 
-bool melo_playlist_entry_add_media (MeloPlaylistEntry *entry, const char *path,
-    const char *name, MeloTags *tags, MeloPlaylistEntry **ref);
+bool melo_playlist_entry_add_media (MeloPlaylistEntry *entry,
+    const char *player_id, const char *path, const char *name, MeloTags *tags,
+    MeloPlaylistEntry **ref);
 
 G_END_DECLS
 

@@ -991,7 +991,7 @@ action_next_files_cb (
     name = strrchr (path, '/');
     if (name)
       name++;
-    entry = melo_playlist_entry_new (MELO_FILE_PLAYER_ID, NULL, name, NULL);
+    entry = melo_playlist_entry_new (NULL, NULL, name, NULL);
     g_free (path);
 
     /* Sort files by name */
@@ -1017,8 +1017,8 @@ action_next_files_cb (
           MELO_LIBRARY_FIELD_LAST);
 
       /* Add file to playlist entry */
-      melo_playlist_entry_add_media (
-          entry, path, g_file_info_get_display_name (info), lib.tags, NULL);
+      melo_playlist_entry_add_media (entry, MELO_FILE_PLAYER_ID, path,
+          g_file_info_get_display_name (info), lib.tags, NULL);
       g_free (path);
 
       /* Remove entry */

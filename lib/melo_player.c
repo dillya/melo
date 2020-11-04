@@ -953,11 +953,48 @@ melo_player_play_media (const char *id, const char *path, const char *name,
   class = MELO_PLAYER_GET_CLASS (player);
   if (class->play)
     ret = class->play (player, path);
+  else
+    melo_player_update_status (
+        player, MELO_PLAYER_STATE_NONE, MELO_PLAYER_STREAM_STATE_NONE, 0);
 
   /* Release player */
   g_object_unref (player);
 
   return ret;
+}
+
+void
+melo_player_reset (void)
+{
+  MeloPlayerClass *class;
+  MeloPlayer *player;
+
+  /* Reset current player */
+  G_LOCK (melo_player_mutex);
+  player = melo_player_current ? g_object_ref (melo_player_current) : NULL;
+  melo_player_current = NULL;
+  G_UNLOCK (melo_player_mutex);
+
+  /* No current player */
+  if (!player)
+    return;
+
+  /* Stop player */
+  class = MELO_PLAYER_GET_CLASS (player);
+  if (class->set_state)
+    class->set_state (player, MELO_PLAYER_STATE_NONE);
+
+  /* Broadcast player reset */
+  melo_events_broadcast (
+      &melo_player_events, melo_player_message_media (NULL, NULL));
+  melo_events_broadcast (
+      &melo_player_events, melo_player_message_status (MELO_PLAYER_STATE_NONE,
+                               MELO_PLAYER_STREAM_STATE_NONE, 0));
+  melo_events_broadcast (
+      &melo_player_events, melo_player_message_position (0, 0));
+
+  /* Release player */
+  g_object_unref (player);
 }
 
 void
@@ -1095,21 +1132,19 @@ melo_player_update_media (MeloPlayer *player, const char *name, MeloTags *tags,
 
   /* Update current player */
   if (player == melo_player_current) {
-    MeloPlaylistEntry *entry, *parent;
-
     /* Get parent entry */
-    parent = melo_playlist_entry_get_parent (priv->playlist_entry);
-    if (!parent)
-      parent = melo_playlist_entry_ref (priv->playlist_entry);
+    if (melo_playlist_entry_has_player (priv->playlist_entry)) {
+      MeloPlaylistEntry *entry;
 
-    /* Update playlist current media */
-    melo_tags_ref (tags);
-    melo_playlist_entry_add_media (parent, NULL, name, tags, &entry);
-    melo_playlist_entry_unref (parent);
+      /* Update playlist current media */
+      melo_tags_ref (tags);
+      melo_playlist_entry_add_media (
+          priv->playlist_entry, NULL, NULL, name, tags, &entry);
 
-    /* Replace current playlist entry */
-    melo_playlist_entry_unref (priv->current_playlist_entry);
-    priv->current_playlist_entry = entry;
+      /* Replace current playlist entry */
+      melo_playlist_entry_unref (priv->current_playlist_entry);
+      priv->current_playlist_entry = entry;
+    }
 
     /* Broadcast media change */
     melo_events_broadcast (&melo_player_events,
