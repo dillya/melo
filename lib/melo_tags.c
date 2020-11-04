@@ -165,8 +165,10 @@ melo_tags_new_from_taglist (GObject *obj, const GstTagList *tag_list)
 MeloTags *
 melo_tags_merge (MeloTags *new, MeloTags *old, unsigned int flags)
 {
-  if (!new || !old)
+  if (!new || !old) {
+    melo_tags_unref (old);
     return new;
+  }
 
   if (!(flags & MELO_TAGS_MERGE_FLAG_SKIP_TITLE) && !new->title)
     new->title = g_strdup (old->title);
