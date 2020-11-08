@@ -781,8 +781,9 @@ melo_playlist_remove_event_listener (
 }
 
 static void
-melo_playlist_update_player_control (MeloPlaylistList *entries)
+melo_playlist_update_player_control (MeloPlaylist *playlist)
 {
+  MeloPlaylistList *entries = &playlist->entries;
   MeloPlaylistEntry *current = entries->current;
   bool prev = false, next = false;
 
@@ -804,7 +805,7 @@ melo_playlist_update_player_control (MeloPlaylistList *entries)
   }
 
   /* Update player controls */
-  melo_player_update_playlist_controls (prev, next);
+  melo_player_update_playlist_controls (prev, next, playlist->shuffle);
 }
 
 static bool
@@ -1055,7 +1056,7 @@ end:
       &melo_playlist_events, melo_playlist_message_play (playlist));
 
   /* Update player controls */
-  melo_playlist_update_player_control (&playlist->entries);
+  melo_playlist_update_player_control (playlist);
 
   return true;
 }
@@ -1279,7 +1280,7 @@ melo_playlist_move (
     /* Broadcast move event to current playlist */
     if (melo_playlist_current == playlist) {
       melo_events_broadcast (&melo_playlist_events, msg);
-      melo_playlist_update_player_control (&playlist->entries);
+      melo_playlist_update_player_control (playlist);
     } else
       melo_message_unref (msg);
   }
@@ -1332,7 +1333,7 @@ melo_playlist_delete (
     /* Broadcast delete event to current playlist */
     if (melo_playlist_current == playlist) {
       melo_events_broadcast (&melo_playlist_events, msg);
-      melo_playlist_update_player_control (&playlist->entries);
+      melo_playlist_update_player_control (playlist);
     } else
       melo_message_unref (msg);
   }
@@ -1501,7 +1502,7 @@ melo_playlist_shuffle (
     /* Broadcast shuffle event to current playlist */
     if (melo_playlist_current == playlist) {
       melo_events_broadcast (&melo_playlist_events, msg);
-      melo_playlist_update_player_control (&playlist->entries);
+      melo_playlist_update_player_control (playlist);
     } else
       melo_message_unref (msg);
   }
@@ -1712,7 +1713,7 @@ melo_playlist_handle_entry (MeloPlaylistEntry *entry, bool play)
     entries->current_index++;
 
   /* Update player controls */
-  melo_playlist_update_player_control (entries);
+  melo_playlist_update_player_control (playlist);
 
   /* Release playlist reference */
   g_object_unref (playlist);

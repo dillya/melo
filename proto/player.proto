@@ -79,6 +79,8 @@ message Event {
     bool prev = 1;
     /* A media is present in playlist after current one */
     bool next = 2;
+    /* The playlist is currently in shuffle mode */
+    bool shuffle = 3;
   }
 
   /* Events */
