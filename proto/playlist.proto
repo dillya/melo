@@ -64,6 +64,8 @@ message Event {
     Move move = 13;
     /* Some medias have been removed */
     Range delete = 14;
+    /* 'Shuffle' mode has been enabled / disabled */
+    bool shuffle = 15;
   }
 }
 
@@ -89,6 +91,8 @@ message Request {
     Move move = 13;
     /* Delete a range of medias (resp: none) */
     Range delete = 14;
+    /* Set playlist in 'Shuffle' mode (resp: none) */
+    bool shuffle = 15;
   }
 }
 

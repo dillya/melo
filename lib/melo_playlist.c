@@ -30,6 +30,8 @@
 #define DEFAULT_PLAYLIST_ID "default"
 #define PLAYLIST_MAX_DEPTH 10
 
+typedef struct _MeloPlaylistBackup MeloPlaylistBackup;
+
 /* Global playlist list */
 G_LOCK_DEFINE_STATIC (melo_playlist_mutex);
 static GHashTable *melo_playlist_list;
@@ -44,6 +46,9 @@ typedef enum _MeloPlaylistFlag {
   MELO_PLAYLIST_FLAG_NONE = 0,
   MELO_PLAYLIST_FLAG_PLAYABLE = (1 << 0),
   MELO_PLAYLIST_FLAG_SORTABLE = (1 << 1),
+  MELO_PLAYLIST_FLAG_SHUFFLE_INSERTED = (1 << 2),
+  MELO_PLAYLIST_FLAG_SHUFFLE_ADDED = (1 << 3),
+  MELO_PLAYLIST_FLAG_SHUFFLE_DELETED = (1 << 4),
 } MeloPlaylistFlag;
 
 typedef struct _MeloPlaylistList {
@@ -71,12 +76,21 @@ struct _MeloPlaylistEntry {
   MeloPlaylistEntry *next;
 };
 
+struct _MeloPlaylistBackup {
+  unsigned int count;
+  struct {
+    MeloPlaylistEntry *entry;
+    MeloPlaylistBackup *children;
+  } list[];
+};
+
 struct _MeloPlaylist {
   /* Parent instance */
   GObject parent_instance;
 
   char *id;
   MeloPlaylistList entries;
+  MeloPlaylistBackup *shuffle;
 
   MeloEvents events;
   MeloRequests requests;
@@ -86,6 +100,9 @@ G_DEFINE_TYPE (MeloPlaylist, melo_playlist, G_TYPE_OBJECT)
 
 /* Melo playlist properties */
 enum { PROP_0, PROP_ID };
+
+static void melo_playlist_backup_restore (MeloPlaylistBackup *list,
+    MeloPlaylistList *entries, MeloPlaylistEntry *parent, bool remove);
 
 static void melo_playlist_constructed (GObject *object);
 static void melo_playlist_finalize (GObject *object);
@@ -207,6 +224,11 @@ melo_playlist_finalize (GObject *object)
     melo_playlist_entry_unref (entry);
   }
 
+  /* Free shuffle */
+  if (playlist->shuffle)
+    melo_playlist_backup_restore (
+        playlist->shuffle, &playlist->entries, NULL, true);
+
   /* Un-register playlist */
   if (playlist->id) {
     /* Lock playlist list */
@@ -314,9 +336,26 @@ melo_playlist_list_prepend (MeloPlaylistList *list, MeloPlaylistEntry *entry)
     entry->next = list->list;
     list->list->prev->next = entry;
     list->list->prev = entry;
+    if (list->current)
+      list->current_index++;
   } else
     entry->prev = entry->next = entry;
   list->list = entry;
+  list->count++;
+}
+
+static void
+melo_playlist_list_append (MeloPlaylistList *list, MeloPlaylistEntry *entry)
+{
+  if (list->list) {
+    entry->prev = list->list->prev;
+    entry->next = list->list;
+    list->list->prev->next = entry;
+    list->list->prev = entry;
+  } else {
+    entry->prev = entry->next = entry;
+    list->list = entry;
+  }
   list->count++;
 }
 
@@ -608,6 +647,25 @@ melo_playlist_message_play (MeloPlaylist *playlist)
     melo_message_set_size (
         msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
   free (idx.indices);
+
+  return msg;
+}
+
+static MeloMessage *
+melo_playlist_message_shuffle (MeloPlaylist *playlist)
+{
+  Playlist__Event pmsg = PLAYLIST__EVENT__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYLIST__EVENT__EVENT_SHUFFLE;
+  pmsg.shuffle = playlist->shuffle ? true : false;
+
+  /* Generate message */
+  msg = melo_message_new (playlist__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
 
   return msg;
 }
@@ -1094,9 +1152,6 @@ melo_playlist_extract (MeloPlaylist *playlist, Playlist__Range *range,
           playlist, range->list[i]->indices, range->list[i]->n_indices, NULL);
     }
 
-    /* Reset current */
-    *current = NULL;
-
     /* Extract entries */
     for (i = 0; i < range->n_list; i++) {
       /* No entry to extract */
@@ -1140,7 +1195,8 @@ melo_playlist_move (
     MeloPlaylist *playlist, Playlist__Move *req, MeloAsyncData *async)
 {
   Playlist__Event event = PLAYLIST__EVENT__INIT;
-  MeloPlaylistEntry *parent = NULL, *list, *entry, *current;
+  MeloPlaylistEntry *parent = NULL, *current = NULL;
+  MeloPlaylistEntry *list, *entry;
   MeloPlaylistList *entries;
   unsigned int count, i;
   MeloMessage *msg;
@@ -1236,7 +1292,7 @@ melo_playlist_delete (
     MeloPlaylist *playlist, Playlist__Range *req, MeloAsyncData *async)
 {
   Playlist__Event event = PLAYLIST__EVENT__INIT;
-  MeloPlaylistEntry *list, *e, *current;
+  MeloPlaylistEntry *list, *e, *current = NULL;
   unsigned int count;
   MeloMessage *msg;
 
@@ -1255,6 +1311,7 @@ melo_playlist_delete (
   while (count--) {
     e = list;
     list = list->next;
+    e->flags |= MELO_PLAYLIST_FLAG_SHUFFLE_DELETED;
     melo_playlist_entry_unref (e);
   }
 
@@ -1273,6 +1330,175 @@ melo_playlist_delete (
     melo_events_broadcast (&playlist->events, melo_message_ref (msg));
 
     /* Broadcast delete event to current playlist */
+    if (melo_playlist_current == playlist) {
+      melo_events_broadcast (&melo_playlist_events, msg);
+      melo_playlist_update_player_control (&playlist->entries);
+    } else
+      melo_message_unref (msg);
+  }
+
+  return true;
+}
+
+static MeloPlaylistBackup *
+melo_playlist_backup_shuffle (MeloPlaylistList *entries)
+{
+  MeloPlaylistBackup *list;
+  MeloPlaylistEntry *entry;
+  unsigned int i;
+  GRand *r;
+
+  /* Prepare random generator */
+  r = g_rand_new_with_seed (time (NULL));
+  if (!r)
+    return NULL;
+
+  /* Allocate backup list */
+  list = malloc (sizeof (*list) + (sizeof (*list->list) * entries->count));
+  if (!list) {
+    g_rand_free (r);
+    return NULL;
+  }
+
+  /* Save each entry in list */
+  list->count = 0;
+  entry = entries->list;
+  for (i = 0; i < entries->count; i++) {
+    /* Save entry */
+    entry->flags &= ~MELO_PLAYLIST_FLAG_SHUFFLE_INSERTED;
+    list->list[i].entry = melo_playlist_entry_ref (entry);
+
+    /* Save children order */
+    if (entry->flags & MELO_PLAYLIST_FLAG_SORTABLE)
+      list->list[i].children = melo_playlist_backup_shuffle (&entry->children);
+    else
+      list->list[i].children = NULL;
+
+    /* Go to next entry */
+    entry = entry->next;
+    list->count++;
+  }
+
+  /* Shuffle the list */
+  entries->list = 0;
+  entries->count = 0;
+  while (entries->count < list->count) {
+    /* Get next entry randomly */
+    i = g_rand_int_range (r, 0, list->count);
+    entry = list->list[i].entry;
+    if (entry->flags & MELO_PLAYLIST_FLAG_SHUFFLE_INSERTED)
+      continue;
+
+    /* Prepend entry to list */
+    melo_playlist_list_prepend (entries, entry);
+    entry->flags |= MELO_PLAYLIST_FLAG_SHUFFLE_INSERTED;
+
+    /* Update current */
+    if (entry == entries->current)
+      entries->current_index = 0;
+  }
+
+  /* Free random generator */
+  g_rand_free (r);
+
+  return list;
+}
+
+static void
+melo_playlist_backup_restore (MeloPlaylistBackup *list,
+    MeloPlaylistList *entries, MeloPlaylistEntry *parent, bool remove)
+{
+  MeloPlaylistList tmp = {0};
+  unsigned int i;
+
+  /* Prepend first all added medias since shuffle is enabled */
+  for (i = 0; i < entries->count; i++) {
+    MeloPlaylistEntry *entry = entries->list;
+    MeloPlaylistEntry *e = entries->list->next;
+
+    /* Append media to temprary list */
+    if (entry->flags & MELO_PLAYLIST_FLAG_SHUFFLE_ADDED)
+      melo_playlist_list_append (&tmp, entry);
+    entry->flags &= ~MELO_PLAYLIST_FLAG_SHUFFLE_ADDED;
+    entry->parent = parent;
+
+    /* Move to next entry */
+    entries->list = e;
+  }
+
+  /* Restore list order */
+  for (i = 0; i < list->count; i++) {
+    MeloPlaylistEntry *entry = list->list[i].entry;
+    bool remove_entry = remove;
+
+    /* Append or delete entry */
+    if (entry->flags & MELO_PLAYLIST_FLAG_SHUFFLE_DELETED || remove)
+      remove_entry = true;
+    else
+      melo_playlist_list_append (&tmp, entry);
+    entry->parent = parent;
+
+    /* Restore children order */
+    if (list->list[i].children)
+      melo_playlist_backup_restore (
+          list->list[i].children, &entry->children, entry, remove_entry);
+
+    /* Release backup reference */
+    melo_playlist_entry_unref (entry);
+  }
+
+  /* Update entries */
+  *entries = tmp;
+
+  /* Release backup list */
+  free (list);
+}
+
+static bool
+melo_playlist_shuffle (
+    MeloPlaylist *playlist, bool enable, MeloAsyncData *async)
+{
+  MeloMessage *msg;
+
+  /* Perform shuffle operation */
+  if (enable && !playlist->shuffle) {
+    /* Save current playlist order */
+    playlist->shuffle = melo_playlist_backup_shuffle (&playlist->entries);
+  } else if (!enable && playlist->shuffle) {
+    MeloPlaylistList *entries = &playlist->entries;
+    MeloPlaylistEntry *current = NULL;
+
+    /* Get current */
+    while (entries->current) {
+      current = entries->current;
+      entries = &current->children;
+    }
+
+    /* Restore the original playlist order */
+    melo_playlist_backup_restore (
+        playlist->shuffle, &playlist->entries, NULL, false);
+    playlist->shuffle = NULL;
+
+    /* Restore current */
+    while (current) {
+      entries =
+          current->parent ? &current->parent->children : &playlist->entries;
+      entries->current = current;
+      melo_playlist_list_get_index (entries, current, &entries->current_index);
+      current = current->parent;
+    }
+  } else
+    return true;
+
+  /* Generate shuffle event */
+  msg = melo_playlist_message_shuffle (playlist);
+
+  /* Broadcast message */
+  if (msg) {
+    /* Broadcast shuffle event */
+    melo_events_broadcast (&playlist->events, melo_message_ref (msg));
+
+    /* Broadcast shuffle event to current playlist */
     if (melo_playlist_current == playlist) {
       melo_events_broadcast (&melo_playlist_events, msg);
       melo_playlist_update_player_control (&playlist->entries);
@@ -1373,6 +1599,9 @@ melo_playlist_handle_request (
   case PLAYLIST__REQUEST__REQ_DELETE:
     ret = melo_playlist_delete (playlist, request->delete_, &async);
     break;
+  case PLAYLIST__REQUEST__REQ_SHUFFLE:
+    ret = melo_playlist_shuffle (playlist, request->shuffle, &async);
+    break;
   default:
     MELO_LOGE ("request %u not supported", request->req_case);
   }
@@ -1466,6 +1695,8 @@ melo_playlist_handle_entry (MeloPlaylistEntry *entry, bool play)
   entries = &playlist->entries;
   melo_playlist_list_prepend (entries, entry);
   melo_playlist_entry_set_playlist (entry, playlist);
+  if (playlist->shuffle)
+    entry->flags |= MELO_PLAYLIST_FLAG_SHUFFLE_ADDED;
 
   /* Broadcast media addition */
   melo_events_broadcast (
@@ -1830,6 +2061,8 @@ melo_playlist_entry_add_media (MeloPlaylistEntry *entry, const char *player_id,
   melo_playlist_list_prepend (&entry->children, media);
   entry->children.current_index = 0;
   entry->children.current = media;
+  if (media->playlist && media->playlist->shuffle)
+    media->flags |= MELO_PLAYLIST_FLAG_SHUFFLE_ADDED;
 
   /* Get playlist */
   playlist = entry->playlist;
