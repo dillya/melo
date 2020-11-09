@@ -21,6 +21,8 @@
 #include "melo/melo_player.h"
 #include "melo/melo_playlist.h"
 
+#include "playlist.pb-c.h"
+
 void melo_player_settings_init (void);
 void melo_player_settings_deinit (void);
 
@@ -28,6 +30,7 @@ bool melo_player_play_media (const char *id, const char *path, const char *name,
     MeloTags *tags, MeloPlaylistEntry *entry);
 void melo_player_reset (void);
 
-void melo_player_update_playlist_controls (bool prev, bool next, bool shuffle);
+void melo_player_update_playlist_controls (
+    bool prev, bool next, bool shuffle, Playlist__RepeatMode repeat_mode);
 
 #endif /* !_MELO_PLAYER_PRIV_H_ */

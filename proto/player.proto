@@ -2,6 +2,7 @@
 
 syntax = "proto3";
 
+import "playlist.proto";
 import "tags.proto";
 
 package Player;
@@ -81,6 +82,8 @@ message Event {
     bool next = 2;
     /* The playlist is currently in shuffle mode */
     bool shuffle = 3;
+    /* The current repeat mode applied on playlist */
+    .Playlist.RepeatMode repeat_mode = 4;
   }
 
   /* Events */

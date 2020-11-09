@@ -44,6 +44,7 @@ static MeloPlayer *melo_player_current;
 static bool melo_player_prev;
 static bool melo_player_next;
 static bool melo_player_shuffle;
+static Playlist__RepeatMode melo_player_repeat_mode;
 
 /* Global volume */
 static float melo_player_volume = 1.f;
@@ -586,7 +587,8 @@ melo_player_message_error (const char *error)
 }
 
 static MeloMessage *
-melo_player_message_playlist (bool prev, bool next, bool shuffle)
+melo_player_message_playlist (
+    bool prev, bool next, bool shuffle, Playlist__RepeatMode repeat_mode)
 {
   Player__Event pmsg = PLAYER__EVENT__INIT;
   Player__Event__Playlist playlist = PLAYER__EVENT__PLAYLIST__INIT;
@@ -600,6 +602,7 @@ melo_player_message_playlist (bool prev, bool next, bool shuffle)
   playlist.prev = prev;
   playlist.next = next;
   playlist.shuffle = shuffle;
+  playlist.repeat_mode = repeat_mode;
 
   /* Generate message */
   msg = melo_message_new (player__event__get_packed_size (&pmsg));
@@ -703,8 +706,8 @@ melo_player_add_event_listener (MeloAsyncCb cb, void *user_data)
       cb (msg, user_data);
       melo_message_unref (msg);
     }
-    msg = melo_player_message_playlist (
-        melo_player_prev, melo_player_next, melo_player_shuffle);
+    msg = melo_player_message_playlist (melo_player_prev, melo_player_next,
+        melo_player_shuffle, melo_player_repeat_mode);
     if (msg) {
       cb (msg, user_data);
       melo_message_unref (msg);
@@ -1001,16 +1004,18 @@ melo_player_reset (void)
 }
 
 void
-melo_player_update_playlist_controls (bool prev, bool next, bool shuffle)
+melo_player_update_playlist_controls (
+    bool prev, bool next, bool shuffle, Playlist__RepeatMode repeat_mode)
 {
   /* Update controls */
   melo_player_prev = prev;
   melo_player_next = next;
   melo_player_shuffle = shuffle;
+  melo_player_repeat_mode = repeat_mode;
 
   /* Broadcast playlist controls change */
-  melo_events_broadcast (
-      &melo_player_events, melo_player_message_playlist (prev, next, shuffle));
+  melo_events_broadcast (&melo_player_events,
+      melo_player_message_playlist (prev, next, shuffle, repeat_mode));
 }
 
 /*
@@ -1453,6 +1458,16 @@ melo_player_eos (MeloPlayer *player)
 {
   if (!player)
     return;
+
+  /* Repeat media */
+  if (melo_player_repeat_mode == PLAYLIST__REPEAT_MODE__REPEAT_ONCE) {
+    MeloPlayerClass *class = MELO_PLAYER_GET_CLASS (player);
+
+    /* Play again */
+    if (class && class->set_state &&
+        class->set_state (player, MELO_PLAYER_STATE_PLAYING))
+      return;
+  }
 
   /* Play next media in playlist */
   if (melo_playlist_play_next ())

@@ -6,6 +6,16 @@ import "tags.proto";
 
 package Playlist;
 
+/* Playlist repeat mode */
+enum RepeatMode {
+  /* Stop player after last media is played */
+  NO_REPEAT = 0;
+  /* Loop back to first media after last media is played */
+  REPEAT = 1;
+  /* Loop on the current playing media */
+  REPEAT_ONCE = 2;
+}
+
 /* Playlist media index */
 message MediaIndex {
   /* Array of indices of the media in the playlist */
@@ -66,6 +76,8 @@ message Event {
     Range delete = 14;
     /* 'Shuffle' mode has been enabled / disabled */
     bool shuffle = 15;
+    /* Current repeat mode applied on playlist */
+    RepeatMode repeat_mode = 16;
   }
 }
 
@@ -93,6 +105,8 @@ message Request {
     Range delete = 14;
     /* Set playlist in 'Shuffle' mode (resp: none) */
     bool shuffle = 15;
+    /* Set playlist repeat mode (resp: none) */
+    RepeatMode set_repeat_mode = 16;
   }
 }
 

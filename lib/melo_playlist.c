@@ -91,6 +91,7 @@ struct _MeloPlaylist {
   char *id;
   MeloPlaylistList entries;
   MeloPlaylistBackup *shuffle;
+  Playlist__RepeatMode repeat_mode;
 
   MeloEvents events;
   MeloRequests requests;
@@ -804,8 +805,12 @@ melo_playlist_update_player_control (MeloPlaylist *playlist)
     current = child;
   }
 
+  if (playlist->repeat_mode == PLAYLIST__REPEAT_MODE__REPEAT)
+    prev = next = true;
+
   /* Update player controls */
-  melo_player_update_playlist_controls (prev, next, playlist->shuffle);
+  melo_player_update_playlist_controls (
+      prev, next, playlist->shuffle, playlist->repeat_mode);
 }
 
 static bool
@@ -1005,8 +1010,9 @@ melo_playlist_play (MeloPlaylist *playlist, unsigned int *indices,
     /* No parent: cannot play */
     if (!entry->parent) {
       /* First / last item: finished */
-      if (melo_playlist_list_is_first (&playlist->entries, entry) ||
-          melo_playlist_list_is_last (&playlist->entries, entry)) {
+      if (playlist->repeat_mode != PLAYLIST__REPEAT_MODE__REPEAT &&
+          (melo_playlist_list_is_first (&playlist->entries, entry) ||
+              melo_playlist_list_is_last (&playlist->entries, entry))) {
         melo_playlist_reset_current (playlist);
         melo_player_reset ();
         goto end;
@@ -1074,6 +1080,11 @@ melo_playlist_play_recursive (MeloPlaylist *playlist, MeloPlaylistList *entries,
     do {
       /* Move to parent */
       while (melo_playlist_list_is_first (entries, entry)) {
+        if (!entry->parent &&
+            playlist->repeat_mode == PLAYLIST__REPEAT_MODE__REPEAT) {
+          indices[count - 1] = entries->count;
+          break;
+        }
         if (!entry->parent || !count)
           return false;
         entry = entry->parent;
@@ -1091,6 +1102,11 @@ melo_playlist_play_recursive (MeloPlaylist *playlist, MeloPlaylistList *entries,
     do {
       /* Move to parent */
       while (melo_playlist_list_is_last (entries, entry)) {
+        if (!entry->parent &&
+            playlist->repeat_mode == PLAYLIST__REPEAT_MODE__REPEAT) {
+          indices[count - 1] = -1;
+          break;
+        }
         if (!entry->parent || !count)
           return false;
         entry = entry->parent;
@@ -1510,6 +1526,34 @@ melo_playlist_shuffle (
   return true;
 }
 
+static bool
+melo_playlist_set_repeat_mode (MeloPlaylist *playlist,
+    Playlist__RepeatMode repeat_mode, MeloAsyncData *async)
+{
+  MeloMessage *msg;
+
+  /* Set repeat mode */
+  playlist->repeat_mode = repeat_mode;
+
+  /* Generate shuffle event */
+  msg = melo_playlist_message_shuffle (playlist);
+
+  /* Broadcast message */
+  if (msg) {
+    /* Broadcast shuffle event */
+    melo_events_broadcast (&playlist->events, melo_message_ref (msg));
+
+    /* Broadcast shuffle event to current playlist */
+    if (melo_playlist_current == playlist) {
+      melo_events_broadcast (&melo_playlist_events, msg);
+      melo_playlist_update_player_control (playlist);
+    } else
+      melo_message_unref (msg);
+  }
+
+  return true;
+}
+
 /**
  * melo_playlist_handle_request:
  * @id: the id of the playlist or %NULL for current playlist
@@ -1602,6 +1646,10 @@ melo_playlist_handle_request (
     break;
   case PLAYLIST__REQUEST__REQ_SHUFFLE:
     ret = melo_playlist_shuffle (playlist, request->shuffle, &async);
+    break;
+  case PLAYLIST__REQUEST__REQ_SET_REPEAT_MODE:
+    ret = melo_playlist_set_repeat_mode (
+        playlist, request->set_repeat_mode, &async);
     break;
   default:
     MELO_LOGE ("request %u not supported", request->req_case);
@@ -2123,7 +2171,7 @@ melo_playlist_handle_control (bool next)
     indices[count++] = entries->current_index;
   }
 
-  /* Play recursively */
+  /* Play previous / next recursively */
   ret = melo_playlist_play_recursive (
       playlist, entries, entry, indices, count, next);
 
