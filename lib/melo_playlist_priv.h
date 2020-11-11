@@ -20,6 +20,9 @@
 
 #include "melo/melo_playlist.h"
 
+void melo_playlist_load_playlists (void);
+void melo_playlist_unload_playlists (void);
+
 bool melo_playlist_play_previous (void);
 bool melo_playlist_play_next (void);
 

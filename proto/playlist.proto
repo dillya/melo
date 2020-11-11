@@ -6,6 +6,19 @@ import "tags.proto";
 
 package Playlist;
 
+/* Playlist description */
+message Desc {
+  /* Playlist unique ID */
+  string id = 1;
+
+  /* Playlist name to display */
+  string name = 2;
+  /* Playlist description (optional) */
+  string description = 3;
+  /* Playlist icon (optional) */
+  string icon = 4;
+}
+
 /* Playlist repeat mode */
 enum RepeatMode {
   /* Stop player after last media is played */
@@ -78,6 +91,15 @@ message Event {
     bool shuffle = 15;
     /* Current repeat mode applied on playlist */
     RepeatMode repeat_mode = 16;
+
+    /* A new playlist has been created */
+    Desc created = 17;
+    /* A playlist had been saved */
+    string saved = 18;
+    /* A playlist has been destroyed */
+    string destroyed = 19;
+    /* A playlist has been loaded */
+    string loaded = 20;
   }
 }
 
@@ -88,6 +110,14 @@ message Request {
     /* Number of media to get */
     uint32 count = 1;
     /* Start point in media list */
+    uint32 offset = 2;
+  }
+
+  /* Get playlist list request */
+  message GetList {
+    /* Number of playlist to get */
+    uint32 count = 1;
+    /* Start point in list */
     uint32 offset = 2;
   }
 
@@ -107,6 +137,15 @@ message Request {
     bool shuffle = 15;
     /* Set playlist repeat mode (resp: none) */
     RepeatMode set_repeat_mode = 16;
+    /* Save current playlist (resp: Playlist.Response.done) */
+    Desc save = 17;
+
+    /* Create a new playlist (resp: Playlist.Response.done) */
+    Desc create = 18;
+    /* Destroy a playlist (resp: Playlist.Response.done) */
+    string destroy = 19;
+    /* Load a playlist to current (resp: Playlist.Response.done) */
+    string load = 20;
   }
 }
 
@@ -126,9 +165,11 @@ message Response {
 
   /* Responses */
   oneof resp {
-    /* Medias in playlist req Playlist.Request.get_media_list) */
+    /* Medias in playlist (req: Playlist.Request.get_media_list) */
     MediaList media_list = 10;
-    /* ID of current playing media (req Playlist.Request.get_current) */
+    /* ID of current playing media (req: Playlist.Request.get_current) */
     MediaIndex current = 11;
+    /* A request has failed with following error message (req: any) */
+    string error = 12;
   }
 }

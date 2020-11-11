@@ -20,14 +20,11 @@
 #include "melo/melo.h"
 #include "melo/melo_cover.h"
 #include "melo/melo_log.h"
-#include "melo/melo_playlist.h"
 
 #include "melo_library_browser.h"
 #include "melo_library_priv.h"
 #include "melo_player_priv.h"
-
-/* Default playlist */
-static MeloPlaylist *def_playlist;
+#include "melo_playlist_priv.h"
 
 /* Library browser */
 static MeloLibraryBrowser *lib_browser;
@@ -58,8 +55,8 @@ melo_init (int *argc, char ***argv)
   /* Initialize library */
   melo_library_init ();
 
-  /* Create default playlist */
-  def_playlist = melo_playlist_new (NULL);
+  /* Load playlists */
+  melo_playlist_load_playlists ();
 
   /* Create library browser */
   lib_browser = melo_library_browser_new ();
@@ -77,8 +74,8 @@ melo_deinit (void)
   /* Destroy library browser */
   g_object_unref (lib_browser);
 
-  /* Destroy default playlist */
-  g_object_unref (def_playlist);
+  /* Unload playlists */
+  melo_playlist_unload_playlists ();
 
   /* Close library */
   melo_library_deinit ();

@@ -15,6 +15,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
  */
 
+#include <stdio.h>
+
 #define MELO_LOG_TAG "playlist"
 #include "melo/melo_log.h"
 
@@ -29,6 +31,8 @@
 
 #define DEFAULT_PLAYLIST_ID "default"
 #define PLAYLIST_MAX_DEPTH 10
+#define FILE_DELIMITER_CHAR 0x1F
+#define FILE_DELIMITER_STR "\x1F"
 
 typedef struct _MeloPlaylistBackup MeloPlaylistBackup;
 
@@ -41,6 +45,12 @@ static MeloEvents melo_playlist_events;
 
 /* Current playlist */
 static MeloPlaylist *melo_playlist_current;
+
+/* Default playlist */
+static MeloPlaylist *melo_playlist_default;
+
+/* Playlist path */
+static char *melo_playlist_path;
 
 typedef enum _MeloPlaylistFlag {
   MELO_PLAYLIST_FLAG_NONE = 0,
@@ -84,6 +94,14 @@ struct _MeloPlaylistBackup {
   } list[];
 };
 
+typedef struct _MeloPlaylistDesc {
+  char *id;
+  char *name;
+  char *description;
+  char *icon;
+  MeloPlaylist *playlist;
+} MeloPlaylistDesc;
+
 struct _MeloPlaylist {
   /* Parent instance */
   GObject parent_instance;
@@ -94,7 +112,6 @@ struct _MeloPlaylist {
   Playlist__RepeatMode repeat_mode;
 
   MeloEvents events;
-  MeloRequests requests;
 };
 
 G_DEFINE_TYPE (MeloPlaylist, melo_playlist, G_TYPE_OBJECT)
@@ -102,6 +119,8 @@ G_DEFINE_TYPE (MeloPlaylist, melo_playlist, G_TYPE_OBJECT)
 /* Melo playlist properties */
 enum { PROP_0, PROP_ID };
 
+static void melo_playlist_list_append (
+    MeloPlaylistList *list, MeloPlaylistEntry *entry);
 static void melo_playlist_backup_restore (MeloPlaylistBackup *list,
     MeloPlaylistList *entries, MeloPlaylistEntry *parent, bool remove);
 
@@ -148,63 +167,234 @@ melo_playlist_init (MeloPlaylist *self)
 {
 }
 
-/**
- * melo_playlist_new:
- *
- * Creates a new #MeloPlaylist.
- *
- * Returns: (transfer full): the new #MeloPlaylist.
- */
-MeloPlaylist *
-melo_playlist_new (const char *id)
+static char *
+melo_playlist_next_delimiter (char *str)
 {
-  /* Set default name */
-  if (!id)
-    id = DEFAULT_PLAYLIST_ID;
+  if (str) {
+    str = strchr (str, FILE_DELIMITER_CHAR);
+    if (str)
+      *str++ = '\0';
+  }
+  return str;
+}
 
-  return g_object_new (MELO_TYPE_PLAYLIST, "id", id, NULL);
+void
+melo_playlist_load_playlists (void)
+{
+  const char *id;
+  char *line = NULL;
+  size_t len = 0;
+  GDir *dir;
+
+  /* Create playlist list */
+  melo_playlist_list = g_hash_table_new (g_str_hash, g_str_equal);
+
+  /* Create default playlist */
+  melo_playlist_default = g_object_new (MELO_TYPE_PLAYLIST, NULL);
+
+  /* Set current playlist to default one */
+  melo_playlist_current = g_object_ref (melo_playlist_default);
+
+  /* Create library path */
+  melo_playlist_path =
+      g_build_filename (g_get_user_data_dir (), "melo", "playlist", NULL);
+  g_mkdir_with_parents (melo_playlist_path, 0700);
+
+  /* Load saved playlists */
+  dir = g_dir_open (melo_playlist_path, 0, NULL);
+  while ((id = g_dir_read_name (dir))) {
+    char *path, *name, *description, *icon = NULL;
+    MeloPlaylistDesc *desc;
+    ssize_t ret;
+    FILE *fp;
+
+    /* Create file path */
+    path = g_build_filename (melo_playlist_path, id, NULL);
+    if (!path)
+      continue;
+
+    /* Open playlist */
+    fp = fopen (path, "r");
+    g_free (path);
+    if (!fp)
+      continue;
+
+    /* Get first line */
+    ret = getline (&line, &len, fp);
+    fclose (fp);
+    if (ret <= 0)
+      continue;
+    line[ret - 1] = '\0';
+
+    /* Extract descriptor */
+    name = line;
+    description = melo_playlist_next_delimiter (line);
+    icon = melo_playlist_next_delimiter (description);
+
+    /* Create descriptor */
+    desc = calloc (1, sizeof (*desc));
+    if (!desc) {
+      MELO_LOGE ("failed to create playlist descriptor for %s", id);
+      continue;
+    }
+
+    /* Fill descriptor */
+    desc->id = g_strdup (id);
+    desc->name = g_strdup (name);
+    desc->description = g_strdup (description);
+    desc->icon = g_strdup (icon);
+
+    /* Add to list */
+    g_hash_table_insert (melo_playlist_list, desc->id, desc);
+  }
+  g_dir_close (dir);
+
+  /* Free line */
+  free (line);
+}
+
+void
+melo_playlist_unload_playlists (void)
+{
+  MeloPlaylistDesc *desc;
+  GHashTableIter iter;
+
+  /* Release playlist path */
+  g_free (melo_playlist_path);
+
+  /* Release current playlist */
+  g_object_unref (melo_playlist_current);
+
+  /* Unload playlists */
+  g_hash_table_iter_init (&iter, melo_playlist_list);
+  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &desc)) {
+    /* Something wrong with a playlist */
+    if (desc->playlist)
+      MELO_LOGW ("'%s' is still loaded", desc->id);
+
+    /* Free descriptor */
+    g_free (desc->id);
+    g_free (desc->name);
+    g_free (desc->description);
+    g_free (desc->icon);
+    g_free (desc);
+  }
+
+  /* Release default playlist */
+  g_object_unref (melo_playlist_default);
+
+  /* Destroy playlist list */
+  g_hash_table_destroy (melo_playlist_list);
 }
 
 static void
 melo_playlist_constructed (GObject *object)
 {
   MeloPlaylist *playlist = MELO_PLAYLIST (object);
+  char *path;
+  FILE *fp;
 
-  /* Register playlist */
-  if (playlist->id) {
-    gboolean added = FALSE;
+  /* Default playlist */
+  if (!playlist->id)
+    return;
 
-    /* Lock playlist list */
-    G_LOCK (melo_playlist_mutex);
+  /* Create file path */
+  path = g_build_filename (melo_playlist_path, playlist->id, NULL);
+  if (!path)
+    return;
 
-    /* Create playlist list */
-    if (!melo_playlist_list)
-      melo_playlist_list = g_hash_table_new (g_str_hash, g_str_equal);
+  /* Open playlist */
+  fp = fopen (path, "r");
+  g_free (path);
 
-    /* Insert playlist into list */
-    if (melo_playlist_list &&
-        g_hash_table_contains (melo_playlist_list, playlist->id) == FALSE) {
-      g_hash_table_insert (
-          melo_playlist_list, (gpointer) playlist->id, playlist);
-      added = TRUE;
+  /* Parse file */
+  if (fp) {
+    MeloPlaylistList *entries = &playlist->entries;
+    MeloPlaylistEntry *parent = NULL;
+    MeloPlaylistEntry *entry = NULL;
+    unsigned int depth = 0;
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t ret;
+
+    /* Skip first line */
+    getline (&line, &len, fp);
+
+    /* Get first line */
+    while ((ret = getline (&line, &len, fp)) > 0) {
+      unsigned int d;
+      char *player, *name;
+      char *title, *artist, *album, *genre, *track, *cover;
+      MeloTags *tags;
+
+      /* Remove trailing character */
+      line[ret - 1] = '\0';
+
+      /* Extract values */
+      d = strtoul (line, NULL, 0);
+      player = melo_playlist_next_delimiter (line);
+      path = melo_playlist_next_delimiter (player);
+      name = melo_playlist_next_delimiter (path);
+      if (!player || !path || !name)
+        continue;
+
+      /* Move to children */
+      if (d == depth + 1) {
+        if (!entry)
+          break;
+        parent = entry;
+        entries = &entry->children;
+        depth = d;
+      } else if (d < depth) {
+        while (d != depth && parent) {
+          parent = parent->parent;
+          entries = parent ? &parent->children : &playlist->entries;
+          depth--;
+        }
+      } else if (d != depth)
+        continue;
+
+      /* Get tags */
+      title = melo_playlist_next_delimiter (name);
+      artist = melo_playlist_next_delimiter (title);
+      album = melo_playlist_next_delimiter (artist);
+      genre = melo_playlist_next_delimiter (album);
+      track = melo_playlist_next_delimiter (genre);
+      cover = melo_playlist_next_delimiter (track);
+      tags = melo_tags_new ();
+      if (tags) {
+        if (title && *title != '\0')
+          melo_tags_set_title (tags, title);
+        if (artist && *artist != '\0')
+          melo_tags_set_artist (tags, artist);
+        if (album && *album != '\0')
+          melo_tags_set_album (tags, album);
+        if (genre && *genre != '\0')
+          melo_tags_set_genre (tags, genre);
+        if (track)
+          melo_tags_set_track (tags, atoi (track));
+        melo_tags_set_cover (tags, NULL, cover);
+      }
+
+      /* Fix values */
+      if (player && *player == '\0')
+        player = NULL;
+      if (path && *path == '\0')
+        path = NULL;
+      if (name && *name == '\0')
+        name = NULL;
+
+      /* New entry */
+      entry = melo_playlist_entry_new (player, path, name, tags);
+      melo_playlist_list_append (entries, entry);
+      entry->playlist = playlist;
+      entry->parent = parent;
     }
 
-    /* Default playlist as current */
-    if (!melo_playlist_current && !strcmp (playlist->id, DEFAULT_PLAYLIST_ID))
-      melo_playlist_current = playlist;
-
-    /* Unlock playlist list */
-    G_UNLOCK (melo_playlist_mutex);
-
-    /* playlist added */
-    if (added == TRUE)
-      MELO_LOGI ("playlist '%s' added", playlist->id);
-    else
-      MELO_LOGW ("failed to add playlist '%s' to global list", playlist->id);
+    /* Free line and close file */
+    free (line);
+    fclose (fp);
   }
-
-  /* Chain constructed */
-  G_OBJECT_CLASS (melo_playlist_parent_class)->constructed (object);
 }
 
 static void
@@ -212,7 +402,6 @@ melo_playlist_finalize (GObject *object)
 {
   MeloPlaylist *playlist = MELO_PLAYLIST (object);
   MeloPlaylistList *entries = &playlist->entries;
-  gboolean removed = FALSE;
 
   /* Free playlist list */
   while (entries->count--) {
@@ -232,27 +421,18 @@ melo_playlist_finalize (GObject *object)
 
   /* Un-register playlist */
   if (playlist->id) {
+    MeloPlaylistDesc *desc;
+
     /* Lock playlist list */
     G_LOCK (melo_playlist_mutex);
 
-    /* Remove playlist from list */
-    if (melo_playlist_list) {
-      g_hash_table_remove (melo_playlist_list, playlist->id);
-      removed = TRUE;
-    }
-
-    /* Destroy playlist list */
-    if (melo_playlist_list && !g_hash_table_size (melo_playlist_list)) {
-      g_hash_table_destroy (melo_playlist_list);
-      melo_playlist_list = NULL;
-    }
+    /* Find descriptor */
+    desc = g_hash_table_lookup (melo_playlist_list, playlist->id);
+    if (desc)
+      desc->playlist = NULL;
 
     /* Unlock playlist list */
     G_UNLOCK (melo_playlist_mutex);
-
-    /* playlist removed */
-    if (removed == TRUE)
-      MELO_LOGI ("playlist '%s' removed", playlist->id);
 
     /* Free ID */
     g_free (playlist->id);
@@ -671,6 +851,70 @@ melo_playlist_message_shuffle (MeloPlaylist *playlist)
   return msg;
 }
 
+static MeloMessage *
+melo_playlist_message_created (MeloPlaylistDesc *desc)
+{
+  Playlist__Event pmsg = PLAYLIST__EVENT__INIT;
+  Playlist__Desc d = PLAYLIST__DESC__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = PLAYLIST__EVENT__EVENT_CREATED;
+  pmsg.created = &d;
+
+  /* Set descriptor */
+  d.id = desc->id;
+  d.name = desc->name;
+  d.description = desc->description;
+  d.icon = desc->icon;
+
+  /* Generate message */
+  msg = melo_message_new (playlist__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
+}
+
+static MeloMessage *
+melo_playlist_message_event_id (Playlist__Event__EventCase type, const char *id)
+{
+  Playlist__Event pmsg = PLAYLIST__EVENT__INIT;
+  MeloMessage *msg;
+
+  /* Set event type */
+  pmsg.event_case = type;
+  pmsg.saved = (char *) id;
+
+  /* Generate message */
+  msg = melo_message_new (playlist__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, playlist__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  return msg;
+}
+
+static MeloMessage *
+melo_playlist_message_error (const char *error)
+{
+  Playlist__Response resp = PLAYLIST__RESPONSE__INIT;
+  MeloMessage *msg;
+
+  /* Set response type */
+  resp.resp_case = PLAYLIST__RESPONSE__RESP_ERROR;
+  resp.error = (char *) error;
+
+  /* Generate message */
+  msg = melo_message_new (playlist__response__get_packed_size (&resp));
+  if (msg)
+    melo_message_set_size (
+        msg, playlist__response__pack (&resp, melo_message_get_data (msg)));
+
+  return msg;
+}
+
 /*
  * Static functions
  */
@@ -683,18 +927,41 @@ melo_playlist_get_by_id (const char *id)
   /* Lock playlist list */
   G_LOCK (melo_playlist_mutex);
 
-  if (!id)
+  if (!id) {
     playlist =
         melo_playlist_current ? g_object_ref (melo_playlist_current) : NULL;
-  else if (melo_playlist_list)
-    playlist = g_hash_table_lookup (melo_playlist_list, id);
-  if (playlist)
-    g_object_ref (playlist);
+  } else if (melo_playlist_list) {
+    MeloPlaylistDesc *desc;
+
+    /* Get playlist descriptor */
+    desc = g_hash_table_lookup (melo_playlist_list, id);
+    if (desc) {
+      /* Load playlist */
+      if (!desc->playlist) {
+        desc->playlist = g_object_new (MELO_TYPE_PLAYLIST, "id", id, NULL);
+        playlist = desc->playlist;
+      } else
+        playlist = g_object_ref (desc->playlist);
+    }
+  }
 
   /* Unlock playlist list */
   G_UNLOCK (melo_playlist_mutex);
 
   return playlist;
+}
+
+static void
+melo_playlist_list_cb (gpointer key, gpointer value, gpointer user_data)
+{
+  MeloPlaylistDesc *desc = value;
+  MeloAsyncData *data = user_data;
+  MeloMessage *msg;
+
+  /* Generate 'created' message */
+  msg = melo_playlist_message_created (desc);
+  data->cb (msg, data->user_data);
+  melo_message_unref (msg);
 }
 
 /**
@@ -737,10 +1004,32 @@ melo_playlist_add_event_listener (
 
     /* Add event listener to playlist */
     ret = melo_events_add_listener (&playlist->events, cb, user_data);
-    g_object_unref (playlist);
   } else {
+    MeloMessage *msg;
+
     /* Add event listener to global / current playlist */
     ret = melo_events_add_listener (&melo_playlist_events, cb, user_data);
+
+    /* Lock playlist list */
+    G_LOCK (melo_playlist_mutex);
+
+    /* Send browser list to new listener */
+    if (ret && melo_playlist_list && cb) {
+      MeloAsyncData data = {.cb = cb, .user_data = user_data};
+
+      /* Send browser list */
+      g_hash_table_foreach (melo_playlist_list, melo_playlist_list_cb, &data);
+    }
+
+    /* Generate 'loaded' message */
+    msg = melo_playlist_message_event_id (
+        PLAYLIST__EVENT__EVENT_LOADED, melo_playlist_current->id);
+    if (cb)
+      cb (msg, user_data);
+    melo_message_unref (msg);
+
+    /* Unlock playlist list */
+    G_UNLOCK (melo_playlist_mutex);
   }
 
   return ret;
@@ -774,6 +1063,9 @@ melo_playlist_remove_event_listener (
 
     /* Remove event listener to playlist */
     ret = melo_events_remove_listener (&playlist->events, cb, user_data);
+    g_object_unref (playlist);
+
+    /* Release extra reference obtained in add_event_listener() */
     g_object_unref (playlist);
   } else
     ret = melo_events_remove_listener (&melo_playlist_events, cb, user_data);
@@ -987,6 +1279,7 @@ melo_playlist_play (MeloPlaylist *playlist, unsigned int *indices,
   MeloPlaylistList *entries;
   MeloPlaylistEntry *e;
   unsigned int depth = count;
+  bool reset = false;
 
   /* No indices */
   if (!count)
@@ -1034,9 +1327,24 @@ melo_playlist_play (MeloPlaylist *playlist, unsigned int *indices,
 
   /* Switch playlist */
   G_LOCK (melo_playlist_mutex);
-  if (playlist != melo_playlist_current)
-    melo_playlist_current = playlist;
+  if (playlist != melo_playlist_current) {
+    g_object_unref (melo_playlist_current);
+    melo_playlist_current = g_object_ref (playlist);
+    reset = true;
+  }
   G_UNLOCK (melo_playlist_mutex);
+
+  /* Playlist has been switched */
+  if (reset) {
+    /* Reset player */
+    melo_playlist_reset_current (playlist);
+    melo_player_reset ();
+
+    /* Broadcast load / unload event */
+    melo_events_broadcast (&melo_playlist_events,
+        melo_playlist_message_event_id (
+            PLAYLIST__EVENT__EVENT_LOADED, playlist->id));
+  }
 
   /* Update parents indices */
   e = entry;
@@ -1057,7 +1365,7 @@ melo_playlist_play (MeloPlaylist *playlist, unsigned int *indices,
       melo_tags_ref (entry->tags), melo_playlist_entry_ref (entry));
 
 end:
-  /* Broadcast media addition */
+  /* Broadcast media play */
   melo_events_broadcast (
       &melo_playlist_events, melo_playlist_message_play (playlist));
 
@@ -1472,8 +1780,7 @@ melo_playlist_backup_restore (MeloPlaylistBackup *list,
 }
 
 static bool
-melo_playlist_shuffle (
-    MeloPlaylist *playlist, bool enable, MeloAsyncData *async)
+melo_playlist_shuffle (MeloPlaylist *playlist, bool enable)
 {
   MeloMessage *msg;
 
@@ -1527,8 +1834,8 @@ melo_playlist_shuffle (
 }
 
 static bool
-melo_playlist_set_repeat_mode (MeloPlaylist *playlist,
-    Playlist__RepeatMode repeat_mode, MeloAsyncData *async)
+melo_playlist_set_repeat_mode (
+    MeloPlaylist *playlist, Playlist__RepeatMode repeat_mode)
 {
   MeloMessage *msg;
 
@@ -1551,6 +1858,311 @@ melo_playlist_set_repeat_mode (MeloPlaylist *playlist,
       melo_message_unref (msg);
   }
 
+  return true;
+}
+
+static void
+melo_playlist_save_list (FILE *fp, unsigned int depth, MeloPlaylistList *list)
+{
+  MeloPlaylistEntry *entry = list->list;
+  unsigned int i;
+
+  /* Save all entries */
+  for (i = 0; i < list->count; i++) {
+    /* Set descriptor */
+    fprintf (fp,
+        "%u" FILE_DELIMITER_STR "%s" FILE_DELIMITER_STR "%s" FILE_DELIMITER_STR
+        "%s",
+        depth, entry->player ? entry->player : "",
+        entry->path ? entry->path : "", entry->name ? entry->name : "");
+
+    /* Add tags */
+    if (entry->tags) {
+      const char *title, *artist, *album, *genre, *cover;
+
+      /* Fetch tags */
+      title = melo_tags_get_title (entry->tags);
+      artist = melo_tags_get_artist (entry->tags);
+      album = melo_tags_get_album (entry->tags);
+      genre = melo_tags_get_genre (entry->tags);
+      cover = melo_tags_get_cover (entry->tags);
+
+      /* Set tags */
+      fprintf (fp,
+          FILE_DELIMITER_STR "%s" FILE_DELIMITER_STR "%s" FILE_DELIMITER_STR
+                             "%s" FILE_DELIMITER_STR "%s" FILE_DELIMITER_STR
+                             "%u" FILE_DELIMITER_STR "%s",
+          title ? title : "", artist ? artist : "", album ? album : "",
+          genre ? genre : "", melo_tags_get_track (entry->tags),
+          cover ? cover : "");
+    }
+
+    /* Finalize entry */
+    fputc ('\n', fp);
+
+    /* Save children */
+    if (entry->children.count)
+      melo_playlist_save_list (fp, depth + 1, &entry->children);
+
+    /* Go to next entry */
+    entry = entry->next;
+  }
+}
+
+static bool
+melo_playlist_save (MeloPlaylist *playlist, Playlist__Desc *req,
+    bool create_only, MeloAsyncData *async)
+{
+  MeloPlaylistDesc *desc;
+  MeloMessage *msg;
+  char *path;
+  FILE *fp;
+
+  /* Invalid ID */
+  if (!req->id || *req->id == '\0')
+    return false;
+
+  /* Lock playlist list */
+  G_LOCK (melo_playlist_mutex);
+
+  /* Find descriptor */
+  desc = g_hash_table_lookup (melo_playlist_list, req->id);
+  if (!desc) {
+    /* Create descriptor */
+    desc = calloc (1, sizeof (*desc));
+    if (!desc)
+      goto error;
+
+    /* Fill descriptor */
+    desc->id = g_strdup (req->id);
+    desc->name = g_strdup (req->name);
+    desc->description = g_strdup (req->description);
+    desc->icon = g_strdup (req->icon);
+
+    /* Add to list */
+    g_hash_table_insert (melo_playlist_list, desc->id, desc);
+
+    /* Broadcast created event */
+    melo_events_broadcast (
+        &melo_playlist_events, melo_playlist_message_created (desc));
+  }
+
+  /* Create file path */
+  path = g_build_filename (melo_playlist_path, desc->id, NULL);
+  if (!path)
+    goto error;
+
+  /* Open playlist */
+  fp = fopen (path, "w");
+  g_free (path);
+
+  /* Failed to create file */
+  if (!fp)
+    goto error;
+
+  /* Write descriptor */
+  fprintf (fp, "%s" FILE_DELIMITER_STR "%s" FILE_DELIMITER_STR "%s\n",
+      desc->name, desc->description, desc->icon);
+
+  /* Write playlist */
+  if (!create_only) {
+    MeloPlaylist *pl = NULL;
+
+    /* Get destination playlist */
+    if (desc->playlist) {
+      /* Get a reference */
+      pl = g_object_ref (desc->playlist);
+
+      /* Detach this playlist from descriptor */
+      if (pl != playlist)
+        desc->playlist = NULL;
+    }
+    melo_playlist_save_list (fp, 0, &playlist->entries);
+
+    /* Create saved playlist event */
+    msg =
+        melo_playlist_message_event_id (PLAYLIST__EVENT__EVENT_SAVED, desc->id);
+
+    /* Send event to listeners */
+    if (pl) {
+      melo_events_broadcast (&pl->events, melo_message_ref (msg));
+      g_object_unref (pl);
+    }
+
+    /* Broadcast saved event */
+    if (melo_playlist_current == playlist)
+      melo_events_broadcast (&melo_playlist_events, melo_message_ref (msg));
+    melo_message_unref (msg);
+  }
+
+  /* Close file */
+  fclose (fp);
+
+  /* Unlock playlist list */
+  G_UNLOCK (melo_playlist_mutex);
+
+  return true;
+
+error:
+  /* Unlock playlist list */
+  G_UNLOCK (melo_playlist_mutex);
+
+  /* Create error response */
+  msg = melo_playlist_message_error (
+      create_only ? "Failed to create playlist" : "Failed to save playlist");
+  if (msg) {
+    /* Send message */
+    if (async->cb)
+      async->cb (msg, async->user_data);
+
+    /* Release message */
+    melo_message_unref (msg);
+  }
+
+  return false;
+}
+
+static bool
+melo_playlist_destroy (const char *id, MeloAsyncData *async)
+{
+  MeloPlaylist *playlist = NULL;
+  MeloPlaylistDesc *desc;
+  MeloMessage *msg;
+  bool ret = false;
+
+  /* Lock playlist list */
+  G_LOCK (melo_playlist_mutex);
+
+  /* Get playlist descriptor */
+  desc = g_hash_table_lookup (melo_playlist_list, id);
+  if (desc) {
+    /* Save playlist */
+    if (desc->playlist)
+      playlist = g_object_ref (desc->playlist);
+
+    /* Remove playlist from list */
+    ret = g_hash_table_remove (melo_playlist_list, id);
+    if (ret) {
+      char *path;
+
+      /* Destroy related file */
+      path = g_build_filename (melo_playlist_path, id, NULL);
+      if (path)
+        remove (path);
+      g_free (path);
+    }
+
+    /* Free descriptor */
+    g_free (desc->id);
+    g_free (desc->name);
+    g_free (desc->description);
+    g_free (desc->icon);
+    free (desc);
+  }
+
+  /* Current playlist */
+  if (playlist == melo_playlist_current) {
+    /* Restore default playlist */
+    melo_playlist_current = g_object_ref (melo_playlist_default);
+    g_object_unref (playlist);
+
+    /* Reset player */
+    melo_player_reset ();
+
+    /* Broadcast load event */
+    melo_events_broadcast (&melo_playlist_events,
+        melo_playlist_message_event_id (
+            PLAYLIST__EVENT__EVENT_LOADED, melo_playlist_current->id));
+  }
+
+  /* Unlock playlist list */
+  G_UNLOCK (melo_playlist_mutex);
+
+  /* Create event / error response */
+  if (ret) {
+    /* Create destroyed message */
+    msg = melo_playlist_message_event_id (PLAYLIST__EVENT__EVENT_DESTROYED, id);
+
+    /* Send to remaining opened instance of this playlist */
+    if (playlist)
+      melo_events_broadcast (&playlist->events, melo_message_ref (msg));
+
+    /* Broadcast created event */
+    melo_events_broadcast (&melo_playlist_events, msg);
+  } else {
+    msg = melo_playlist_message_error ("Failed to destroy playlist");
+    if (msg) {
+      /* Send message */
+      if (async->cb)
+        async->cb (msg, async->user_data);
+
+      /* Release message */
+      melo_message_unref (msg);
+    }
+  }
+
+  /* Free playlist */
+  if (playlist)
+    g_object_unref (playlist);
+
+  return ret;
+}
+
+static bool
+melo_playlist_load (const char *id, MeloAsyncData *async)
+{
+  MeloPlaylist *playlist = NULL, *pl;
+
+  /* Get playlist to load */
+  if (id && *id != '\0' && strcmp (id, "default")) {
+    /* Find playlist */
+    pl = melo_playlist_get_by_id (id);
+    if (!pl) {
+      MeloMessage *msg;
+
+      /* Invalid ID */
+      msg = melo_playlist_message_error ("Failed to load playlist");
+      if (msg) {
+        /* Send message */
+        if (async->cb)
+          async->cb (msg, async->user_data);
+
+        /* Release message */
+        melo_message_unref (msg);
+      }
+
+      return false;
+    }
+  } else {
+    /* Use default playlist */
+    pl = g_object_ref (melo_playlist_default);
+    id = "default";
+  }
+
+  /* Lock playlist list */
+  G_LOCK (melo_playlist_mutex);
+
+  /* Replace current playlist */
+  playlist = melo_playlist_current;
+  melo_playlist_current = pl;
+
+  /* Unlock playlist list */
+  G_UNLOCK (melo_playlist_mutex);
+
+  /* No change */
+  if (pl == playlist)
+    return true;
+
+  /* Stop current playing */
+  if (playlist) {
+    melo_playlist_reset_current (playlist);
+    melo_player_reset ();
+    g_object_unref (playlist);
+  }
+
+  /* Broadcast load event */
+  melo_events_broadcast (&melo_playlist_events,
+      melo_playlist_message_event_id (PLAYLIST__EVENT__EVENT_LOADED, id));
   return true;
 }
 
@@ -1645,11 +2257,28 @@ melo_playlist_handle_request (
     ret = melo_playlist_delete (playlist, request->delete_, &async);
     break;
   case PLAYLIST__REQUEST__REQ_SHUFFLE:
-    ret = melo_playlist_shuffle (playlist, request->shuffle, &async);
+    ret = melo_playlist_shuffle (playlist, request->shuffle);
     break;
   case PLAYLIST__REQUEST__REQ_SET_REPEAT_MODE:
-    ret = melo_playlist_set_repeat_mode (
-        playlist, request->set_repeat_mode, &async);
+    ret = melo_playlist_set_repeat_mode (playlist, request->set_repeat_mode);
+    break;
+  case PLAYLIST__REQUEST__REQ_SAVE:
+    ret = melo_playlist_save (playlist, request->save, false, &async);
+    break;
+  case PLAYLIST__REQUEST__REQ_CREATE:
+    /* Only global playlist can handle 'create' request */
+    if (!id)
+      ret = melo_playlist_save (playlist, request->create, true, &async);
+    break;
+  case PLAYLIST__REQUEST__REQ_DESTROY:
+    /* Only global playlist can handle 'destroy' request */
+    if (!id)
+      ret = melo_playlist_destroy (request->destroy, &async);
+    break;
+  case PLAYLIST__REQUEST__REQ_LOAD:
+    /* Only global playlist can handle 'load' request */
+    if (!id)
+      ret = melo_playlist_load (request->load, &async);
     break;
   default:
     MELO_LOGE ("request %u not supported", request->req_case);
@@ -1683,20 +2312,7 @@ melo_playlist_handle_request (
 void
 melo_playlist_cancel_request (const char *id, MeloAsyncCb cb, void *user_data)
 {
-  MeloAsyncData async = {
-      .cb = cb,
-      .user_data = user_data,
-  };
-  MeloPlaylist *playlist;
-
-  /* Find playlist */
-  playlist = melo_playlist_get_by_id (id);
-  if (!playlist)
-    return;
-
-  /* Cancel / stop request */
-  melo_requests_cancel_request (&playlist->requests, &async);
-  g_object_unref (playlist);
+  return;
 }
 
 static void

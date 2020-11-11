@@ -34,8 +34,6 @@ typedef struct _MeloPlaylistEntry MeloPlaylistEntry;
 #define MELO_TYPE_PLAYLIST melo_playlist_get_type ()
 G_DECLARE_FINAL_TYPE (MeloPlaylist, melo_playlist, MELO, PLAYLIST, GObject)
 
-MeloPlaylist *melo_playlist_new ();
-
 bool melo_playlist_add_event_listener (
     const char *id, MeloAsyncCb cb, void *user_data);
 bool melo_playlist_remove_event_listener (
