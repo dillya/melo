@@ -2373,8 +2373,7 @@ melo_playlist_handle_entry (MeloPlaylistEntry *entry, bool play)
 
     /* Play media on top of playlist */
     melo_playlist_play (playlist, &idx, 1, entry, false);
-  } else
-    entries->current_index++;
+  }
 
   /* Update player controls */
   melo_playlist_update_player_control (playlist);
