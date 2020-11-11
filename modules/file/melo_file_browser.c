@@ -61,6 +61,7 @@ typedef struct {
 typedef struct {
   MeloTags *tags;
   uint64_t id;
+  uint64_t timestamp;
 } MeloFileBrowserActLib;
 
 typedef struct {
@@ -77,6 +78,8 @@ typedef struct {
   unsigned int offset;
 
   GstDiscoverer *disco;
+  unsigned int disco_count;
+  bool done;
 
   uint64_t player_id;
   uint64_t path_id;
@@ -89,6 +92,11 @@ typedef struct {
   Browser__Action__Type type;
 
   GList *list;
+
+  GstDiscoverer *disco;
+  uint64_t player_id;
+  unsigned int disco_count;
+  unsigned int ref_count;
 } MeloFileBrowserAction;
 
 struct _MeloFileBrowser {
@@ -200,7 +208,8 @@ melo_file_browser_filter (MeloFileBrowser *browser, const char *name)
   size_t len, n = 0;
 
   /* Get extension list */
-  if (!melo_settings_entry_get_string (browser->filter, &exts, NULL))
+  if (!browser || !browser->filter ||
+      !melo_settings_entry_get_string (browser->filter, &exts, NULL))
     return true;
 
   /* Get extension */
@@ -282,7 +291,7 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
   melo_tags_unref (tags);
 
   /* Send media item */
-  if (!melo_request_send_response (mlist->req, msg)) {
+  if (!melo_request_send_response (mlist->req, msg) && mlist->done) {
     /* Stop and release discoverer */
     gst_discoverer_stop (disco);
     g_object_unref (disco);
@@ -290,18 +299,17 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
     /* Release request */
     melo_request_unref (mlist->req);
     free (mlist);
+    return;
   }
-}
 
-static void
-discover_finished_cb (GstDiscoverer *disco, gpointer user_data)
-{
-  MeloFileBrowserMediaList *mlist = user_data;
-
-  /* Release discoverer and request */
-  g_object_unref (disco);
-  melo_request_unref (mlist->req);
-  free (mlist);
+  /* Last media to discover */
+  mlist->disco_count--;
+  if (!mlist->disco_count && mlist->done) {
+    /* Release discoverer and request */
+    g_object_unref (disco);
+    melo_request_unref (mlist->req);
+    free (mlist);
+  }
 }
 
 static bool
@@ -521,8 +529,6 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         mlist->disco = gst_discoverer_new (GST_SECOND * 10, NULL);
         g_signal_connect (mlist->disco, "discovered",
             G_CALLBACK (discover_discovered_cb), mlist);
-        g_signal_connect (
-            mlist->disco, "finished", G_CALLBACK (discover_finished_cb), mlist);
         gst_discoverer_start (mlist->disco);
       }
 
@@ -557,6 +563,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         if (mlist->disco) {
           char *uri =
               g_build_path ("/", en_uri, g_file_info_get_name (info), NULL);
+          mlist->disco_count++;
           gst_discoverer_discover_uri_async (mlist->disco, uri);
           g_free (uri);
         }
@@ -603,7 +610,10 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     /* Release request, source object and asynchronous object */
     g_object_unref (en);
     free (mlist->auth);
-    if (!mlist->disco) {
+    mlist->done = true;
+    if (!mlist->disco_count) {
+      if (mlist->disco)
+        g_object_unref (mlist->disco);
       melo_request_unref (mlist->req);
       free (mlist);
     }
@@ -776,7 +786,15 @@ children_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 static void
 request_cancelled_cb (MeloRequest *req, void *user_data)
 {
-  g_cancellable_cancel ((GCancellable *) user_data);
+  MeloFileBrowserMediaList *mlist = user_data;
+
+  /* Stop discoverer */
+  if (mlist->disco)
+    gst_discoverer_stop (mlist->disco);
+  mlist->disco_count = 0;
+
+  /* Cancel GIO */
+  g_cancellable_cancel (mlist->cancel);
 }
 
 static void
@@ -801,8 +819,7 @@ melo_file_browser_get_file_list (
 
   /* Create and connect a cancellable for GIO */
   mlist->cancel = g_cancellable_new ();
-  g_signal_connect (
-      req, "cancelled", G_CALLBACK (request_cancelled_cb), mlist->cancel);
+  g_signal_connect (req, "cancelled", G_CALLBACK (request_cancelled_cb), mlist);
   g_signal_connect (
       req, "destroyed", G_CALLBACK (request_destroyed_cb), mlist->cancel);
 
@@ -949,6 +966,20 @@ melo_file_browser_get_media_list (MeloFileBrowser *browser,
   return ret;
 }
 
+static void
+action_cancelled_cb (MeloRequest *req, void *user_data)
+{
+  MeloFileBrowserAction *action = user_data;
+
+  /* Stop discoverer */
+  if (action->disco)
+    gst_discoverer_stop (action->disco);
+  action->disco_count = 0;
+
+  /* Cancel GIO */
+  g_cancellable_cancel (action->cancel);
+}
+
 static bool
 action_library_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
 {
@@ -1073,6 +1104,185 @@ action_next_files_cb (
   }
 }
 
+static void action_children_cb (
+    GObject *source_object, GAsyncResult *res, gpointer user_data);
+
+static bool
+action_scan_library_cb (
+    const MeloLibraryData *data, MeloTags *tags, void *user_data)
+{
+  MeloFileBrowserActLib *lib = user_data;
+
+  /* Save timestamp */
+  lib->timestamp = data->timestamp;
+
+  return true;
+}
+
+static void
+action_scan_discovered_cb (GstDiscoverer *discoverer, GstDiscovererInfo *info,
+    const GError *err, gpointer user_data)
+{
+  MeloFileBrowserAction *action = user_data;
+  struct timespec tp;
+  const char *uri;
+  char *path, *id;
+  MeloTags *tags;
+
+  /* Get media tags */
+  tags = melo_tags_new_from_taglist (melo_request_get_object (action->req),
+      gst_discoverer_info_get_tags (info));
+
+  /* Get timestamp for now */
+  clock_gettime (CLOCK_REALTIME, &tp);
+
+  uri = gst_discoverer_info_get_uri (info);
+  path = g_path_get_dirname (uri);
+  id = g_path_get_basename (uri);
+
+  /* Update media to library */
+  melo_library_add_media (NULL, action->player_id, path, 0, id, 0,
+      MELO_LIBRARY_SELECT (TIMESTAMP) | MELO_LIBRARY_SELECT (TITLE) |
+          MELO_LIBRARY_SELECT (ARTIST) | MELO_LIBRARY_SELECT (ALBUM) |
+          MELO_LIBRARY_SELECT (GENRE) | MELO_LIBRARY_SELECT (TRACK) |
+          MELO_LIBRARY_SELECT (COVER),
+      NULL, tags, tp.tv_sec, MELO_LIBRARY_FLAG_NONE);
+
+  /* Free ID and tags */
+  g_free (path);
+  g_free (id);
+  melo_tags_unref (tags);
+
+  /* Finished discovery */
+  action->disco_count--;
+  if (!action->ref_count && !action->disco_count) {
+    melo_request_unref (action->req);
+    g_object_unref (discoverer);
+    free (action);
+  }
+}
+
+static void
+action_scan_files_cb (
+    GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  GFileEnumerator *en = G_FILE_ENUMERATOR (source_object);
+  MeloFileBrowserAction *action = user_data;
+  GList *list;
+
+  /* Get next files list */
+  list = g_file_enumerator_next_files_finish (en, res, NULL);
+
+  /* Parse list */
+  if (list == NULL) {
+    /* Finished enumeration */
+    action->ref_count--;
+    if (!action->ref_count && !action->disco_count) {
+      melo_request_unref (action->req);
+      g_object_unref (action->disco);
+      free (action);
+    }
+    g_object_unref (en);
+  } else {
+    MeloFileBrowser *browser;
+    bool en_tags = false;
+    uint64_t path_id;
+    char *uri, *path;
+
+    /* Get browser */
+    browser = MELO_FILE_BROWSER (melo_request_get_object (action->req));
+
+    /* Get tags settings */
+    if (!browser ||
+        !melo_settings_entry_get_boolean (browser->en_tags, &en_tags, NULL))
+      en_tags = true;
+
+    /* Get directory URI */
+    uri = g_file_get_uri (g_file_enumerator_get_container (en));
+
+    /* Get player and path ID */
+    path = g_uri_unescape_string (uri, NULL);
+    action->player_id = melo_library_get_player_id (MELO_FILE_PLAYER_ID);
+    path_id = melo_library_get_path_id (path);
+    g_free (uri);
+
+    /* Extract files and directories */
+    while (list) {
+      GList *l = list;
+      GFileInfo *info = G_FILE_INFO (l->data);
+      GFileType type = g_file_info_get_file_type (info);
+      const char *name;
+
+      /* Remove file info from list */
+      list = g_list_remove_link (list, l);
+
+      /* Filter entries on name and extension */
+      name = g_file_info_get_name (info);
+      if (name && *name != '.') {
+        /* Process entry */
+        if (type == G_FILE_TYPE_DIRECTORY) {
+          GFile *file;
+
+          /* Get child */
+          file = g_file_enumerator_get_child (en, info);
+
+          /* Scan sub-directory */
+          action->ref_count++;
+          g_file_enumerate_children_async (file, MELO_FILE_BROWSER_ATTRIBUTES,
+              0, G_PRIORITY_DEFAULT, action->cancel, action_children_cb,
+              action);
+        } else if (type == G_FILE_TYPE_REGULAR &&
+                   melo_file_browser_filter (browser, name)) {
+          MeloFileBrowserActLib lib;
+          uint64_t timestamp;
+
+          /* Get last modified timestamp */
+          timestamp = g_file_info_get_attribute_uint64 (
+              info, G_FILE_ATTRIBUTE_TIME_MODIFIED);
+
+          /* Find media in library */
+          lib.timestamp = 0;
+          melo_library_find (MELO_LIBRARY_TYPE_MEDIA, action_scan_library_cb,
+              &lib, MELO_LIBRARY_SELECT (TIMESTAMP), 1, 0,
+              MELO_LIBRARY_FIELD_NONE, false, false,
+              MELO_LIBRARY_FIELD_PLAYER_ID, action->player_id,
+              MELO_LIBRARY_FIELD_PATH_ID, path_id, MELO_LIBRARY_FIELD_MEDIA,
+              name, MELO_LIBRARY_FIELD_LAST);
+
+          /* Update library and tags */
+          if (lib.timestamp <= timestamp) {
+            /* Add media to library */
+            melo_library_add_media (NULL, action->player_id, NULL, path_id,
+                name, 0,
+                MELO_LIBRARY_SELECT (NAME) | MELO_LIBRARY_SELECT (TIMESTAMP),
+                g_file_info_get_display_name (info), NULL, timestamp,
+                MELO_LIBRARY_FLAG_NONE);
+
+            /* Add media to discoverer queue */
+            if (en_tags) {
+              action->disco_count++;
+              uri = g_build_filename (path, name, NULL);
+              gst_discoverer_discover_uri_async (action->disco, uri);
+              g_free (uri);
+            }
+          }
+        }
+      }
+
+      /* Free entry */
+      g_object_unref (info);
+      g_list_free (l);
+    }
+
+    /* Free path */
+    g_free (path);
+
+    /* Enumerate next ITEMS_PER_CALLBACK files */
+    g_file_enumerator_next_files_async (en, ITEMS_PER_CALLBACK,
+        G_PRIORITY_DEFAULT, action->cancel, action_scan_files_cb, action);
+  }
+}
+
 static void
 action_children_cb (
     GObject *source_object, GAsyncResult *res, gpointer user_data)
@@ -1086,6 +1296,18 @@ action_children_cb (
   if (!en) {
     char *uri, *path, *media;
     MeloFileBrowserActLib lib;
+
+    /* Handle scan */
+    if (action->type == BROWSER__ACTION__TYPE__CUSTOM) {
+      action->ref_count--;
+      if (!action->ref_count && !action->disco_count) {
+        melo_request_unref (action->req);
+        g_object_unref (action->disco);
+        free (action);
+      }
+      g_object_unref (file);
+      return;
+    }
 
     /* Get file URI */
     uri = g_file_get_uri (file);
@@ -1124,7 +1346,7 @@ action_children_cb (
       melo_tags_unref (lib.tags);
     }
 
-    /* Release riequest, source object and asynchronous object */
+    /* Release request, source object and asynchronous object */
     melo_request_unref (action->req);
     g_object_unref (file);
     free (action);
@@ -1134,6 +1356,23 @@ action_children_cb (
 
   /* Release file */
   g_object_unref (file);
+
+  /* Handle scan */
+  if (action->type == BROWSER__ACTION__TYPE__CUSTOM) {
+    /* Create discoverer */
+    if (!action->disco) {
+      action->player_id = melo_library_get_player_id (MELO_FILE_PLAYER_ID);
+      action->disco = gst_discoverer_new (GST_SECOND * 10, NULL);
+      g_signal_connect (action->disco, "discovered",
+          G_CALLBACK (action_scan_discovered_cb), action);
+      gst_discoverer_start (action->disco);
+    }
+
+    /* Get childrens */
+    g_file_enumerator_next_files_async (en, ITEMS_PER_CALLBACK,
+        G_PRIORITY_DEFAULT, action->cancel, action_scan_files_cb, action);
+    return;
+  }
 
   /* Enumerate ITEMS_PER_CALLBACK first files */
   g_file_enumerator_next_files_async (en, ITEMS_PER_CALLBACK,
@@ -1155,6 +1394,9 @@ melo_file_browser_do_action (
   case BROWSER__ACTION__TYPE__SET_FAVORITE:
   case BROWSER__ACTION__TYPE__UNSET_FAVORITE:
     break;
+  case BROWSER__ACTION__TYPE__CUSTOM:
+    if (!strcmp (r->custom_id, "scan"))
+      break;
   default:
     MELO_LOGE ("action %u not supported", r->type);
     return false;
@@ -1182,12 +1424,12 @@ melo_file_browser_do_action (
 
   /* Create and connect a cancellable for GIO */
   action->cancel = g_cancellable_new ();
-  g_signal_connect (
-      req, "cancelled", G_CALLBACK (request_cancelled_cb), action->cancel);
+  g_signal_connect (req, "cancelled", G_CALLBACK (action_cancelled_cb), action);
   g_signal_connect (
       req, "destroyed", G_CALLBACK (request_destroyed_cb), action->cancel);
 
   /* Start file enumeration */
+  action->ref_count++;
   g_file_enumerate_children_async (file, MELO_FILE_BROWSER_ATTRIBUTES, 0,
       G_PRIORITY_DEFAULT, action->cancel, action_children_cb, action);
 
