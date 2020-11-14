@@ -99,6 +99,10 @@ void melo_browser_cancel_request (
 
 char *melo_browser_get_asset (const char *id, const char *asset);
 
+void melo_browser_send_event (MeloBrowser *browser, MeloMessage *msg);
+void melo_browser_send_media_deleted_event (
+    MeloBrowser *browser, const char *path);
+
 G_END_DECLS
 
 #endif /* !_MELO_BROWSER_H_ */

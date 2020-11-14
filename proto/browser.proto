@@ -34,6 +34,10 @@ message Action {
     SET_FAVORITE = 3;
     /* Remove media from library favorites */
     UNSET_FAVORITE = 4;
+    /* Scan recursively a folder */
+    SCAN = 5;
+    /* Delete / eject a media */
+    DELETE = 7;
     /* Custom action: Browser.Request.DoAction.action_id must be with the custom
      * action ID
      */
@@ -74,6 +78,9 @@ message Event {
     Desc add = 10;
     /* A browser has been removed */
     Desc remove = 11;
+
+    /* A media has been deleted / ejected */
+    string media_deleted = 12;
   }
 }
 

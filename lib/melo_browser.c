@@ -634,3 +634,58 @@ melo_browser_get_asset (const char *id, const char *asset)
 
   return ret;
 }
+
+/**
+ * melo_browser_send_event:
+ * @browser: a #MeloBrowser
+ * @msg: the #MeloMessage containing the event to send
+ *
+ * This function should be used to send an event from the #MeloBrowser final
+ * implementation. It will automatically broadcast the message to all clients
+ * listening on the @browser.
+ *
+ * This function takes ownership of @msg and will free its memory.
+ */
+void
+melo_browser_send_event (MeloBrowser *browser, MeloMessage *msg)
+{
+  MeloBrowserPrivate *priv;
+
+  /* Accept only valid browser */
+  if (!browser) {
+    melo_message_unref (msg);
+    return;
+  }
+  priv = melo_browser_get_instance_private (browser);
+
+  /* Broadcast event */
+  melo_events_broadcast (&priv->events, msg);
+}
+
+/**
+ * melo_browser_send_media_deleted_event:
+ * @browser: a #MeloBrowser
+ * @path: the deleted media item
+ *
+ * This helper can be used by #MeloBrowser implementations to send a
+ * 'media_deleted' event.
+ */
+void
+melo_browser_send_media_deleted_event (MeloBrowser *browser, const char *path)
+{
+  Browser__Event pmsg = BROWSER__EVENT__INIT;
+  MeloMessage *msg;
+
+  /* Prepare message */
+  pmsg.event_case = BROWSER__EVENT__EVENT_MEDIA_DELETED;
+  pmsg.media_deleted = (char *) path;
+
+  /* Generate message */
+  msg = melo_message_new (browser__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, browser__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  /* Send event */
+  melo_browser_send_event (browser, msg);
+}
