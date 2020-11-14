@@ -16,6 +16,7 @@
  */
 
 #include <ctype.h>
+#include <stdio.h>
 
 #include <gio/gio.h>
 #include <gst/pbutils/pbutils.h>
@@ -67,6 +68,7 @@ typedef struct {
 typedef struct {
   MeloRequest *req;
   GCancellable *cancel;
+  char *path;
 
   char *auth;
 
@@ -99,10 +101,19 @@ typedef struct {
   unsigned int ref_count;
 } MeloFileBrowserAction;
 
+typedef struct _MeloFileBrowserMount {
+  char *id;
+  char *name;
+  GVolume *volume;
+  GMount *mount;
+} MeloFileBrowserMount;
+
 struct _MeloFileBrowser {
   GObject parent_instance;
 
   char *root_path;
+  GVolumeMonitor *volume_monitor;
+  GHashTable *mounts;
 
   /* Settings */
   MeloSettingsEntry *en_network;
@@ -118,10 +129,37 @@ static bool melo_file_browser_handle_request (
     MeloBrowser *browser, const MeloMessage *msg, MeloRequest *req);
 static char *melo_file_browser_get_asset (MeloBrowser *browser, const char *id);
 
+static void volume_monitor_added_cb (
+    GVolumeMonitor *monitor, GObject *obj, MeloFileBrowser *browser);
+static void volume_monitor_removed_cb (
+    GVolumeMonitor *monitor, GObject *obj, MeloFileBrowser *browser);
+
 static void
 melo_file_browser_finalize (GObject *object)
 {
   MeloFileBrowser *browser = MELO_FILE_BROWSER (object);
+
+  /* Release volume monitor */
+  if (browser->volume_monitor) {
+    MeloFileBrowserMount *bm;
+    GHashTableIter iter;
+
+    /* Release mount list */
+    g_hash_table_iter_init (&iter, browser->mounts);
+    while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &bm)) {
+      g_clear_object (&bm->volume);
+      g_clear_object (&bm->mount);
+      g_free (bm->name);
+      g_free (bm->id);
+      free (bm);
+    }
+
+    /* Destroy hash table */
+    g_hash_table_destroy (browser->mounts);
+
+    /* Release volume monitor */
+    g_object_unref (browser->volume_monitor);
+  }
 
   /* Free root path */
   g_free (browser->root_path);
@@ -155,6 +193,42 @@ melo_file_browser_init (MeloFileBrowser *self)
   if (!root || *root != '/')
     root = "/";
   self->root_path = g_strconcat ("file://", root, NULL);
+
+  /* Get default volume monitor */
+  self->volume_monitor = g_volume_monitor_get ();
+  if (self->volume_monitor) {
+    /* Create hash table */
+    self->mounts = g_hash_table_new (g_direct_hash, g_direct_equal);
+    if (self->mounts) {
+      GList *list;
+
+      /* Fill mount list with volumes first */
+      list = g_volume_monitor_get_volumes (self->volume_monitor);
+      while (list) {
+        volume_monitor_added_cb (self->volume_monitor, list->data, self);
+        g_object_unref (list->data);
+        list = g_list_delete_link (list, list);
+      }
+
+      /* Fill mount list with mounts */
+      list = g_volume_monitor_get_mounts (self->volume_monitor);
+      while (list) {
+        volume_monitor_added_cb (self->volume_monitor, list->data, self);
+        g_object_unref (list->data);
+        list = g_list_delete_link (list, list);
+      }
+    }
+
+    /* Subscribe to volume and mount events */
+    g_signal_connect (self->volume_monitor, "volume-added",
+        (GCallback) volume_monitor_added_cb, self);
+    g_signal_connect (self->volume_monitor, "volume-removed",
+        (GCallback) volume_monitor_removed_cb, self);
+    g_signal_connect (self->volume_monitor, "mount_added",
+        (GCallback) volume_monitor_added_cb, self);
+    g_signal_connect (self->volume_monitor, "mount_removed",
+        (GCallback) volume_monitor_removed_cb, self);
+  }
 }
 
 MeloFileBrowser *
@@ -192,6 +266,106 @@ melo_file_browser_settings (MeloBrowser *browser, MeloSettings *settings)
   fbrowser->filter = melo_settings_group_add_string (group, "filter",
       "File extension filter", "File extension to display",
       MELO_FILE_BROWSER_DEFAULT_FILTER, NULL, MELO_SETTINGS_FLAG_NONE);
+}
+
+static void
+volume_monitor_added_cb (
+    GVolumeMonitor *monitor, GObject *obj, MeloFileBrowser *browser)
+{
+  MeloFileBrowserMount *bm;
+  GVolume *volume;
+  GMount *mount;
+  GObject *key;
+
+  /* Get object */
+  if (G_IS_VOLUME (obj)) {
+    volume = g_object_ref (G_VOLUME (obj));
+    mount = g_volume_get_mount (volume);
+  } else {
+    mount = g_object_ref (G_MOUNT (obj));
+    volume = g_mount_get_volume (mount);
+  }
+  key = volume ? G_OBJECT (volume) : G_OBJECT (mount);
+
+  /* Find mount */
+  bm = g_hash_table_lookup (browser->mounts, key);
+  if (!bm) {
+    /* Create new entry */
+    bm = malloc (sizeof (*bm));
+    if (bm) {
+      /* Set objects */
+      bm->volume = volume ? g_object_ref (volume) : NULL;
+      bm->mount = mount ? g_object_ref (mount) : NULL;
+
+      /* Set ID and name */
+      bm->id = g_strdup_printf ("%llx", (unsigned long long) key);
+      bm->name = volume ? g_volume_get_name (volume) : g_mount_get_name (mount);
+
+      /* Insert into hash table */
+      g_hash_table_insert (browser->mounts, key, bm);
+      MELO_LOGD ("add mount '%s' '%s'", bm->id, bm->name);
+    }
+  } else if (!bm->volume && volume)
+    bm->volume = g_object_ref (volume);
+  else if (!bm->mount && mount)
+    bm->mount = g_object_ref (mount);
+  if (bm)
+    MELO_LOGD ("mount '%s' updated: %p / %p", bm->id, bm->volume, bm->mount);
+
+  /* Release volume and mount */
+  g_clear_object (&volume);
+  g_clear_object (&mount);
+}
+
+static void
+volume_monitor_removed_cb (
+    GVolumeMonitor *monitor, GObject *obj, MeloFileBrowser *browser)
+{
+  MeloFileBrowserMount *bm;
+  GVolume *volume;
+  GMount *mount;
+  GObject *key;
+
+  /* Get object */
+  if (G_IS_VOLUME (obj)) {
+    volume = g_object_ref (G_VOLUME (obj));
+    mount = g_volume_get_mount (volume);
+  } else {
+    mount = g_object_ref (G_MOUNT (obj));
+    volume = g_mount_get_volume (mount);
+  }
+  key = volume ? G_OBJECT (volume) : G_OBJECT (mount);
+
+  /* Find mount */
+  bm = g_hash_table_lookup (browser->mounts, key);
+  if (bm) {
+    /* Remove objects */
+    if (key == (GObject *) volume)
+      g_clear_object (&bm->volume);
+    g_clear_object (&bm->mount);
+    MELO_LOGD ("mount '%s' updated: %p / %p", bm->id, bm->volume, bm->mount);
+
+    /* Remove from list */
+    if (!bm->mount && !bm->volume) {
+      char path[18];
+
+      MELO_LOGD ("remove mount '%s' '%s'", bm->id, bm->name);
+
+      /* Notify of deletion */
+      snprintf (path, sizeof (path), "/%s", bm->id);
+      melo_browser_send_media_deleted_event (MELO_BROWSER (browser), path);
+
+      /* Release memory */
+      g_hash_table_remove (browser->mounts, key);
+      g_free (bm->name);
+      g_free (bm->id);
+      free (bm);
+    }
+  }
+
+  /* Release volume and mount */
+  g_clear_object (&volume);
+  g_clear_object (&mount);
 }
 
 static gint
@@ -373,8 +547,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         },
         {
             .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
-            .type = BROWSER__ACTION__TYPE__CUSTOM,
-            .custom_id = "scan",
+            .type = BROWSER__ACTION__TYPE__SCAN,
             .name = "Scan for medias",
             .icon = "fa:search",
         },
@@ -609,7 +782,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 
     /* Release request, source object and asynchronous object */
     g_object_unref (en);
-    free (mlist->auth);
+    g_free (mlist->auth);
     mlist->done = true;
     if (!mlist->disco_count) {
       if (mlist->disco)
@@ -657,6 +830,27 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 static void children_cb (
     GObject *source_object, GAsyncResult *res, gpointer user_data);
 
+static MeloMessage *
+melo_file_browser_message_error (unsigned int code, const char *message)
+{
+  Browser__Response resp = BROWSER__RESPONSE__INIT;
+  Browser__Response__Error error = BROWSER__RESPONSE__ERROR__INIT;
+  MeloMessage *msg;
+
+  /* Set error */
+  error.code = code;
+  error.message = (char *) message;
+  resp.resp_case = BROWSER__RESPONSE__RESP_ERROR;
+  resp.error = &error;
+
+  /* Pack message */
+  msg = melo_message_new (browser__response__get_packed_size (&resp));
+  melo_message_set_size (
+      msg, browser__response__pack (&resp, melo_message_get_data (msg)));
+
+  return msg;
+}
+
 static void
 mount_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
@@ -665,28 +859,14 @@ mount_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 
   /* Finalize mount operation */
   if (!g_file_mount_enclosing_volume_finish (file, res, NULL)) {
-    Browser__Response resp = BROWSER__RESPONSE__INIT;
-    Browser__Response__Error error = BROWSER__RESPONSE__ERROR__INIT;
-    MeloMessage *msg;
-
-    /* Set error */
-    error.code = 401;
-    error.message = "Unauthorized";
-    resp.resp_case = BROWSER__RESPONSE__RESP_ERROR;
-    resp.error = &error;
-
-    /* Pack message */
-    msg = melo_message_new (browser__response__get_packed_size (&resp));
-    melo_message_set_size (
-        msg, browser__response__pack (&resp, melo_message_get_data (msg)));
-
-    /* Send response */
-    melo_request_send_response (mlist->req, msg);
+    /* Send error response */
+    melo_request_send_response (
+        mlist->req, melo_file_browser_message_error (401, "Unauthorized"));
 
     /* Release request, source object and asynchronous object */
     melo_request_unref (mlist->req);
     g_object_unref (file);
-    free (mlist->auth);
+    g_free (mlist->auth);
     free (mlist);
     return;
   }
@@ -770,7 +950,7 @@ children_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     /* Release request, source object and asynchronous object */
     melo_request_unref (mlist->req);
     g_object_unref (file);
-    free (mlist->auth);
+    g_free (mlist->auth);
     free (mlist);
     return;
   }
@@ -804,25 +984,8 @@ request_destroyed_cb (MeloRequest *req, void *user_data)
 }
 
 static bool
-melo_file_browser_get_file_list (
-    GFile *file, Browser__Request__GetMediaList *r, MeloRequest *req)
+melo_file_browser_get_file_list (GFile *file, MeloFileBrowserMediaList *mlist)
 {
-  MeloFileBrowserMediaList *mlist;
-
-  /* Create asynchronous object */
-  mlist = calloc (1, sizeof (*mlist));
-  if (r->auth != protobuf_c_empty_string)
-    mlist->auth = g_strdup (r->auth);
-  mlist->req = req;
-  mlist->count = r->count;
-  mlist->offset = r->offset;
-
-  /* Create and connect a cancellable for GIO */
-  mlist->cancel = g_cancellable_new ();
-  g_signal_connect (req, "cancelled", G_CALLBACK (request_cancelled_cb), mlist);
-  g_signal_connect (
-      req, "destroyed", G_CALLBACK (request_destroyed_cb), mlist->cancel);
-
   /* Start file enumeration */
   g_file_enumerate_children_async (file, MELO_FILE_BROWSER_ATTRIBUTES, 0,
       G_PRIORITY_DEFAULT, mlist->cancel, children_cb, mlist);
@@ -830,24 +993,114 @@ melo_file_browser_get_file_list (
   return true;
 }
 
+static GFile *
+melo_file_browser_get_file_from_mount (GMount *mount, const char *path)
+{
+  GFile *root, *file;
+
+  /* Get root from mount */
+  root = g_mount_get_root (mount);
+  if (!root)
+    return NULL;
+
+  /* Find next fragment */
+  path = strchr (path, '/');
+  path = path ? path + 1 : "";
+
+  /* Open file */
+  file = g_file_resolve_relative_path (root, path);
+  g_object_unref (root);
+
+  return file;
+}
+
+static void
+mount_finished_cb (
+    GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  MeloFileBrowserMediaList *mlist = user_data;
+  GVolume *volume = G_VOLUME (source_object);
+  GMount *mount;
+  GFile *file;
+
+  /* Mount has finished */
+  if (!g_volume_mount_finish (volume, res, NULL)) {
+    /* Send error response */
+    melo_request_send_response (mlist->req,
+        melo_file_browser_message_error (403, "Cannot access location"));
+
+    /* Release request */
+    melo_request_unref (mlist->req);
+    g_object_unref (volume);
+    g_free (mlist->path);
+    g_free (mlist->auth);
+    free (mlist);
+    return;
+  }
+
+  /* Get mount */
+  mount = g_volume_get_mount (volume);
+  g_object_unref (volume);
+
+  /* Generate final file */
+  file = melo_file_browser_get_file_from_mount (mount, mlist->path);
+  g_object_unref (mount);
+  g_free (mlist->path);
+
+  /* Get list */
+  melo_file_browser_get_file_list (file, mlist);
+}
+
+static int
+media_item_cmp (const void *a, const void *b)
+{
+  Browser__Response__MediaItem *ma = *(Browser__Response__MediaItem **) a;
+  Browser__Response__MediaItem *mb = *(Browser__Response__MediaItem **) b;
+  return strcasecmp (ma->name, mb->name);
+}
+
 static bool
 melo_file_browser_get_root_list (MeloRequest *req)
 {
+  static Browser__Action action = {
+      .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+      .type = BROWSER__ACTION__TYPE__DELETE,
+      .name = "Eject",
+      .icon = "fa:eject",
+  };
+  static Browser__Action *actions_ptr[1] = {
+      &action,
+  };
   Browser__Response resp = BROWSER__RESPONSE__INIT;
   Browser__Response__MediaList media_list = BROWSER__RESPONSE__MEDIA_LIST__INIT;
-  Browser__Response__MediaItem *media_items[2];
-  Browser__Response__MediaItem items[2];
+  Browser__Response__MediaItem **media_items;
+  Browser__Response__MediaItem *items;
   MeloFileBrowser *browser;
-  Tags__Tags tags[2];
+  Tags__Tags *tags;
   MeloMessage *msg;
   bool en_network;
-  unsigned int i;
+  unsigned int count = 2, i;
 
   /* Get network settings */
   browser = MELO_FILE_BROWSER (melo_request_get_object (req));
   if (!browser ||
       !melo_settings_entry_get_boolean (browser->en_network, &en_network, NULL))
     en_network = true;
+
+  /* Get volumes and mounts */
+  if (browser)
+    count += g_hash_table_size (browser->mounts);
+
+  /* Allocate lists */
+  media_items = malloc (sizeof (*media_items) * count);
+  items = malloc (sizeof (*items) * count);
+  tags = malloc (sizeof (*tags) * count);
+  if (!media_items || !items || !tags) {
+    free (media_items);
+    free (items);
+    free (tags);
+    return false;
+  }
 
   /* Prepare response */
   resp.resp_case = BROWSER__RESPONSE__RESP_MEDIA_LIST;
@@ -858,7 +1111,7 @@ melo_file_browser_get_root_list (MeloRequest *req)
   media_list.offset = 0;
 
   /* Prepare media items */
-  for (i = 0; i < 2; i++) {
+  for (i = 0; i < count; i++) {
     browser__response__media_item__init (&items[i]);
     tags__tags__init (&tags[i]);
     items[i].tags = &tags[i];
@@ -881,10 +1134,53 @@ melo_file_browser_get_root_list (MeloRequest *req)
     media_list.count++;
   }
 
+  /* Add volumes and mounts */
+  if (browser) {
+    GHashTableIter iter;
+
+    /* Initialize iterator */
+    g_hash_table_iter_init (&iter, browser->mounts);
+    for (i = media_list.count; i < count; i++) {
+      MeloFileBrowserMount *bm;
+
+      /* Get next mount / volume */
+      if (!g_hash_table_iter_next (&iter, NULL, (gpointer *) &bm))
+        break;
+
+      /* Set item */
+      items[i].id = bm->id;
+      items[i].name = bm->name;
+      items[i].type = BROWSER__RESPONSE__MEDIA_ITEM__TYPE__FOLDER;
+      tags[i].cover = "fa:hdd";
+
+      /* Set eject action */
+      if ((bm->volume && g_volume_can_eject (bm->volume)) ||
+          (bm->mount && (g_mount_can_unmount (bm->mount) ||
+                            g_mount_can_eject (bm->mount)))) {
+        items[i].actions = actions_ptr;
+        items[i].n_actions = 1;
+      }
+
+      /* Move to next volume */
+      media_list.n_items++;
+      media_list.count++;
+    }
+
+    /* Sort volumes / mounts */
+    count = media_list.count - (en_network ? 2 : 1);
+    qsort (&media_list.items[media_list.count - count], count,
+        sizeof (*media_list.items), media_item_cmp);
+  }
+
   /* Generate message */
   msg = melo_message_new (browser__response__get_packed_size (&resp));
   melo_message_set_size (
       msg, browser__response__pack (&resp, melo_message_get_data (msg)));
+
+  /* Free buffers */
+  free (media_items);
+  free (items);
+  free (tags);
 
   /* Send message and release request */
   melo_request_send_response (req, msg);
@@ -894,11 +1190,12 @@ melo_file_browser_get_root_list (MeloRequest *req)
 }
 
 static bool
-melo_file_browser_get_uri (
-    MeloFileBrowser *browser, const char *path, char **uri)
+melo_file_browser_get_uri (MeloFileBrowser *browser, const char *path,
+    GFile **file, GVolume **vol, GMount **mount)
 {
   const char *prefix = "";
   char *link = NULL;
+  char *uri;
 
   /* Invalid path */
   if (!path || *path++ != '/')
@@ -906,19 +1203,52 @@ melo_file_browser_get_uri (
 
   /* Root path */
   if (*path == '\0') {
-    uri = NULL;
+    if (file)
+      *file = NULL;
     return true;
   }
 
-  /* Parse first fragment */
+  /* Parse firsut fragment */
   if (!strncmp (path, "local", 5)) {
     prefix = browser->root_path;
     path += 5;
   } else if (!strncmp (path, "network", 7)) {
     prefix = "network://";
     path += 7;
-  } else
+  } else {
+    MeloFileBrowserMount *bm;
+    unsigned long long id;
+
+    /* Extract ID from path */
+    id = strtoull (path, NULL, 16);
+
+    /* Find our mount */
+    bm = g_hash_table_lookup (browser->mounts, (gpointer) id);
+    if (bm) {
+      /* No mount set */
+      if (!bm->mount) {
+        /* No volume found */
+        if (!bm->volume || !vol)
+          return false;
+
+        /* Return volume */
+        *vol = g_object_ref (bm->volume);
+        return true;
+      }
+
+      /* Create final file */
+      if (!file) {
+        if (vol && bm->volume)
+          *vol = g_object_ref (bm->volume);
+        if (mount && bm->mount)
+          *mount = g_object_ref (bm->mount);
+      } else
+        *file = melo_file_browser_get_file_from_mount (bm->mount, path);
+      return true;
+    }
+
     return false;
+  }
 
   /* Invalid fragment */
   if (*path != '\0' && *path != '/')
@@ -933,8 +1263,13 @@ melo_file_browser_get_uri (
   }
 
   /* Generate final URI */
-  *uri = g_strconcat (prefix, path, NULL);
+  uri = g_strconcat (prefix, path, NULL);
   g_free (link);
+
+  /* Generate final file */
+  if (file)
+    *file = g_file_new_for_uri (uri);
+  g_free (uri);
 
   return true;
 }
@@ -943,23 +1278,42 @@ static bool
 melo_file_browser_get_media_list (MeloFileBrowser *browser,
     Browser__Request__GetMediaList *r, MeloRequest *req)
 {
-  char *uri = NULL;
+  GVolume *volume = NULL;
+  GFile *file = NULL;
   bool ret;
 
   /* Generate URI from query */
-  if (!melo_file_browser_get_uri (browser, r->query, &uri))
+  if (!melo_file_browser_get_uri (browser, r->query, &file, &volume, NULL))
     return false;
 
   /* Get media list */
-  if (uri) {
-    GFile *file;
+  if (volume || file) {
+    MeloFileBrowserMediaList *mlist;
 
-    /* Create file */
-    file = g_file_new_for_uri (uri);
-    g_free (uri);
+    /* Create asynchronous object */
+    mlist = calloc (1, sizeof (*mlist));
+    if (r->auth != protobuf_c_empty_string)
+      mlist->auth = g_strdup (r->auth);
+    mlist->req = req;
+    mlist->count = r->count;
+    mlist->offset = r->offset;
+
+    /* Create and connect a cancellable for GIO */
+    mlist->cancel = g_cancellable_new ();
+    g_signal_connect (
+        req, "cancelled", G_CALLBACK (request_cancelled_cb), mlist);
+    g_signal_connect (
+        req, "destroyed", G_CALLBACK (request_destroyed_cb), mlist->cancel);
+
+    /* Volume is not yet mounted */
+    if (volume) {
+      mlist->path = g_strdup (r->query + 1);
+      g_volume_mount (volume, 0, NULL, mlist->cancel, mount_finished_cb, mlist);
+      return true;
+    }
 
     /* List with GIO */
-    ret = melo_file_browser_get_file_list (file, r, req);
+    ret = melo_file_browser_get_file_list (file, mlist);
   } else
     ret = melo_file_browser_get_root_list (req);
 
@@ -1298,7 +1652,7 @@ action_children_cb (
     MeloFileBrowserActLib lib;
 
     /* Handle scan */
-    if (action->type == BROWSER__ACTION__TYPE__CUSTOM) {
+    if (action->type == BROWSER__ACTION__TYPE__SCAN) {
       action->ref_count--;
       if (!action->ref_count && !action->disco_count) {
         melo_request_unref (action->req);
@@ -1358,7 +1712,7 @@ action_children_cb (
   g_object_unref (file);
 
   /* Handle scan */
-  if (action->type == BROWSER__ACTION__TYPE__CUSTOM) {
+  if (action->type == BROWSER__ACTION__TYPE__SCAN) {
     /* Create discoverer */
     if (!action->disco) {
       action->player_id = melo_library_get_player_id (MELO_FILE_PLAYER_ID);
@@ -1368,7 +1722,7 @@ action_children_cb (
       gst_discoverer_start (action->disco);
     }
 
-    /* Get childrens */
+    /* Get children */
     g_file_enumerator_next_files_async (en, ITEMS_PER_CALLBACK,
         G_PRIORITY_DEFAULT, action->cancel, action_scan_files_cb, action);
     return;
@@ -1379,12 +1733,62 @@ action_children_cb (
       G_PRIORITY_DEFAULT, action->cancel, action_next_files_cb, action);
 }
 
+static void
+volume_eject_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  GVolume *volume = G_VOLUME (source_object);
+  MeloRequest *req = user_data;
+  GError *error = NULL;
+
+  if (!g_volume_eject_with_operation_finish (volume, res, &error)) {
+    MELO_LOGE ("failed to eject a volume: %s", error->message);
+    melo_request_send_response (
+        req, melo_file_browser_message_error (403, "Failed to eject device"));
+    g_error_free (error);
+  }
+  melo_request_unref (req);
+  g_object_unref (volume);
+}
+
+static void
+mount_eject_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  GMount *mount = G_MOUNT (source_object);
+  MeloRequest *req = user_data;
+  GError *error = NULL;
+
+  if (!g_mount_eject_with_operation_finish (mount, res, &error)) {
+    MELO_LOGE ("failed to eject a mount: %s", error->message);
+    melo_request_send_response (
+        req, melo_file_browser_message_error (403, "Failed to eject"));
+    g_error_free (error);
+  }
+  melo_request_unref (req);
+  g_object_unref (mount);
+}
+
+static void
+mount_unmount_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  GMount *mount = G_MOUNT (source_object);
+  MeloRequest *req = user_data;
+  GError *error = NULL;
+
+  if (!g_mount_unmount_with_operation_finish (mount, res, &error)) {
+    MELO_LOGE ("failed to unmount a mount: %s", error->message);
+    melo_request_send_response (
+        req, melo_file_browser_message_error (403, "Failed to unmount"));
+    g_error_free (error);
+  }
+  melo_request_unref (req);
+  g_object_unref (mount);
+}
+
 static bool
 melo_file_browser_do_action (
     MeloFileBrowser *browser, Browser__Request__DoAction *r, MeloRequest *req)
 {
   MeloFileBrowserAction *action;
-  char *uri = NULL;
   GFile *file;
 
   /* Do action */
@@ -1393,25 +1797,49 @@ melo_file_browser_do_action (
   case BROWSER__ACTION__TYPE__ADD:
   case BROWSER__ACTION__TYPE__SET_FAVORITE:
   case BROWSER__ACTION__TYPE__UNSET_FAVORITE:
+  case BROWSER__ACTION__TYPE__SCAN:
+  case BROWSER__ACTION__TYPE__DELETE:
     break;
-  case BROWSER__ACTION__TYPE__CUSTOM:
-    if (!strcmp (r->custom_id, "scan"))
-      break;
   default:
     MELO_LOGE ("action %u not supported", r->type);
     return false;
   }
 
-  /* Generate URI from path */
-  if (!melo_file_browser_get_uri (browser, r->path, &uri) || !uri)
-    return false;
+  /* Handle ejection */
+  if (r->type == BROWSER__ACTION__TYPE__DELETE) {
+    GVolume *volume = NULL;
+    GMount *mount = NULL;
 
-  /* Create file */
-  file = g_file_new_for_uri (uri);
-  g_free (uri);
-  if (!file) {
-    return false;
+    /* Get volume and mount */
+    if (!melo_file_browser_get_uri (browser, r->path, NULL, &volume, &mount))
+      return false;
+
+    /* Ejection first, unmount otherwise */
+    if (volume && g_volume_can_eject (volume)) {
+      g_volume_eject_with_operation (volume, G_MOUNT_UNMOUNT_NONE, NULL, NULL,
+          volume_eject_cb, melo_request_ref (req));
+      volume = NULL;
+    } else if (mount && g_mount_can_eject (mount)) {
+      g_mount_eject_with_operation (mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL,
+          mount_eject_cb, melo_request_ref (req));
+      mount = NULL;
+    } else if (mount && g_mount_can_unmount (mount)) {
+      g_mount_unmount_with_operation (mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL,
+          mount_unmount_cb, melo_request_ref (req));
+      mount = NULL;
+    }
+
+    /* Release objects */
+    melo_request_unref (req);
+    g_clear_object (&mount);
+    g_clear_object (&volume);
+
+    return true;
   }
+
+  /* Generate URI from path */
+  if (!melo_file_browser_get_uri (browser, r->path, &file, NULL, NULL) || !file)
+    return false;
 
   /* Create asynchronous object */
   action = calloc (1, sizeof (*action));
