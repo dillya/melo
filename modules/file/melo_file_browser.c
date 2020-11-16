@@ -70,6 +70,7 @@ typedef struct {
   GCancellable *cancel;
   char *path;
 
+  GMountOperation *op;
   char *auth;
 
   GList *dirs;
@@ -865,11 +866,15 @@ mount_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 
     /* Release request, source object and asynchronous object */
     melo_request_unref (mlist->req);
+    g_object_unref (mlist->op);
     g_object_unref (file);
     g_free (mlist->auth);
     free (mlist);
     return;
   }
+
+  /* Release operation */
+  g_object_unref (mlist->op);
 
   /* Redo file enumerate again */
   g_file_enumerate_children_async (file, MELO_FILE_BROWSER_ATTRIBUTES, 0,
@@ -930,18 +935,16 @@ children_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
   if (!en) {
     /* Try to mount directory when file is not found */
     if (err && err->code == G_IO_ERROR_NOT_MOUNTED) {
-      GMountOperation *op;
-
       /* Create mount operation */
-      op = g_mount_operation_new ();
+      mlist->op = g_mount_operation_new ();
 
       /* Add signal for authentication */
       g_signal_connect (
-          op, "ask_password", G_CALLBACK (ask_password_cb), mlist);
+          mlist->op, "ask_password", G_CALLBACK (ask_password_cb), mlist);
 
       /* Mount */
       g_file_mount_enclosing_volume (
-          file, 0, op, mlist->cancel, mount_cb, mlist);
+          file, 0, mlist->op, mlist->cancel, mount_cb, mlist);
 
       g_error_free (err);
       return;
