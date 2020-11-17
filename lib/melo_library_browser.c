@@ -124,7 +124,7 @@ melo_library_browser_get_root (MeloRequest *req)
   melo_request_send_response (req, msg);
 
   /* Release request */
-  melo_request_unref (req);
+  melo_request_complete (req);
 
   return true;
 }
@@ -582,7 +582,7 @@ melo_library_browser_get_media_list (MeloLibraryBrowser *browser,
   melo_request_send_response (req, msg);
 
   /* Release request */
-  melo_request_unref (req);
+  melo_request_complete (req);
 
   return true;
 }

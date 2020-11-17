@@ -15,6 +15,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
  */
 
+#include <stdatomic.h>
 #include <stdio.h>
 
 #define MELO_LOG_TAG "playlist"
@@ -23,7 +24,6 @@
 #include "melo/melo_tags.h"
 #include "melo_events.h"
 #include "melo_player_priv.h"
-#include "melo_requests.h"
 
 #include "playlist.pb-c.h"
 
@@ -2180,10 +2180,6 @@ melo_playlist_load (const char *id, MeloAsyncData *async)
 
  * If the request is malformed or an internal error occurs, the function will
  * return %false, otherwise %true will be returned.
- * After returning, many asynchronous tasks related to the request can still
- be
- * pending, so @cb and @user_data should not be destroyed. If the request need
- * to stopped / cancelled, melo_playlist_cancel_request() is intended for.
  *
  * Returns: %true if the message has been handled by the playlist, %false
  *     otherwise.
@@ -2295,24 +2291,6 @@ melo_playlist_handle_request (
     cb (NULL, user_data);
 
   return ret;
-}
-
-/**
- * melo_playlist_cancel_request:
- * @id: the id of the playlist or %NULL for current playlist
- * @cb: the function used during call to melo_playlist_handle_request()
- * @user_data: data passed with @cb
- *
- * This function can be called to cancel a running or a pending request. If
- * the request exists, the asynchronous tasks will be cancelled and @cb will
- * be called with a NULL-message to signal end of request. If the request is
- * already finished or a cancellation is already pending, this function will
- * do nothing.
- */
-void
-melo_playlist_cancel_request (const char *id, MeloAsyncCb cb, void *user_data)
-{
-  return;
 }
 
 static void

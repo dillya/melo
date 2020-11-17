@@ -198,10 +198,7 @@ websocket_conn_request_cb (
   /* Stop / cancel request */
   switch (obj) {
   case WEBSOCKET_OBJECT_BROWSER:
-    melo_browser_cancel_request (id, websocket_async_cb, ws);
-    break;
-  case WEBSOCKET_OBJECT_PLAYLIST:
-    melo_playlist_cancel_request (id, websocket_async_cb, ws);
+    melo_request_cancel (melo_websocket_get_user_data (ws));
     break;
 #ifdef NETWORK_SUPPORT
   case WEBSOCKET_OBJECT_NETWORK:
@@ -228,6 +225,7 @@ websocket_request_cb (MeloWebsocket *ws, const char *path,
     const unsigned char *data, size_t size, void *user_data)
 {
   WebsocketObject obj;
+  MeloRequest *req;
   MeloMessage *msg;
   const char *id;
   bool ret = false;
@@ -250,7 +248,11 @@ websocket_request_cb (MeloWebsocket *ws, const char *path,
   /* Forward message */
   switch (obj) {
   case WEBSOCKET_OBJECT_BROWSER:
-    ret = melo_browser_handle_request (id, msg, websocket_async_cb, ws);
+    req = melo_browser_handle_request (id, msg, websocket_async_cb, ws);
+    if (req) {
+      melo_websocket_set_user_data (ws, req);
+      ret = true;
+    }
     break;
   case WEBSOCKET_OBJECT_PLAYER:
     ret = melo_player_handle_request (msg, websocket_async_cb, ws);

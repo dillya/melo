@@ -117,7 +117,7 @@ list_category_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
 
     /* Invalid offset */
     if (async->offset >= len) {
-      melo_request_unref (req);
+      melo_request_complete (req);
       free (async);
       return;
     }
@@ -175,7 +175,7 @@ list_category_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
   }
 
   /* Release request */
-  melo_request_unref (req);
+  melo_request_complete (req);
 }
 
 static void
@@ -316,7 +316,7 @@ list_station_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
   }
 
   /* Release request */
-  melo_request_unref (req);
+  melo_request_complete (req);
 }
 
 static bool
@@ -378,7 +378,7 @@ melo_radio_browser_get_root (MeloRequest *req)
   melo_request_send_response (req, msg);
 
   /* Release request */
-  melo_request_unref (req);
+  melo_request_complete (req);
 
   return true;
 }
@@ -552,7 +552,7 @@ action_cb (MeloHttpClient *client, JsonNode *node, void *user_data)
   }
 
   /* Release request */
-  melo_request_unref (req);
+  melo_request_complete (req);
 }
 
 static bool

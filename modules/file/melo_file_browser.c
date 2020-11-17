@@ -472,7 +472,7 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
     g_object_unref (disco);
 
     /* Release request */
-    melo_request_unref (mlist->req);
+    melo_request_complete (mlist->req);
     free (mlist);
     return;
   }
@@ -482,7 +482,7 @@ discover_discovered_cb (GstDiscoverer *disco, GstDiscovererInfo *info,
   if (!mlist->disco_count && mlist->done) {
     /* Release discoverer and request */
     g_object_unref (disco);
-    melo_request_unref (mlist->req);
+    melo_request_complete (mlist->req);
     free (mlist);
   }
 }
@@ -788,7 +788,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     if (!mlist->disco_count) {
       if (mlist->disco)
         g_object_unref (mlist->disco);
-      melo_request_unref (mlist->req);
+      melo_request_complete (mlist->req);
       free (mlist);
     }
   } else {
@@ -865,7 +865,7 @@ mount_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         mlist->req, melo_file_browser_message_error (401, "Unauthorized"));
 
     /* Release request, source object and asynchronous object */
-    melo_request_unref (mlist->req);
+    melo_request_complete (mlist->req);
     g_object_unref (mlist->op);
     g_object_unref (file);
     g_free (mlist->auth);
@@ -951,7 +951,7 @@ children_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     }
 
     /* Release request, source object and asynchronous object */
-    melo_request_unref (mlist->req);
+    melo_request_complete (mlist->req);
     g_object_unref (file);
     g_free (mlist->auth);
     free (mlist);
@@ -1033,7 +1033,7 @@ mount_finished_cb (
         melo_file_browser_message_error (403, "Cannot access location"));
 
     /* Release request */
-    melo_request_unref (mlist->req);
+    melo_request_complete (mlist->req);
     g_object_unref (volume);
     g_free (mlist->path);
     g_free (mlist->auth);
@@ -1187,7 +1187,7 @@ melo_file_browser_get_root_list (MeloRequest *req)
 
   /* Send message and release request */
   melo_request_send_response (req, msg);
-  melo_request_unref (req);
+  melo_request_complete (req);
 
   return true;
 }
@@ -1421,7 +1421,7 @@ action_next_files_cb (
       melo_playlist_add_entry (entry);
 
     /* Release request, source object and asynchronous object */
-    melo_request_unref (action->req);
+    melo_request_complete (action->req);
     g_object_unref (en);
     free (action);
     g_free (uri);
@@ -1513,7 +1513,7 @@ action_scan_discovered_cb (GstDiscoverer *discoverer, GstDiscovererInfo *info,
   /* Finished discovery */
   action->disco_count--;
   if (!action->ref_count && !action->disco_count) {
-    melo_request_unref (action->req);
+    melo_request_complete (action->req);
     g_object_unref (discoverer);
     free (action);
   }
@@ -1535,7 +1535,7 @@ action_scan_files_cb (
     /* Finished enumeration */
     action->ref_count--;
     if (!action->ref_count && !action->disco_count) {
-      melo_request_unref (action->req);
+      melo_request_complete (action->req);
       g_object_unref (action->disco);
       free (action);
     }
@@ -1658,7 +1658,7 @@ action_children_cb (
     if (action->type == BROWSER__ACTION__TYPE__SCAN) {
       action->ref_count--;
       if (!action->ref_count && !action->disco_count) {
-        melo_request_unref (action->req);
+        melo_request_complete (action->req);
         g_object_unref (action->disco);
         free (action);
       }
@@ -1704,7 +1704,7 @@ action_children_cb (
     }
 
     /* Release request, source object and asynchronous object */
-    melo_request_unref (action->req);
+    melo_request_complete (action->req);
     g_object_unref (file);
     free (action);
     g_free (uri);
@@ -1749,7 +1749,7 @@ volume_eject_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         req, melo_file_browser_message_error (403, "Failed to eject device"));
     g_error_free (error);
   }
-  melo_request_unref (req);
+  melo_request_complete (req);
   g_object_unref (volume);
 }
 
@@ -1766,7 +1766,7 @@ mount_eject_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         req, melo_file_browser_message_error (403, "Failed to eject"));
     g_error_free (error);
   }
-  melo_request_unref (req);
+  melo_request_complete (req);
   g_object_unref (mount);
 }
 
@@ -1783,7 +1783,7 @@ mount_unmount_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         req, melo_file_browser_message_error (403, "Failed to unmount"));
     g_error_free (error);
   }
-  melo_request_unref (req);
+  melo_request_complete (req);
   g_object_unref (mount);
 }
 
@@ -1819,21 +1819,21 @@ melo_file_browser_do_action (
 
     /* Ejection first, unmount otherwise */
     if (volume && g_volume_can_eject (volume)) {
-      g_volume_eject_with_operation (volume, G_MOUNT_UNMOUNT_NONE, NULL, NULL,
-          volume_eject_cb, melo_request_ref (req));
+      g_volume_eject_with_operation (
+          volume, G_MOUNT_UNMOUNT_NONE, NULL, NULL, volume_eject_cb, req);
       volume = NULL;
     } else if (mount && g_mount_can_eject (mount)) {
-      g_mount_eject_with_operation (mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL,
-          mount_eject_cb, melo_request_ref (req));
+      g_mount_eject_with_operation (
+          mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL, mount_eject_cb, req);
       mount = NULL;
     } else if (mount && g_mount_can_unmount (mount)) {
-      g_mount_unmount_with_operation (mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL,
-          mount_unmount_cb, melo_request_ref (req));
+      g_mount_unmount_with_operation (
+          mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL, mount_unmount_cb, req);
       mount = NULL;
-    }
+    } else
+      melo_request_complete (req);
 
     /* Release objects */
-    melo_request_unref (req);
     g_clear_object (&mount);
     g_clear_object (&volume);
 

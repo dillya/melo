@@ -22,6 +22,7 @@
 
 #include <glib-object.h>
 
+#include <melo/melo_async.h>
 #include <melo/melo_message.h>
 
 G_BEGIN_DECLS
@@ -44,6 +45,8 @@ G_DECLARE_FINAL_TYPE (MeloRequest, melo_request, MELO, REQUEST, GObject)
  * from application layer or when the request is going to be destroyed.
  */
 typedef void (*MeloRequestCb) (MeloRequest *req, void *user_data);
+
+MeloRequest *melo_request_new (MeloAsyncData *async, GObject *obj);
 
 /**
  * melo_request_ref:
@@ -77,6 +80,9 @@ void melo_request_set_user_data (MeloRequest *req, void *user_data);
 void *melo_request_get_user_data (MeloRequest *req);
 
 bool melo_request_send_response (MeloRequest *req, MeloMessage *msg);
+
+void melo_request_cancel (MeloRequest *req);
+void melo_request_complete (MeloRequest *req);
 
 G_END_DECLS
 

@@ -34,7 +34,6 @@ libmelo_sources = [
 	'melo_player.c',
 	'melo_playlist.c',
 	'melo_request.c',
-	'melo_requests.c',
 	'melo_rtsp_server.c',
 	'melo_settings.c',
 	'melo_tags.c',

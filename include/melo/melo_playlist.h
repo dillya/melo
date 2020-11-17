@@ -41,8 +41,6 @@ bool melo_playlist_remove_event_listener (
 
 bool melo_playlist_handle_request (
     const char *id, MeloMessage *msg, MeloAsyncCb cb, void *user_data);
-void melo_playlist_cancel_request (
-    const char *id, MeloAsyncCb cb, void *user_data);
 
 bool melo_playlist_add_media (
     const char *player_id, const char *path, const char *name, MeloTags *tags);

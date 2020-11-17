@@ -92,10 +92,8 @@ bool melo_browser_add_event_listener (
 bool melo_browser_remove_event_listener (
     const char *id, MeloAsyncCb cb, void *user_data);
 
-bool melo_browser_handle_request (
+MeloRequest *melo_browser_handle_request (
     const char *id, MeloMessage *msg, MeloAsyncCb cb, void *user_data);
-void melo_browser_cancel_request (
-    const char *id, MeloAsyncCb cb, void *user_data);
 
 char *melo_browser_get_asset (const char *id, const char *asset);
 

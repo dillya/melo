@@ -38,6 +38,7 @@ melo_websocket_new (
   ws->cbs.conn = conn_cb;
   ws->cbs.msg = msg_cb;
   ws->cbs.user_data = user_data;
+  ws->user_data = NULL;
   ws->closed = false;
 
   return ws;

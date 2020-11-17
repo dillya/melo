@@ -18,11 +18,28 @@
 #define MELO_LOG_TAG "request"
 #include <melo/melo_log.h>
 
-#include "melo_requests.h"
+#include "melo/melo_request.h"
+
+typedef enum _MeloRequestState {
+  MELO_REQUEST_STATE_PENDING = 0,
+  MELO_REQUEST_STATE_COMPLETE,
+  MELO_REQUEST_STATE_CANCELED,
+} MeloRequestState;
 
 enum { CANCELLED, DESTROYED, LAST_SIGNAL };
 
 static guint signals[LAST_SIGNAL] = {0};
+
+struct _MeloRequest {
+  /* Parent instance */
+  GObject parent_instance;
+
+  MeloRequestState state;
+
+  MeloAsyncData async;
+  GObject *obj;
+  void *user_data;
+};
 
 G_DEFINE_TYPE (MeloRequest, melo_request, G_TYPE_OBJECT)
 
@@ -30,25 +47,15 @@ static void
 melo_request_finalize (GObject *gobject)
 {
   MeloRequest *req = MELO_REQUEST (gobject);
-  MeloRequests *requests = req->parent;
-
-  /* Lock parent list access */
-  g_mutex_lock (&requests->mutex);
 
   /* Send empty message to finish request */
-  if (req->async.cb && !req->is_canceled)
+  if (req->async.cb && req->state == MELO_REQUEST_STATE_PENDING)
     req->async.cb (NULL, req->async.user_data);
 
   /* Call destroyed callback */
   g_signal_emit (req, signals[DESTROYED], 0);
 
-  /* Remove from parent list */
-  requests->list = g_list_remove (requests->list, req);
-
   MELO_LOGD ("request %p destroyed", req);
-
-  /* Unlock parent list access */
-  g_mutex_unlock (&requests->mutex);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_request_parent_class)->finalize (gobject);
@@ -86,8 +93,24 @@ melo_request_init (MeloRequest *req)
 {
 }
 
+/**
+ * melo_request_new:
+ * @async: a #MeloAsyncData containing the asynchronous callback
+ * @obj: (nullable): a reference to the #GObject who created the request
+ *
+ * Creates a new #MeloRequest to hold an asynchronous request. Multiple messages
+ * can be send over the request with melo_request_send_response(). When the
+ * request is complete (no more message to send), the function
+ * melo_request_complete() must be called to finalize the request. If the user
+ * wants to cancel and stop immediately the request, the function
+ * melo_request_cancel() can be used.
+ *
+ * After usage, the reference should be released with melo_request_unref().
+ *
+ * Returns: (transfer full): a new #MeloRequest.
+ */
 MeloRequest *
-melo_request_new (MeloRequests *requests, MeloAsyncData *async, GObject *obj)
+melo_request_new (MeloAsyncData *async, GObject *obj)
 {
   MeloRequest *req;
 
@@ -97,14 +120,8 @@ melo_request_new (MeloRequests *requests, MeloAsyncData *async, GObject *obj)
     return NULL;
 
   /* Initialize request */
-  req->parent = requests;
   req->async = *async;
   req->obj = obj;
-
-  /* Add request to list */
-  g_mutex_lock (&requests->mutex);
-  requests->list = g_list_prepend (requests->list, req);
-  g_mutex_unlock (&requests->mutex);
 
   return req;
 }
@@ -159,8 +176,8 @@ melo_request_get_user_data (MeloRequest *req)
  * @msq: the #MeloMessage to send
  *
  * This function is used to send a response to a request. It can be called
- * multiple times for one request. To end a request, the melo_request_unref()
- * must be called.
+ * multiple times for one request. To omplete request, the function
+ * melo_request_complete() must be called.
  *
  * If the request has been cancelled, the function will returns %false and the
  * current task should be aborted and finally, the request reference should be
@@ -175,14 +192,12 @@ melo_request_send_response (MeloRequest *req, MeloMessage *msg)
 {
   bool ret = false;
 
-  if (!req)
+  if (!req || !msg)
     return false;
 
   /* Call asynchronous callback if not cancelled */
-  g_mutex_lock (&req->parent->mutex);
-  if (!req->is_canceled)
+  if (req->state == MELO_REQUEST_STATE_PENDING)
     ret = req->async.cb ? req->async.cb (msg, req->async.user_data) : true;
-  g_mutex_unlock (&req->parent->mutex);
 
   /* Release message reference */
   melo_message_unref (msg);
@@ -190,22 +205,51 @@ melo_request_send_response (MeloRequest *req, MeloMessage *msg)
   return ret;
 }
 
+/**
+ * melo_request_cancel:
+ * @req: a #MeloRequest
+ *
+ * This function can be used to cancel a pending request. If the request is
+ * already canceled or complete, this function will only release the request
+ * reference.
+ *
+ * This function release the request reference at return.
+ */
 void
 melo_request_cancel (MeloRequest *req)
 {
   if (!req)
     return;
 
-  /* Lock request list access */
-  g_mutex_lock (&req->parent->mutex);
-
   /* Cancel request */
-  if (!req->is_canceled) {
+  if (req->state == MELO_REQUEST_STATE_PENDING) {
     g_signal_emit (req, signals[CANCELLED], 0);
     MELO_LOGD ("request %p cancelled", req);
   }
-  req->is_canceled = true;
+  req->state = MELO_REQUEST_STATE_CANCELED;
 
-  /* Unlock request list access */
-  g_mutex_unlock (&req->parent->mutex);
+  g_object_unref (req);
+}
+
+/**
+ * melo_request_complete:
+ * @req: a #MeloRequest
+ *
+ * This function must be called to complete a request and then send a NULL
+ * message to the asynchronous callback registered during request creation.
+ *
+ * This function release the request reference at return.
+ */
+void
+melo_request_complete (MeloRequest *req)
+{
+  if (!req)
+    return;
+
+  /* Complete request */
+  if (req->async.cb && req->state == MELO_REQUEST_STATE_PENDING)
+    req->async.cb (NULL, req->async.user_data);
+  req->state = MELO_REQUEST_STATE_COMPLETE;
+
+  g_object_unref (req);
 }

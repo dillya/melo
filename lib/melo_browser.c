@@ -30,7 +30,6 @@
 #include "browser.pb-c.h"
 
 #include "melo_events.h"
-#include "melo_requests.h"
 
 #include "melo/melo_browser.h"
 
@@ -50,7 +49,6 @@ typedef struct _MeloBrowserPrivate {
   bool support_search;
 
   MeloEvents events;
-  MeloRequests requests;
 
   MeloSettings *settings;
 } MeloBrowserPrivate;
@@ -511,35 +509,40 @@ melo_browser_remove_event_listener (
  * This function is called when a new browser request is received by the
  * application. This function will handle and forward the request to the
  * destination browser instance. If the browser doesn't exist, the function will
- * return %false.
+ * return %NULL.
  *
  * If the request is malformed or an internal error occurs, the function will
- * return %false, otherwise %true will be returned.
+ * return %NULL, otherwise a reference to the request is returned. If this
+ * reference is not used by caller, melo_request_unref() should be called
+ * immediately.
  * After returning, many asynchronous tasks related to the request can still be
  * pending, so @cb and @user_data should not be destroyed. If the request need
- * to stopped / cancelled, melo_browser_cancel_request() is intended for.
+ * to be stopped or canceled, melo_request_cancel() can be used on the returned
+ * objects.
  *
- * Returns: %true if the message has been handled by the browser, %false
+ * The request reference must be released with melo_request_unref() after usage,
+ * except if melo_request_cancel() has been called since it does the unref for
+ * us.
+ *
+ * Returns: a #MeloRequest handling asynchronous tasks of the request, %NULL
  *     otherwise.
  */
-bool
+MeloRequest *
 melo_browser_handle_request (
     const char *id, MeloMessage *msg, MeloAsyncCb cb, void *user_data)
 {
   MeloBrowserClass *class;
-  MeloBrowserPrivate *priv;
   MeloBrowser *browser;
-  bool ret = false;
+  MeloRequest *req = NULL;
 
   if (!id || !msg)
-    return false;
+    return NULL;
 
   /* Find browser */
   browser = melo_browser_get_by_id (id);
   if (!browser)
-    return false;
+    return NULL;
   class = MELO_BROWSER_GET_CLASS (browser);
-  priv = melo_browser_get_instance_private (browser);
 
   /* Forward message to browser */
   if (class->handle_request) {
@@ -547,56 +550,23 @@ melo_browser_handle_request (
         .cb = cb,
         .user_data = user_data,
     };
-    MeloRequest *req;
 
     /* Create new request */
-    req =
-        melo_requests_new_request (&priv->requests, &async, G_OBJECT (browser));
+    req = melo_request_new (&async, G_OBJECT (browser));
     if (req) {
       /* Forward message */
-      ret = class->handle_request (browser, msg, req);
-      if (!ret)
+      if (!class->handle_request (browser, msg, melo_request_ref (req))) {
         melo_request_unref (req);
+        melo_request_unref (req);
+        req = NULL;
+      }
     }
   }
 
   /* Release browser */
   g_object_unref (browser);
 
-  return ret;
-}
-
-/**
- * melo_browser_cancel_request:
- * @id: the id of a #MeloBrowser
- * @cb: the function used during call to melo_browser_handle_request()
- * @user_data: data passed with @cb
- *
- * This function can be called to cancel a running or a pending request. If the
- * request exists, the asynchronous tasks will be cancelled and @cb will be
- * called with a NULL-message to signal end of request. If the request is
- * already finished or a cancellation is already pending, this function will do
- * nothing.
- */
-void
-melo_browser_cancel_request (const char *id, MeloAsyncCb cb, void *user_data)
-{
-  MeloAsyncData async = {
-      .cb = cb,
-      .user_data = user_data,
-  };
-  MeloBrowserPrivate *priv;
-  MeloBrowser *browser;
-
-  /* Find browser */
-  browser = melo_browser_get_by_id (id);
-  if (!browser)
-    return;
-  priv = melo_browser_get_instance_private (browser);
-
-  /* Cancel / stop request */
-  melo_requests_cancel_request (&priv->requests, &async);
-  g_object_unref (browser);
+  return req;
 }
 
 /**
