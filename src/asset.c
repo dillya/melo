@@ -19,6 +19,7 @@
 #include <melo/melo_cover.h>
 #include <melo/melo_player.h>
 
+#define MELO_LOG_TAG "melo_asset"
 #include <melo/melo_log.h>
 
 #include "asset.h"
