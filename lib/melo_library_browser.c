@@ -646,7 +646,6 @@ melo_library_browser_do_action (MeloLibraryBrowser *browser,
   MeloLibraryField fields[3] = {0};
   const char *path = r->path;
   uint64_t ids[3] = {0};
-  bool ret = true;
 
   /* Check action type */
   if (r->type != BROWSER__ACTION__TYPE__PLAY &&
@@ -701,7 +700,10 @@ melo_library_browser_do_action (MeloLibraryBrowser *browser,
     }
   }
 
-  return ret;
+  /* Release request */
+  melo_request_complete (req);
+
+  return true;
 }
 
 static bool
