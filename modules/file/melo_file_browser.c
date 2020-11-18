@@ -533,7 +533,8 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 
   /* Parse list */
   if (list == NULL) {
-    static Browser__Action folder_actions[3] = {
+    static Browser__Action actions[] = {
+        /* Folder actions */
         {
             .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
             .type = BROWSER__ACTION__TYPE__PLAY,
@@ -552,8 +553,7 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
             .name = "Scan for medias",
             .icon = "fa:search",
         },
-    };
-    static Browser__Action file_actions[4] = {
+        /* File actions */
         {
             .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
             .type = BROWSER__ACTION__TYPE__PLAY,
@@ -579,21 +579,18 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
             .icon = "fa:star",
         },
     };
-    static Browser__Action *folder_actions_ptr[3] = {
-        &folder_actions[0],
-        &folder_actions[1],
-        &folder_actions[2],
+    static Browser__Action *actions_ptr[] = {
+        &actions[0],
+        &actions[1],
+        &actions[2],
+        &actions[3],
+        &actions[4],
+        &actions[5],
+        &actions[6],
     };
-    static Browser__Action *file_set_fav_actions_ptr[3] = {
-        &file_actions[0],
-        &file_actions[1],
-        &file_actions[2],
-    };
-    static Browser__Action *file_unset_fav_actions_ptr[3] = {
-        &file_actions[0],
-        &file_actions[1],
-        &file_actions[3],
-    };
+    static uint32_t folder_actions[] = {0, 1, 2};
+    static uint32_t file_set_fav_actions[] = {3, 4, 5};
+    static uint32_t file_unset_fav_actions[] = {3, 4, 6};
     Browser__Response resp = BROWSER__RESPONSE__INIT;
     Browser__Response__MediaList media_list =
         BROWSER__RESPONSE__MEDIA_LIST__INIT;
@@ -631,9 +628,11 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     media_list.count = media_list.n_items;
     media_list.offset = mlist->offset;
 
-    /* Set media list actions */
-    media_list.n_actions = G_N_ELEMENTS (folder_actions_ptr);
-    media_list.actions = folder_actions_ptr;
+    /* Set media list actions and folder action IDs */
+    media_list.n_actions = G_N_ELEMENTS (actions_ptr);
+    media_list.actions = actions_ptr;
+    media_list.n_action_ids = G_N_ELEMENTS (folder_actions);
+    media_list.action_ids = folder_actions;
 
     /* Allocate items */
     media_list.items = malloc (sizeof (*media_list.items) * media_list.n_items);
@@ -659,8 +658,8 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
       browser__response__media_item__init (&items[i]);
       items[i].name = g_strdup (g_file_info_get_display_name (info));
       items[i].type = BROWSER__RESPONSE__MEDIA_ITEM__TYPE__FOLDER;
-      items[i].n_actions = G_N_ELEMENTS (folder_actions_ptr);
-      items[i].actions = folder_actions_ptr;
+      items[i].n_action_ids = G_N_ELEMENTS (folder_actions);
+      items[i].action_ids = folder_actions;
 
       /* Generate item ID */
       if (g_file_info_get_file_type (info) == G_FILE_TYPE_SHORTCUT) {
@@ -743,13 +742,13 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         }
       }
 
-      /* Set actions */
+      /* Set action IDs */
       if (items[i].favorite) {
-        items[i].n_actions = G_N_ELEMENTS (file_unset_fav_actions_ptr);
-        items[i].actions = file_unset_fav_actions_ptr;
+        items[i].n_action_ids = G_N_ELEMENTS (file_unset_fav_actions);
+        items[i].action_ids = file_unset_fav_actions;
       } else {
-        items[i].n_actions = G_N_ELEMENTS (file_set_fav_actions_ptr);
-        items[i].actions = file_set_fav_actions_ptr;
+        items[i].n_action_ids = G_N_ELEMENTS (file_set_fav_actions);
+        items[i].action_ids = file_set_fav_actions;
       }
 
       /* Add item to list */
@@ -1071,9 +1070,10 @@ melo_file_browser_get_root_list (MeloRequest *req)
       .name = "Eject",
       .icon = "fa:eject",
   };
-  static Browser__Action *actions_ptr[1] = {
+  static Browser__Action *actions_ptr[] = {
       &action,
   };
+  static uint32_t action_ids[] = {0};
   Browser__Response resp = BROWSER__RESPONSE__INIT;
   Browser__Response__MediaList media_list = BROWSER__RESPONSE__MEDIA_LIST__INIT;
   Browser__Response__MediaItem **media_items;
@@ -1137,6 +1137,10 @@ melo_file_browser_get_root_list (MeloRequest *req)
     media_list.count++;
   }
 
+  /* Set actions */
+  media_list.actions = actions_ptr;
+  media_list.n_actions = 1;
+
   /* Add volumes and mounts */
   if (browser) {
     GHashTableIter iter;
@@ -1160,8 +1164,8 @@ melo_file_browser_get_root_list (MeloRequest *req)
       if ((bm->volume && g_volume_can_eject (bm->volume)) ||
           (bm->mount && (g_mount_can_unmount (bm->mount) ||
                             g_mount_can_eject (bm->mount)))) {
-        items[i].actions = actions_ptr;
-        items[i].n_actions = 1;
+        items[i].action_ids = action_ids;
+        items[i].n_action_ids = 1;
       }
 
       /* Move to next volume */

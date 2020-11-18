@@ -98,6 +98,12 @@ MeloRequest *melo_browser_handle_request (
 char *melo_browser_get_asset (const char *id, const char *asset);
 
 void melo_browser_send_event (MeloBrowser *browser, MeloMessage *msg);
+void melo_browser_send_media_created_event (
+    MeloBrowser *browser, const char *path);
+void melo_browser_send_media_renamed_event (
+    MeloBrowser *browser, const char *path);
+void melo_browser_send_media_moved_event (
+    MeloBrowser *browser, const char *path, const char *dest);
 void melo_browser_send_media_deleted_event (
     MeloBrowser *browser, const char *path);
 

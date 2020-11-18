@@ -24,24 +24,28 @@ message SortMenu {
 message Action {
   /* Action types */
   enum Type {
-    /* Unknown action: no-op */
-    UNKNOWN = 0;
+    /* Custom action */
+    CUSTOM = 0;
     /* Play media */
     PLAY = 1;
     /* Add media to top of playlist */
     ADD = 2;
     /* Add media to library favorites */
     SET_FAVORITE = 3;
-    /* Remove media from library favorites */
+    /* Remove media to library favorites */
     UNSET_FAVORITE = 4;
-    /* Scan recursively a folder */
+    /* Scan a folder */
     SCAN = 5;
+    /* Create a new folder */
+    CREATE = 6;
+    /* Rename a folder / media */
+    RENAME = 7;
+    /* Paste a folder / media */
+    PASTE = 8;
+    /* Move a folder / media */
+    MOVE = 9;
     /* Delete / eject a media */
-    DELETE = 7;
-    /* Custom action: Browser.Request.DoAction.action_id must be with the custom
-     * action ID
-     */
-    CUSTOM = 16;
+    DELETE = 10;
   }
 
   /* Action type */
@@ -72,6 +76,14 @@ message Event {
     bool support_search = 5;
   }
 
+  /* Move item event */
+  message Move {
+    /* Original media */
+    string path = 1;
+    /* New media path */
+    string destination = 2;
+  }
+
   /* Events */
   oneof event {
     /* A browser has been added */
@@ -79,8 +91,14 @@ message Event {
     /* A browser has been removed */
     Desc remove = 11;
 
+    /* A media has been added / created */
+    string media_created = 12;
+    /* A media has been renamed */
+    string media_renamed = 13;
+    /* A media has been moved */
+    Move media_moved = 14;
     /* A media has been deleted / ejected */
-    string media_deleted = 12;
+    string media_deleted = 15;
   }
 }
 
@@ -127,8 +145,18 @@ message Request {
     string path = 1;
     /* Action type */
     Action.Type type = 2;
-    /* Custom action ID (when type == CUSTOM) */
-    string custom_id = 3;
+
+    /* Additional parameters */
+    oneof params {
+      /* Custom action ID (when type == CUSTOM) */
+      string custom_id = 10;
+      /* Scan recursively (when type == SCAN) */
+      bool scan_recursively = 11;
+      /* Create / Rename folder / media (when type == CREATE or RENAME) */
+      string name = 12;
+      /* Paste / Move folder / media (when type == PASTE or MOVE) */
+      string destination = 13;
+    }
   }
 
   /* Requests */
@@ -173,10 +201,13 @@ message Response {
     Type type = 4;
 
     /* Item actions */
-    repeated Action actions = 5;
+    repeated uint32 action_ids = 5;
 
     /* Media is marked as favorite */
     bool favorite = 6;
+
+    /* Get / download of media is supported */
+    bool support_get = 7;
   }
 
   /* Media list response */
@@ -202,10 +233,14 @@ message Response {
 
     /* List actions */
     repeated Action actions = 8;
+    repeated uint32 action_ids = 9;
+
+    /* Put / upload of media is supported */
+    bool support_put = 10;
 
     /* Media items */
-    repeated MediaItem items = 9;
-}
+    repeated MediaItem items = 16;
+  }
 
   /* Responses */
   oneof resp {

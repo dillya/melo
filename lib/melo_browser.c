@@ -633,6 +633,97 @@ melo_browser_send_event (MeloBrowser *browser, MeloMessage *msg)
 }
 
 /**
+ * melo_browser_send_media_created_event:
+ * @browser: a #MeloBrowser
+ * @path: the created media item
+ *
+ * This helper can be used by #MeloBrowser implementations to send a
+ * 'media_created' event.
+ */
+void
+melo_browser_send_media_created_event (MeloBrowser *browser, const char *path)
+{
+  Browser__Event pmsg = BROWSER__EVENT__INIT;
+  MeloMessage *msg;
+
+  /* Prepare message */
+  pmsg.event_case = BROWSER__EVENT__EVENT_MEDIA_CREATED;
+  pmsg.media_created = (char *) path;
+
+  /* Generate message */
+  msg = melo_message_new (browser__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, browser__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  /* Send event */
+  melo_browser_send_event (browser, msg);
+}
+
+/**
+ * melo_browser_send_media_renamed_event:
+ * @browser: a #MeloBrowser
+ * @path: the renamed media item
+ *
+ * This helper can be used by #MeloBrowser implementations to send a
+ * 'media_renamed' event.
+ */
+void
+melo_browser_send_media_renamed_event (MeloBrowser *browser, const char *path)
+{
+  Browser__Event pmsg = BROWSER__EVENT__INIT;
+  MeloMessage *msg;
+
+  /* Prepare message */
+  pmsg.event_case = BROWSER__EVENT__EVENT_MEDIA_RENAMED;
+  pmsg.media_renamed = (char *) path;
+
+  /* Generate message */
+  msg = melo_message_new (browser__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, browser__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  /* Send event */
+  melo_browser_send_event (browser, msg);
+}
+
+/**
+ * melo_browser_send_media_moved_event:
+ * @browser: a #MeloBrowser
+ * @path: the moved media item
+ * @dest: the destination
+ *
+ * This helper can be used by #MeloBrowser implementations to send a
+ * 'media_moved' event.
+ */
+void
+melo_browser_send_media_moved_event (
+    MeloBrowser *browser, const char *path, const char *dest)
+{
+  Browser__Event pmsg = BROWSER__EVENT__INIT;
+  Browser__Event__Move move = BROWSER__EVENT__MOVE__INIT;
+  MeloMessage *msg;
+
+  /* Prepare message */
+  pmsg.event_case = BROWSER__EVENT__EVENT_MEDIA_MOVED;
+  pmsg.media_moved = &move;
+
+  /* Set move */
+  move.path = (char *) path;
+  move.destination = (char *) dest;
+
+  /* Generate message */
+  msg = melo_message_new (browser__event__get_packed_size (&pmsg));
+  if (msg)
+    melo_message_set_size (
+        msg, browser__event__pack (&pmsg, melo_message_get_data (msg)));
+
+  /* Send event */
+  melo_browser_send_event (browser, msg);
+}
+
+/**
  * melo_browser_send_media_deleted_event:
  * @browser: a #MeloBrowser
  * @path: the deleted media item

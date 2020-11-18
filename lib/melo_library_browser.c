@@ -224,7 +224,8 @@ melo_library_parse_query (const char *query, MeloLibraryType *type,
   return false;
 }
 
-static Browser__Action category_actions[2] = {
+static Browser__Action actions[] = {
+    /* Category actions */
     {
         .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
         .type = BROWSER__ACTION__TYPE__PLAY,
@@ -237,9 +238,7 @@ static Browser__Action category_actions[2] = {
         .name = "Add all to playlist",
         .icon = "fa:plus",
     },
-};
-
-static Browser__Action media_actions[4] = {
+    /* Media actions */
     {
         .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
         .type = BROWSER__ACTION__TYPE__PLAY,
@@ -266,21 +265,18 @@ static Browser__Action media_actions[4] = {
     },
 };
 
-static Browser__Action *category_actions_ptr[2] = {
-    &category_actions[0],
-    &category_actions[1],
+static Browser__Action *actions_ptr[] = {
+    &actions[0],
+    &actions[1],
+    &actions[2],
+    &actions[3],
+    &actions[4],
+    &actions[5],
 };
 
-static Browser__Action *media_set_fav_actions_ptr[3] = {
-    &media_actions[0],
-    &media_actions[1],
-    &media_actions[2],
-};
-static Browser__Action *media_unset_fav_actions_ptr[3] = {
-    &media_actions[0],
-    &media_actions[1],
-    &media_actions[3],
-};
+static uint32_t category_actions[] = {0, 1};
+static uint32_t media_set_fav_actions[] = {2, 3, 4};
+static uint32_t media_unset_fav_actions[] = {2, 3, 5};
 
 static Browser__SortMenu__Item sort_menu_items[6] = {
     {.base = PROTOBUF_C_MESSAGE_INIT (&browser__sort_menu__item__descriptor),
@@ -398,13 +394,13 @@ media_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
     }
   }
 
-  /* Add actions */
+  /* Add action IDs */
   if (data->flags & MELO_LIBRARY_FLAG_FAVORITE) {
-    item->n_actions = G_N_ELEMENTS (media_unset_fav_actions_ptr);
-    item->actions = media_unset_fav_actions_ptr;
+    item->n_action_ids = G_N_ELEMENTS (media_unset_fav_actions);
+    item->action_ids = media_unset_fav_actions;
   } else {
-    item->n_actions = G_N_ELEMENTS (media_set_fav_actions_ptr);
-    item->actions = media_set_fav_actions_ptr;
+    item->n_action_ids = G_N_ELEMENTS (media_set_fav_actions);
+    item->action_ids = media_set_fav_actions;
   }
   item->favorite = data->flags & MELO_LIBRARY_FLAG_FAVORITE;
 
@@ -431,9 +427,9 @@ category_cb (const MeloLibraryData *data, MeloTags *tags, void *user_data)
   else
     item->name = g_strdup (data->name);
 
-  /* Add actions */
-  item->n_actions = G_N_ELEMENTS (category_actions_ptr);
-  item->actions = category_actions_ptr;
+  /* Add action IDs */
+  item->n_action_ids = G_N_ELEMENTS (category_actions);
+  item->action_ids = category_actions;
 
   /* Add item to list */
   async->media_list->items[async->media_list->n_items] = item;
@@ -545,10 +541,14 @@ melo_library_browser_get_media_list (MeloLibraryBrowser *browser,
         MELO_LIBRARY_FIELD_LAST);
   }
 
-  /* Add actions and sort menu */
+  /* Set actions */
+  media_list.n_actions = G_N_ELEMENTS (actions_ptr);
+  media_list.actions = actions_ptr;
+
+  /* Add action IDs and sort menu */
   if (!search && type == MELO_LIBRARY_TYPE_MEDIA) {
-    media_list.n_actions = G_N_ELEMENTS (category_actions_ptr);
-    media_list.actions = category_actions_ptr;
+    media_list.n_action_ids = G_N_ELEMENTS (category_actions);
+    media_list.action_ids = category_actions;
     media_list.n_sort_menus = G_N_ELEMENTS (sort_media_menus_ptr);
     media_list.sort_menus = sort_media_menus_ptr;
   } else {
