@@ -294,6 +294,8 @@ volume_monitor_added_cb (
     /* Create new entry */
     bm = malloc (sizeof (*bm));
     if (bm) {
+      char path[18];
+
       /* Set objects */
       bm->volume = volume ? g_object_ref (volume) : NULL;
       bm->mount = mount ? g_object_ref (mount) : NULL;
@@ -305,6 +307,10 @@ volume_monitor_added_cb (
       /* Insert into hash table */
       g_hash_table_insert (browser->mounts, key, bm);
       MELO_LOGD ("add mount '%s' '%s'", bm->id, bm->name);
+
+      /* Notify of creation */
+      snprintf (path, sizeof (path), "/%s", bm->id);
+      melo_browser_send_media_created_event (MELO_BROWSER (browser), path);
     }
   } else if (!bm->volume && volume)
     bm->volume = g_object_ref (volume);
