@@ -38,6 +38,8 @@ G_DECLARE_DERIVABLE_TYPE (MeloBrowser, melo_browser, MELO, BROWSER, GObject)
  * @parent_class: #GObject parent class
  * @handle_request: This function is called when a new request is received and
  *     should be handled by the #MeloBrowser instance
+ * @put_media: This function is called when a chunk of a media is received from
+ *     user and it shoud be added to the resource pointed by path
  * @get_asset: This function is called to get an URI for a specific asset
  *     identified by its ID
  * @settings: This function is called when settings have been created and should
@@ -50,6 +52,8 @@ struct _MeloBrowserClass {
 
   bool (*handle_request) (
       MeloBrowser *browser, const MeloMessage *msg, MeloRequest *req);
+  bool (*put_media) (MeloBrowser *browser, const char *path, ssize_t len,
+      GBytes *chunk, MeloRequest *req);
   char *(*get_asset) (MeloBrowser *browser, const char *id);
   void (*settings) (MeloBrowser *browser, MeloSettings *settings);
 };
@@ -94,6 +98,10 @@ bool melo_browser_remove_event_listener (
 
 MeloRequest *melo_browser_handle_request (
     const char *id, MeloMessage *msg, MeloAsyncCb cb, void *user_data);
+
+MeloRequest *melo_browser_put_media (const char *id, const char *path,
+    ssize_t len, MeloAsyncCb cb, void *user_data);
+bool melo_browser_put_media_chunk (MeloRequest *request, GBytes *chunk);
 
 char *melo_browser_get_asset (const char *id, const char *asset);
 

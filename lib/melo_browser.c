@@ -570,6 +570,124 @@ melo_browser_handle_request (
 }
 
 /**
+ * melo_browser_put_media:
+ * @id: the id of a #MeloBrowser
+ * @path: the resource to replace with new content received from user
+ * @len: the media lenght, -1 for undefined
+ * @cb: the function to call when a response is sent
+ * @user_data: data to pass to @cb
+ *
+ * This function is called when a new media should be added as @path in the
+ * current context. It is mainly used to bring the upload of media feature to
+ * browsers. This function will create a request which will be used later with
+ * melo_browser_put_media_chunk() to forward the data chunk to the browser
+ * implementation. If the browser doesn't exist, the function will return %NULL.
+ *
+ * After returning, many asynchronous tasks related to the request can still be
+ * pending, so @cb and @user_data should not be destroyed. If the request need
+ * to be stopped or canceled, melo_request_cancel() can be used on the returned
+ * objects.
+ *
+ * The request reference must be released with melo_request_unref() after usage,
+ * except if melo_request_cancel() has been called since it does the unref for
+ * us.
+ *
+ * The media data is provided with melo_browser_put_media_chunk(), chunk by
+ * chunk. When all data have received and provided to the browser, the same
+ * function should be called with %NULL as chunk.
+ *
+ * The function will call the put_media callback from the #MeloBrowserClass with
+ * the path set and the chunk unset. Then, melo_browser_put_media_chunk() call
+ * will forward the chunk to browser implement with put_media callback but with
+ * path unset and chunk set. When path and chunk are not set, the reception of
+ * data is finished.
+ *
+ * Returns: a #MeloRequest handling asynchronous tasks of the request, %NULL
+ *     otherwise.
+ */
+MeloRequest *
+melo_browser_put_media (const char *id, const char *path, ssize_t len,
+    MeloAsyncCb cb, void *user_data)
+{
+  MeloBrowserClass *class;
+  MeloBrowser *browser;
+  MeloRequest *req = NULL;
+
+  if (!id || !path)
+    return NULL;
+
+  /* Find browser */
+  browser = melo_browser_get_by_id (id);
+  if (!browser)
+    return NULL;
+  class = MELO_BROWSER_GET_CLASS (browser);
+
+  /* Do put media */
+  if (class->put_media) {
+    MeloAsyncData async = {
+        .cb = cb,
+        .user_data = user_data,
+    };
+
+    /* Create new request */
+    req = melo_request_new (&async, G_OBJECT (browser));
+    if (req) {
+      /* Forward media creation */
+      if (!class->put_media (browser, path, len, NULL, req)) {
+        melo_request_unref (req);
+        req = NULL;
+      }
+    }
+  }
+
+  /* Release browser */
+  g_object_unref (browser);
+
+  return req;
+}
+
+/**
+ * melo_browser_put_media_chunk:
+ * @request: a #MeloRequest
+ * @chunk: (nullable): a data chunk
+ *
+ * This function is used to send data chunk to a request created with
+ * melo_browser_put_media(). To complete data reception, @chunk must be set to
+ * %NULL.
+ *
+ * It takes ownership of the @chunk and will release the data when everything
+ * have been consumed.
+ * The reference @request is untouched, so the release is responsible of the
+ * caller.
+ *
+ * Returns: %true if the chunk has been used, %false otherwise.
+ */
+bool
+melo_browser_put_media_chunk (MeloRequest *request, GBytes *chunk)
+{
+  MeloBrowserClass *class;
+  MeloBrowser *browser;
+  bool ret = false;
+
+  if (!request)
+    return NULL;
+
+  /* Get browser from request */
+  browser = (MeloBrowser *) melo_request_get_object (request);
+  if (!browser || !MELO_IS_BROWSER (browser))
+    return NULL;
+  class = MELO_BROWSER_GET_CLASS (browser);
+
+  /* Do put media */
+  if (class->put_media) {
+    ret = class->put_media (browser, NULL, 0, chunk, request);
+    if (!ret)
+      g_bytes_unref (chunk);
+  }
+  return ret;
+}
+
+/**
  * melo_browser_get_asset:
  * @id: the id of a #MeloBrowser
  * @asset: the id of the asset to get
