@@ -79,6 +79,7 @@ typedef struct {
 
   unsigned int count;
   unsigned int offset;
+  bool is_local;
 
   GstDiscoverer *disco;
   unsigned int disco_count;
@@ -109,6 +110,17 @@ typedef struct _MeloFileBrowserMount {
   GMount *mount;
 } MeloFileBrowserMount;
 
+typedef struct _MeloFileBrowserPut {
+  MeloRequest *req;
+  GCancellable *cancel;
+  char *path;
+  ssize_t len;
+  GFile *file;
+  GFileOutputStream *stream;
+  GBytes *current;
+  GQueue queue;
+} MeloFileBrowserPut;
+
 struct _MeloFileBrowser {
   GObject parent_instance;
 
@@ -128,6 +140,8 @@ static void melo_file_browser_settings (
     MeloBrowser *browser, MeloSettings *settings);
 static bool melo_file_browser_handle_request (
     MeloBrowser *browser, const MeloMessage *msg, MeloRequest *req);
+static bool melo_file_browser_put_media (MeloBrowser *browser, const char *path,
+    ssize_t len, GBytes *chunk, MeloRequest *req);
 static char *melo_file_browser_get_asset (MeloBrowser *browser, const char *id);
 
 static void volume_monitor_added_cb (
@@ -178,6 +192,7 @@ melo_file_browser_class_init (MeloFileBrowserClass *klass)
   /* Setup callbacks */
   parent_class->settings = melo_file_browser_settings;
   parent_class->handle_request = melo_file_browser_handle_request;
+  parent_class->put_media = melo_file_browser_put_media;
   parent_class->get_asset = melo_file_browser_get_asset;
 
   /* Set finalize */
@@ -639,6 +654,9 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
     media_list.actions = actions_ptr;
     media_list.n_action_ids = G_N_ELEMENTS (folder_actions);
     media_list.action_ids = folder_actions;
+
+    /* Set put support */
+    media_list.support_put = mlist->is_local;
 
     /* Allocate items */
     media_list.items = malloc (sizeof (*media_list.items) * media_list.n_items);
@@ -1310,6 +1328,7 @@ melo_file_browser_get_media_list (MeloFileBrowser *browser,
     mlist->req = req;
     mlist->count = r->count;
     mlist->offset = r->offset;
+    mlist->is_local = !strncmp (r->query, "/local", 6);
 
     /* Create and connect a cancellable for GIO */
     mlist->cancel = g_cancellable_new ();
@@ -1909,6 +1928,189 @@ melo_file_browser_handle_request (
   browser__request__free_unpacked (r, NULL);
 
   return ret;
+}
+
+static void write_all_cb (
+    GObject *source_object, GAsyncResult *res, gpointer user_data);
+
+#ifndef g_queue_clear_full
+static void
+g_queue_clear_full (GQueue *queue, GDestroyNotify free_func)
+{
+  g_return_if_fail (queue != NULL);
+
+  if (free_func != NULL)
+    g_queue_foreach (queue, (GFunc) free_func, NULL);
+
+  g_queue_clear (queue);
+}
+#endif
+
+static void
+melo_file_browser_put_next_chunk (MeloFileBrowserPut *put, GBytes *chunk)
+{
+  /* Write next chunk to file */
+  if (chunk) {
+    const unsigned char *data;
+    gsize size;
+
+    /* Write next chunk */
+    put->current = chunk;
+    data = g_bytes_get_data (chunk, &size);
+    g_output_stream_write_all_async (G_OUTPUT_STREAM (put->stream), data, size,
+        G_PRIORITY_DEFAULT, put->cancel, write_all_cb, put);
+  } else {
+    MeloBrowser *browser;
+
+    /* New file event */
+    browser = (MeloBrowser *) melo_request_get_object (put->req);
+    if (browser)
+      melo_browser_send_media_created_event (browser, put->path);
+
+    /* Last data chunk */
+    g_object_unref (put->stream);
+    g_object_unref (put->file);
+    g_queue_clear_full (&put->queue, (GDestroyNotify) g_bytes_unref);
+    melo_request_set_user_data (put->req, NULL);
+    melo_request_complete (put->req);
+    g_free (put->path);
+    free (put);
+  }
+}
+
+static void
+write_all_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  MeloFileBrowserPut *put = user_data;
+  size_t written;
+
+  /* Chunk written */
+  if (!g_output_stream_write_all_finish (
+          G_OUTPUT_STREAM (put->stream), res, &written, NULL)) {
+    melo_request_send_response (put->req,
+        melo_file_browser_message_error (500, "Failed to write media"));
+    g_bytes_unref (put->current);
+    g_object_unref (put->stream);
+    g_object_unref (put->file);
+    g_queue_clear_full (&put->queue, (GDestroyNotify) g_bytes_unref);
+    melo_request_set_user_data (put->req, NULL);
+    melo_request_complete (put->req);
+    g_free (put->path);
+    free (put);
+    return;
+  }
+
+  /* Update length */
+  if (put->len > 0)
+    put->len -= written;
+
+  /* Release current chunk */
+  g_bytes_unref (put->current);
+  put->current = NULL;
+
+  /* Process next chunk */
+  if (!g_queue_is_empty (&put->queue))
+    melo_file_browser_put_next_chunk (put, g_queue_pop_tail (&put->queue));
+}
+
+static void
+replace_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  MeloFileBrowserPut *put = user_data;
+
+  /* Get output stream */
+  put->stream = g_file_replace_finish (put->file, res, NULL);
+  if (!put->stream) {
+    melo_request_send_response (put->req,
+        melo_file_browser_message_error (403, "Failed to create media"));
+    g_object_unref (put->file);
+    g_queue_clear_full (&put->queue, (GDestroyNotify) g_bytes_unref);
+    melo_request_set_user_data (put->req, NULL);
+    melo_request_complete (put->req);
+    g_free (put->path);
+    free (put);
+    return;
+  }
+
+  /* Process next chunk */
+  if (!g_queue_is_empty (&put->queue))
+    melo_file_browser_put_next_chunk (put, g_queue_pop_tail (&put->queue));
+}
+
+static void
+put_media_cancelled_cb (MeloRequest *req, void *user_data)
+{
+  g_cancellable_cancel ((GCancellable *) user_data);
+}
+
+static void
+put_media_destroyed_cb (MeloRequest *req, void *user_data)
+{
+  g_object_unref ((GCancellable *) user_data);
+}
+
+static bool
+melo_file_browser_put_media (MeloBrowser *browser, const char *path,
+    ssize_t len, GBytes *chunk, MeloRequest *req)
+{
+  MeloFileBrowser *fbrowser = MELO_FILE_BROWSER (browser);
+  MeloFileBrowserPut *put;
+
+  /* Get put */
+  put = melo_request_get_user_data (req);
+
+  /* Create file */
+  if (path) {
+    const char *p = path;
+
+    /* Put already allocated */
+    if (put)
+      return false;
+
+    /* Check path */
+    if (strncmp (p, "/local/", 7))
+      return false;
+    p += 7;
+
+    /* Allocate new put item */
+    put = malloc (sizeof (*put));
+    if (!put)
+      return false;
+    melo_request_set_user_data (req, put);
+
+    /* Initialize put */
+    g_queue_init (&put->queue);
+    put->req = melo_request_ref (req);
+    put->path = g_strdup (path);
+    put->len = len;
+    put->current = NULL;
+    put->stream = NULL;
+
+    /* Set cancellable */
+    put->cancel = g_cancellable_new ();
+    g_signal_connect (
+        req, "cancelled", G_CALLBACK (put_media_cancelled_cb), put->cancel);
+    g_signal_connect (
+        req, "destroyed", G_CALLBACK (put_media_destroyed_cb), put->cancel);
+
+    /* Create file */
+    put->file = g_file_new_build_filename (fbrowser->root_path + 6, p, NULL);
+    g_file_replace_async (put->file, NULL, false,
+        G_FILE_CREATE_REPLACE_DESTINATION, G_PRIORITY_DEFAULT, put->cancel,
+        &replace_cb, put);
+  } else {
+    /* Put should be allocated */
+    if (!put)
+      return false;
+
+    /* Process next chunk */
+    if (!put->stream || put->current)
+      g_queue_push_head (&put->queue, chunk);
+    else
+      melo_file_browser_put_next_chunk (put, chunk);
+  }
+
+  return true;
 }
 
 static char *
