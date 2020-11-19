@@ -35,6 +35,7 @@
 
 #include "asset.h"
 #include "discover.h"
+#include "media.h"
 #include "settings.h"
 #include "websocket.h"
 
@@ -109,6 +110,13 @@ main (int argc, char *argv[])
   if (!melo_http_server_add_handler (
           http_server, "/asset/", NULL, asset_cb, NULL, NULL)) {
     MELO_LOGE ("failed to add asset handler to HTTP server");
+    goto end;
+  }
+
+  /* Add browser media handler to HTTP server */
+  if (!melo_http_server_add_handler (http_server, "/media/", media_header_cb,
+          media_body_cb, media_close_cb, NULL)) {
+    MELO_LOGE ("failed to add browser media handler to HTTP server");
     goto end;
   }
 

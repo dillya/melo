@@ -39,6 +39,7 @@ src = [
 	'asset.c',
 	'discover.c',
 	'main.c',
+	'media.c',
 	'settings.c',
 	'websocket.c'
 ]
