@@ -106,7 +106,8 @@ main (int argc, char *argv[])
   }
 
   /* Add asset handler to HTTP server */
-  if (!melo_http_server_add_handler (http_server, "/asset/", asset_cb, NULL)) {
+  if (!melo_http_server_add_handler (
+          http_server, "/asset/", NULL, asset_cb, NULL, NULL)) {
     MELO_LOGE ("failed to add asset handler to HTTP server");
     goto end;
   }

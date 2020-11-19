@@ -26,6 +26,8 @@
 
 G_BEGIN_DECLS
 
+typedef enum _MeloHttpServerMethod MeloHttpServerMethod;
+
 /**
  * MeloHttpServerConnection:
  *
@@ -33,6 +35,32 @@ G_BEGIN_DECLS
  * used to get request details and generate the response.
  */
 typedef struct _MeloHttpServerConnection MeloHttpServerConnection;
+
+/**
+ * MeloHttpServerMethod:
+ * @MELO_HTTP_SERVER_METHOD_UNKNOWN: unknown HTTP method
+ * @MELO_HTTP_SERVER_METHOD_GET: GET HTTP method
+ * @MELO_HTTP_SERVER_METHOD_HEAD: HEAD HTTP method
+ * @MELO_HTTP_SERVER_METHOD_POST: POST HTTP method
+ * @MELO_HTTP_SERVER_METHOD_PUT: PUT HTTP method
+ * @MELO_HTTP_SERVER_METHOD_DELETE: DELETE HTTP method
+ * @MELO_HTTP_SERVER_METHOD_CONNECT: CONNECT HTTP method
+ * @MELO_HTTP_SERVER_METHOD_OPTIONS: OPTIONS HTTP method
+ * @MELO_HTTP_SERVER_METHOD_TRACE: TRACE HTTP method
+ *
+ * This enumerator lists all HTTP methods supported by the HTTP server.
+ */
+enum _MeloHttpServerMethod {
+  MELO_HTTP_SERVER_METHOD_UNKNOWN = 0,
+  MELO_HTTP_SERVER_METHOD_GET,
+  MELO_HTTP_SERVER_METHOD_HEAD,
+  MELO_HTTP_SERVER_METHOD_POST,
+  MELO_HTTP_SERVER_METHOD_PUT,
+  MELO_HTTP_SERVER_METHOD_DELETE,
+  MELO_HTTP_SERVER_METHOD_CONNECT,
+  MELO_HTTP_SERVER_METHOD_OPTIONS,
+  MELO_HTTP_SERVER_METHOD_TRACE,
+};
 
 /**
  * MeloHttpServer:
@@ -59,10 +87,39 @@ G_DECLARE_FINAL_TYPE (
 typedef void (*MeloHttpServerCb) (MeloHttpServer *server,
     MeloHttpServerConnection *connection, const char *path, void *user_data);
 
+/**
+ * MeloHttpServerCloseCb:
+ * @server: the #MeloHttpServer
+ * @connection: the current #MeloHttpServerConnection
+ * @user_data: user data passed to the callback
+ *
+ * This function is called when a request has finished (response body has been
+ * sent) and the HTTP connection is closing. It should be used to release
+ * resources used during request processing.
+ */
+typedef void (*MeloHttpServerCloseCb) (MeloHttpServer *server,
+    MeloHttpServerConnection *connection, void *user_data);
+
+/**
+ * MeloHttpServerChunkCb:
+ * @connection: the current #MeloHttpServerConnection
+ * @chunk; a data chunk
+ * @user_data: user data passed to the callback
+ *
+ * This function is called when a new request body data chunk is available. The
+ * reference to @chunk must be released after usage with g_bytes_unref().
+ * This function can be registered during server callback handling request
+ * headers reception (see melo_http_server_add_handler()) with the dedicated
+ * function melo_http_server_connection_capture_body().
+ */
+typedef void (*MeloHttpServerChunkCb) (
+    MeloHttpServerConnection *connection, GBytes *chunk, void *user_data);
+
 MeloHttpServer *melo_http_server_new (void);
 
 bool melo_http_server_add_handler (MeloHttpServer *srv, const char *path,
-    MeloHttpServerCb cb, void *user_data);
+    MeloHttpServerCb header_cb, MeloHttpServerCb body_cb,
+    MeloHttpServerCloseCb close_cb, void *user_data);
 bool melo_http_server_add_file_handler (
     MeloHttpServer *srv, const char *path, const char *www_path);
 bool melo_http_server_add_websocket_handler (MeloHttpServer *srv,
@@ -74,6 +131,34 @@ bool melo_http_server_start (
     MeloHttpServer *srv, unsigned int http_port, unsigned int https_port);
 void melo_http_server_stop (MeloHttpServer *srv);
 
+void melo_http_server_connection_set_user_data (
+    MeloHttpServerConnection *conn, void *user_data);
+void *melo_http_server_connection_get_user_data (
+    MeloHttpServerConnection *conn);
+
+MeloHttpServerMethod melo_http_server_connection_get_method (
+    MeloHttpServerConnection *conn);
+ssize_t melo_http_server_connection_get_content_length (
+    MeloHttpServerConnection *conn);
+
+bool melo_http_server_connection_capture_body (
+    MeloHttpServerConnection *conn, MeloHttpServerChunkCb cb, void *user_data);
+
+void melo_http_server_connection_set_status (
+    MeloHttpServerConnection *conn, unsigned int code);
+void melo_http_server_connection_set_content_type (
+    MeloHttpServerConnection *conn, const char *mime_type);
+void melo_http_server_connection_set_content_length (
+    MeloHttpServerConnection *conn, size_t len);
+
+void melo_http_server_connection_send_chunk (MeloHttpServerConnection *conn,
+    const unsigned char *data, size_t len, GDestroyNotify free_func,
+    void *user_data);
+void melo_http_server_connection_close (MeloHttpServerConnection *conn);
+
+void melo_http_server_connection_send (MeloHttpServerConnection *conn,
+    unsigned int code, const unsigned char *data, size_t len,
+    GDestroyNotify free_func, void *user_data);
 void melo_http_server_connection_send_file (
     MeloHttpServerConnection *conn, const char *path);
 void melo_http_server_connection_send_url (

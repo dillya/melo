@@ -41,11 +41,29 @@ struct _MeloHttpServer {
   char *auth_password;
 };
 
+typedef struct _MeloHttpServerData {
+  MeloHttpServer *server;
+  MeloHttpServerCb header_cb;
+  MeloHttpServerCb body_cb;
+  MeloHttpServerCloseCb close_cb;
+  void *user_data;
+} MeloHttpServerData;
+
 struct _MeloHttpServerConnection {
+  MeloHttpServerData *data;
+  char *path;
+
   SoupServer *server;
   SoupSession *session;
   SoupMessage *msg;
   SoupClientContext *client;
+
+  struct {
+    MeloHttpServerChunkCb cb;
+    void *user_data;
+  } body;
+
+  void *user_data;
 };
 
 G_DEFINE_TYPE (MeloHttpServer, melo_http_server, G_TYPE_OBJECT)
@@ -109,11 +127,54 @@ melo_http_server_new ()
   return g_object_new (MELO_TYPE_HTTP_SERVER, NULL);
 }
 
-typedef struct _MeloHttpServerData {
-  MeloHttpServer *server;
-  MeloHttpServerCb cb;
-  void *user_data;
-} MeloHttpServerData;
+static void
+got_chunk_cb (SoupMessage *msg, SoupBuffer *chunk, gpointer user_data)
+{
+  MeloHttpServerConnection *conn = user_data;
+
+  /* Send body chunk */
+  if (conn->body.cb) {
+    GBytes *bytes;
+
+    /* Create GBytes */
+    bytes = soup_buffer_get_as_bytes (chunk);
+
+    /* Send body chunk */
+    conn->body.cb (conn, bytes, conn->body.user_data);
+  }
+}
+
+static void
+got_body_cb (SoupMessage *msg, gpointer user_data)
+{
+  MeloHttpServerConnection *conn = user_data;
+
+  /* No handler registered */
+  if (!conn->data->body_cb)
+    return;
+
+  /* Pause message and wait call to melo_http_server_connection_close() */
+  soup_server_pause_message (conn->server, conn->msg);
+
+  /* Call registered handler */
+  conn->data->body_cb (
+      conn->data->server, conn, conn->path, conn->data->user_data);
+}
+
+static void
+finished_cb (SoupMessage *msg, gpointer user_data)
+{
+  MeloHttpServerConnection *conn = user_data;
+
+  /* Close callback */
+  if (conn->data->close_cb)
+    conn->data->close_cb (conn->data->server, conn, conn->data->user_data);
+
+  /* Release connection */
+  g_object_unref (conn->msg);
+  g_free (conn->path);
+  free (conn);
+}
 
 static void
 melo_http_server_handler (SoupServer *server, SoupMessage *msg,
@@ -121,35 +182,81 @@ melo_http_server_handler (SoupServer *server, SoupMessage *msg,
     gpointer user_data)
 {
   MeloHttpServerData *data = user_data;
-  MeloHttpServerConnection conn = {
-      .server = server,
-      .session = data->server->session,
-      .msg = msg,
-      .client = client,
-  };
+  MeloHttpServerConnection *conn;
 
-  data->cb (data->server, &conn, path, data->user_data);
+  /* Create connection */
+  conn = g_malloc0 (sizeof (*conn));
+  if (!conn) {
+    return;
+  }
+
+  /* Set connection context */
+  conn->data = data;
+  conn->server = server;
+  conn->session = data->server->session;
+  conn->msg = g_object_ref (msg);
+  conn->client = client;
+
+  /* Handle request */
+  if (data->header_cb) {
+    /* Catch 'go-body' event to handle request after body reception */
+    g_signal_connect (msg, "got-body", G_CALLBACK (got_body_cb), conn);
+
+    /* Save path */
+    conn->path = g_strdup (path);
+
+    /* Call registered handler */
+    data->header_cb (data->server, conn, path, data->user_data);
+  } else {
+    /* Pause message and wait call to melo_http_server_connection_close() */
+    soup_server_pause_message (server, msg);
+
+    /* Call registered handler */
+    data->body_cb (data->server, conn, path, data->user_data);
+  }
+
+  /* Catch 'finished' event to release connection */
+  g_signal_connect (msg, "finished", G_CALLBACK (finished_cb), conn);
 }
 
 /**
  * melo_http_server_add_handler:
  * @srv: a #MeloHttpServer instance
  * @path: the top-level path for the handler, can be %NULL
- * @cb: the function called when a new request is received
- * @user_data: the data to pass to @cb
+ * @header_cb: the function called when a new request is received (after request
+ *      headers reception and before request body reception)
+ * @body_cb: the function called when a new request is received (after request
+ *     body reception and before response body send)
+ * @close_cb: the function called when a request has finished and connection is
+ *     closing
+ * @user_data: the data to pass to @header_cb, @body_cb and @close_cb
  *
  * This function adds an handler to capture a request and generate an HTTP
- * response.
+ * response. At least one of @header_cb and @body_cb must be defined to register
+ * @path.
+ *
+ * The @header_cb can be used to handle the HTTP request just after request
+ * header reception. This callback can also be used to start body capture as
+ * chunk of data with melo_http_server_connection_capture_body().
+ *
+ * The @body_cb can be used to handle a generic HTTP request and start
+ * generating the response (status, content-length, content-type and body data).
+ * The melo_http_server_connection_send functions can be used for this purpose.
+ *
+ * Finally, the @close_cb can be used to catch finalization of the HTTP request
+ * and connection close, to release all resources allocated during request
+ * processing.
  *
  * Returns: %true if the handler has been added, %false otherwise.
  */
 bool
-melo_http_server_add_handler (
-    MeloHttpServer *srv, const char *path, MeloHttpServerCb cb, void *user_data)
+melo_http_server_add_handler (MeloHttpServer *srv, const char *path,
+    MeloHttpServerCb header_cb, MeloHttpServerCb body_cb,
+    MeloHttpServerCloseCb close_cb, void *user_data)
 {
   MeloHttpServerData *data;
 
-  if (!srv || !cb)
+  if (!srv || (!body_cb && !header_cb))
     return false;
 
   /* Allocate new callback data */
@@ -159,12 +266,18 @@ melo_http_server_add_handler (
 
   /* Save callback and user data */
   data->server = srv;
-  data->cb = cb;
+  data->header_cb = header_cb;
+  data->body_cb = body_cb;
+  data->close_cb = close_cb;
   data->user_data = user_data;
 
   /* Add file handler */
-  soup_server_add_handler (
-      srv->server, path, melo_http_server_handler, data, g_free);
+  if (header_cb)
+    soup_server_add_early_handler (
+        srv->server, path, melo_http_server_handler, data, g_free);
+  else
+    soup_server_add_handler (
+        srv->server, path, melo_http_server_handler, data, g_free);
 
   return true;
 }
@@ -361,6 +474,265 @@ melo_http_server_stop (MeloHttpServer *srv)
 }
 
 /**
+ * MeloHttpServerMethod:
+ * @conn: the #MeloHttpServerConnection
+ *
+ * This function can be used to know the HTTP method of the current request
+ * handled by @conn.
+ *
+ * Returns: the #MeloHttpServerMethod method of the current request.
+ */
+MeloHttpServerMethod
+melo_http_server_connection_get_method (MeloHttpServerConnection *conn)
+{
+  if (conn) {
+    if (conn->msg->method == SOUP_METHOD_GET)
+      return MELO_HTTP_SERVER_METHOD_GET;
+    else if (conn->msg->method == SOUP_METHOD_HEAD)
+      return MELO_HTTP_SERVER_METHOD_HEAD;
+    else if (conn->msg->method == SOUP_METHOD_POST)
+      return MELO_HTTP_SERVER_METHOD_POST;
+    else if (conn->msg->method == SOUP_METHOD_PUT)
+      return MELO_HTTP_SERVER_METHOD_PUT;
+    else if (conn->msg->method == SOUP_METHOD_DELETE)
+      return MELO_HTTP_SERVER_METHOD_DELETE;
+    else if (conn->msg->method == SOUP_METHOD_CONNECT)
+      return MELO_HTTP_SERVER_METHOD_CONNECT;
+    else if (conn->msg->method == SOUP_METHOD_OPTIONS)
+      return MELO_HTTP_SERVER_METHOD_OPTIONS;
+    else if (conn->msg->method == SOUP_METHOD_TRACE)
+      return MELO_HTTP_SERVER_METHOD_TRACE;
+  }
+  return MELO_HTTP_SERVER_METHOD_UNKNOWN;
+}
+
+/**
+ * melo_http_server_connection_get_content_length:
+ * @conn: the #MeloHttpServerConnection
+ *
+ * This function can be used to get the request body content length of the
+ * current request handled by @conn. If the size returned is negative, it means
+ * the content length was not defined.
+ *
+ * Returns: the content length in bytes, -1 if the content length is unset.
+ */
+ssize_t
+melo_http_server_connection_get_content_length (MeloHttpServerConnection *conn)
+{
+  if (!conn || soup_message_headers_get_encoding (
+                   conn->msg->response_headers) != SOUP_ENCODING_CONTENT_LENGTH)
+    return -1;
+  return soup_message_headers_get_content_length (conn->msg->response_headers);
+}
+
+/**
+ * melo_http_server_connection_set_user_data:
+ * @conn: the #MeloHttpServerConnection
+ * @user_data: the data to attach
+ *
+ * Attach a data to the connection. Before attaching a new data, be sure to free
+ * the previous one.
+ */
+void
+melo_http_server_connection_set_user_data (
+    MeloHttpServerConnection *conn, void *user_data)
+{
+  if (conn)
+    conn->user_data = user_data;
+}
+
+/**
+ * melo_http_server_connection_get_user_data:
+ * @conn: the #MeloHttpServerConnection
+ *
+ * Gets data attached to the connection.
+ *
+ * Returns: (transfer none): the data to attached to the connection or %NULL.
+ */
+void *
+melo_http_server_connection_get_user_data (MeloHttpServerConnection *conn)
+{
+  return conn ? conn->user_data : NULL;
+}
+
+/**
+ * melo_http_server_connection_capture_body:
+ * @conn: the #MeloHttpServerConnection
+ * @cb: the function called when a new chunk of request body data is available
+ * @user_data: the data to pass to @cb
+ *
+ * This function enable request body capture as chunk of memory: @cb will be
+ * called on each chunk of request body received.
+ *
+ * Returns: %true if the capture has been set successfully, %false otherwise.
+ */
+bool
+melo_http_server_connection_capture_body (
+    MeloHttpServerConnection *conn, MeloHttpServerChunkCb cb, void *user_data)
+{
+  if (!conn || conn->body.cb)
+    return false;
+
+  /* Disable body accumulation */
+  soup_message_body_set_accumulate (conn->msg->request_body, false);
+
+  /* Register 'got-chunk' callback */
+  g_signal_connect (conn->msg, "got-chunk", G_CALLBACK (got_chunk_cb), conn);
+
+  /* Set callback */
+  conn->body.cb = cb;
+  conn->body.user_data = user_data;
+
+  return true;
+}
+
+/**
+ * melo_http_server_connection_set_status:
+ * @conn: the #MeloHttpServerConnection
+ * @code: the HTTP response code
+ *
+ * This function can be used to set the HTTP status code for the current request
+ * handled by @conn.
+ *
+ * It must be called before any call to melo_http_server_connection_send to
+ * take place.
+ */
+void
+melo_http_server_connection_set_status (
+    MeloHttpServerConnection *conn, unsigned int code)
+{
+  if (conn)
+    soup_message_set_status (conn->msg, code);
+}
+
+/**
+ * melo_http_server_connection_set_content_type:
+ * @conn: the #MeloHttpServerConnection
+ * @mime_type: the content mime type
+ *
+ * This function can be used to set the response body content mime type of the
+ * current request handled by @conn.
+ *
+ * It must be called before any call to melo_http_server_connection_send to
+ * take place.
+ */
+void
+melo_http_server_connection_set_content_type (
+    MeloHttpServerConnection *conn, const char *mime_type)
+{
+  if (conn)
+    soup_message_headers_set_content_type (
+        conn->msg->response_headers, mime_type, NULL);
+}
+
+/**
+ * melo_http_server_connection_set_content_length:
+ * @conn: the #MeloHttpServerConnection
+ * @len: the content length of the body response
+ *
+ * This function can be used to set the response body content length of the
+ * current request handled by @conn.
+ *
+ * It must be called before any call to melo_http_server_connection_send to
+ * take place.
+ */
+void
+melo_http_server_connection_set_content_length (
+    MeloHttpServerConnection *conn, size_t len)
+{
+  if (conn)
+    soup_message_headers_set_content_length (conn->msg->response_headers, len);
+}
+
+/**
+ * melo_http_server_connection_send_chunk:
+ * @conn: the #MeloHttpServerConnection
+ * @data: (transfer none) (array length=size): the chunk data to append to body
+ * @size: the size of @data
+ * @free_func: the function to call to release the data
+ * @user_data: data to pass to @free_func
+ *
+ * This function can be called during and after call to the MeloHttpServerCb
+ * callback, to append new chunk of data to the response body of the current
+ * HTTP request handled by @conn.
+ *
+ * When no more data chunk has to be appended, the function
+ * melo_http_server_connection_close() must be called to complete the body send
+ * and finalize the connection.
+ */
+void
+melo_http_server_connection_send_chunk (MeloHttpServerConnection *conn,
+    const unsigned char *data, size_t len, GDestroyNotify free_func,
+    void *user_data)
+{
+  SoupBuffer *chunk;
+
+  /* No data to append */
+  if (!conn || !data)
+    return;
+
+  /* Append chunk to body */
+  chunk = soup_buffer_new_with_owner (data, len, user_data, free_func);
+  soup_message_body_append_buffer (conn->msg->response_body, chunk);
+  soup_server_unpause_message (conn->server, conn->msg);
+}
+
+/**
+ * melo_http_server_connection_close:
+ * @conn: the #MeloHttpServerConnection
+ *
+ * This function is used to complete the response body of the current HTTP
+ * request handled by @conn and finalize the connection, when the function
+ * melo_http_server_connection_send_chunk() has been called to feed the response
+ * body. This function should not be called in any combination with other
+ * melo_http_server_connection_send functions.
+ */
+void
+melo_http_server_connection_close (MeloHttpServerConnection *conn)
+{
+  /* Complete body and close connection */
+  if (conn) {
+    soup_message_body_complete (conn->msg->response_body);
+    soup_server_unpause_message (conn->server, conn->msg);
+  }
+}
+
+/**
+ * melo_http_server_connection_send:
+ * @conn: the #MeloHttpServerConnection
+ * @code: the HTTP response code
+ * @data: (transfer none) (array length=size): the data to set to body
+ * @size: the size of @data
+ * @free_func: the function to call to release the data
+ * @user_data: data to pass to @free_func
+ *
+ * This function can be used to set the response body message for the current
+ * HTTP request handled by @conn.
+ * The response code is set to @code and the content length is set with @len.
+ * After this call, the connection is finalized.*
+ *
+ * This function is not compatible with melo_http_server_connection_close() and
+ * melo_http_server_connection_send_chunk().
+ */
+void
+melo_http_server_connection_send (MeloHttpServerConnection *conn,
+    unsigned int code, const unsigned char *data, size_t len,
+    GDestroyNotify free_func, void *user_data)
+{
+  if (!conn)
+    return;
+
+  /* Set headers */
+  soup_message_set_status (conn->msg, code);
+  soup_message_headers_set_content_length (conn->msg->response_headers, len);
+
+  /* Set body */
+  melo_http_server_connection_send_chunk (
+      conn, data, len, free_func, user_data);
+  melo_http_server_connection_close (conn);
+}
+
+/**
  * melo_http_server_connection_send_file:
  * @conn: the #MeloHttpServerConnection
  * @path: the file path to send
@@ -375,6 +747,10 @@ void
 melo_http_server_connection_send_file (
     MeloHttpServerConnection *conn, const char *path)
 {
+  if (!conn || !path)
+    return;
+
+  soup_server_unpause_message (conn->server, conn->msg);
   melo_http_server_file_serve (conn->msg, conn->client, path);
 }
 
@@ -391,6 +767,9 @@ void
 melo_http_server_connection_send_url (
     MeloHttpServerConnection *conn, const char *url)
 {
+  if (!conn || !url)
+    return;
+
   melo_http_server_url_serve (conn->server, conn->msg, conn->session, url);
 }
 
