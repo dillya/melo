@@ -298,7 +298,15 @@ volume_monitor_added_cb (
     volume = g_object_ref (G_VOLUME (obj));
     mount = g_volume_get_mount (volume);
   } else {
-    mount = g_object_ref (G_MOUNT (obj));
+    /* Get mount */
+    mount = G_MOUNT (obj);
+
+    /* Skip shadowed mounts */
+    if (g_mount_is_shadowed (mount))
+      return;
+
+    /* Keep a reference of mount and its volume */
+    mount = g_object_ref (mount);
     volume = g_mount_get_volume (mount);
   }
   key = volume ? G_OBJECT (volume) : G_OBJECT (mount);
