@@ -578,6 +578,24 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         },
         {
             .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+            .type = BROWSER__ACTION__TYPE__CREATE,
+            .name = "Create a new folder",
+            .icon = "fa:folder-plus",
+        },
+        {
+            .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+            .type = BROWSER__ACTION__TYPE__RENAME,
+            .name = "Rename folder",
+            .icon = "fa:i-cursor",
+        },
+        {
+            .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+            .type = BROWSER__ACTION__TYPE__DELETE,
+            .name = "Delete folder",
+            .icon = "fa:trash",
+        },
+        {
+            .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
             .type = BROWSER__ACTION__TYPE__SCAN,
             .name = "Scan for medias",
             .icon = "fa:search",
@@ -607,6 +625,18 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
             .name = "Remove media from favorites",
             .icon = "fa:star",
         },
+        {
+            .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+            .type = BROWSER__ACTION__TYPE__RENAME,
+            .name = "Rename file",
+            .icon = "fa:i-cursor",
+        },
+        {
+            .base = PROTOBUF_C_MESSAGE_INIT (&browser__action__descriptor),
+            .type = BROWSER__ACTION__TYPE__DELETE,
+            .name = "Delete file",
+            .icon = "fa:trash",
+        },
     };
     static Browser__Action *actions_ptr[] = {
         &actions[0],
@@ -616,10 +646,16 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
         &actions[4],
         &actions[5],
         &actions[6],
+        &actions[7],
+        &actions[8],
+        &actions[9],
+        &actions[10],
+        &actions[11],
     };
-    static uint32_t folder_actions[] = {0, 1, 2};
-    static uint32_t file_set_fav_actions[] = {3, 4, 5};
-    static uint32_t file_unset_fav_actions[] = {3, 4, 6};
+    static uint32_t folder_actions[] = {0, 1, 2, 5};
+    static uint32_t folder_item_actions[] = {0, 1, 3, 4, 5};
+    static uint32_t file_set_fav_actions[] = {6, 7, 8, 10, 11};
+    static uint32_t file_unset_fav_actions[] = {6, 7, 9, 10, 11};
     Browser__Response resp = BROWSER__RESPONSE__INIT;
     Browser__Response__MediaList media_list =
         BROWSER__RESPONSE__MEDIA_LIST__INIT;
@@ -690,8 +726,8 @@ next_files_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
       browser__response__media_item__init (&items[i]);
       items[i].name = g_strdup (g_file_info_get_display_name (info));
       items[i].type = BROWSER__RESPONSE__MEDIA_ITEM__TYPE__FOLDER;
-      items[i].n_action_ids = G_N_ELEMENTS (folder_actions);
-      items[i].action_ids = folder_actions;
+      items[i].n_action_ids = G_N_ELEMENTS (folder_item_actions);
+      items[i].action_ids = folder_item_actions;
 
       /* Generate item ID */
       if (g_file_info_get_file_type (info) == G_FILE_TYPE_SHORTCUT) {
@@ -1276,12 +1312,12 @@ melo_file_browser_get_uri (MeloFileBrowser *browser, const char *path,
       }
 
       /* Create final file */
-      if (!file) {
+      if (vol && mount) {
         if (vol && bm->volume)
           *vol = g_object_ref (bm->volume);
         if (mount && bm->mount)
           *mount = g_object_ref (bm->mount);
-      } else
+      } else if (file)
         *file = melo_file_browser_get_file_from_mount (bm->mount, path);
       return true;
     }
@@ -1774,6 +1810,86 @@ action_children_cb (
 }
 
 static void
+action_create_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  GFile *file = G_FILE (source_object);
+  MeloRequest *req = user_data;
+  GError *error = NULL;
+  char *path;
+
+  /* Get path */
+  path = melo_request_get_user_data (req);
+
+  /* Folder created */
+  if (!g_file_make_directory_finish (file, res, &error)) {
+    MELO_LOGE ("failed to create folder: %s", error->message),
+        melo_request_send_response (req,
+            melo_file_browser_message_error (403, "Failed to create folder"));
+    g_error_free (error);
+  } else {
+    melo_browser_send_media_created_event (
+        MELO_BROWSER (melo_request_get_object (req)), path);
+  }
+  melo_request_complete (req);
+  g_object_unref (file);
+  g_free (path);
+}
+
+static void
+action_rename_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  GFile *file = G_FILE (source_object), *new_file;
+  MeloRequest *req = user_data;
+  GError *error = NULL;
+  char *path;
+
+  /* Get path */
+  path = melo_request_get_user_data (req);
+
+  /* Folder / file renamed */
+  new_file = g_file_set_display_name_finish (file, res, &error);
+  if (!new_file) {
+    MELO_LOGE ("failed to rename item: %s", error->message),
+        melo_request_send_response (req,
+            melo_file_browser_message_error (403, "Failed to rename item"));
+    g_error_free (error);
+  } else {
+    melo_browser_send_media_renamed_event (
+        MELO_BROWSER (melo_request_get_object (req)), path);
+    g_object_unref (new_file);
+  }
+  melo_request_complete (req);
+  g_object_unref (file);
+  g_free (path);
+}
+
+static void
+action_delete_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  GFile *file = G_FILE (source_object);
+  MeloRequest *req = user_data;
+  GError *error = NULL;
+  char *path;
+
+  /* Get path */
+  path = melo_request_get_user_data (req);
+
+  /* Folder / file renamed */
+  if (!g_file_delete_finish (file, res, &error)) {
+    MELO_LOGE ("failed to delete item: %s", error->message),
+        melo_request_send_response (req,
+            melo_file_browser_message_error (403, "Failed to delete item"));
+    g_error_free (error);
+  } else {
+    melo_browser_send_media_deleted_event (
+        MELO_BROWSER (melo_request_get_object (req)), path);
+  }
+  melo_request_complete (req);
+  g_object_unref (file);
+  g_free (path);
+}
+
+static void
 volume_eject_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
   GVolume *volume = G_VOLUME (source_object);
@@ -1829,7 +1945,10 @@ melo_file_browser_do_action (
     MeloFileBrowser *browser, Browser__Request__DoAction *r, MeloRequest *req)
 {
   MeloFileBrowserAction *action;
-  GFile *file;
+  GVolume *volume = NULL;
+  GMount *mount = NULL;
+  GFile *file = NULL;
+  bool ret;
 
   /* Do action */
   switch (r->type) {
@@ -1840,46 +1959,89 @@ melo_file_browser_do_action (
   case BROWSER__ACTION__TYPE__SCAN:
   case BROWSER__ACTION__TYPE__DELETE:
     break;
+  case BROWSER__ACTION__TYPE__CREATE:
+  case BROWSER__ACTION__TYPE__RENAME:
+    /* Name not defined */
+    if (r->params_case != BROWSER__REQUEST__DO_ACTION__PARAMS_NAME ||
+        !r->name || *r->name == '\0')
+      return false;
+    break;
   default:
     MELO_LOGE ("action %u not supported", r->type);
     return false;
   }
 
-  /* Handle ejection */
-  if (r->type == BROWSER__ACTION__TYPE__DELETE) {
-    GVolume *volume = NULL;
-    GMount *mount = NULL;
+  /* Get file / volume / mount */
+  if (r->type == BROWSER__ACTION__TYPE__CREATE) {
+    char *path;
 
-    /* Get volume and mount */
-    if (!melo_file_browser_get_uri (browser, r->path, NULL, &volume, &mount))
+    /* Name not defined */
+    if (r->params_case != BROWSER__REQUEST__DO_ACTION__PARAMS_NAME ||
+        !r->name || *r->name == '\0')
       return false;
 
-    /* Ejection first, unmount otherwise */
-    if (volume && g_volume_can_eject (volume)) {
-      g_volume_eject_with_operation (
-          volume, G_MOUNT_UNMOUNT_NONE, NULL, NULL, volume_eject_cb, req);
-      volume = NULL;
-    } else if (mount && g_mount_can_eject (mount)) {
-      g_mount_eject_with_operation (
-          mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL, mount_eject_cb, req);
-      mount = NULL;
-    } else if (mount && g_mount_can_unmount (mount)) {
-      g_mount_unmount_with_operation (
-          mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL, mount_unmount_cb, req);
-      mount = NULL;
-    } else
-      melo_request_complete (req);
+    /* Create path */
+    path = g_build_filename (r->path, r->name, NULL);
 
-    /* Release objects */
-    g_clear_object (&mount);
-    g_clear_object (&volume);
+    /* Generate URI from path */
+    ret = melo_file_browser_get_uri (browser, path, &file, NULL, NULL);
+    if (!ret || !file)
+      g_free (path);
+    else
+      melo_request_set_user_data (req, path);
+  } else if (r->type == BROWSER__ACTION__TYPE__DELETE)
+    ret = melo_file_browser_get_uri (browser, r->path, &file, &volume, &mount);
+  else
+    ret = melo_file_browser_get_uri (browser, r->path, &file, NULL, NULL);
+  if (!ret || !file)
+    return false;
 
+  /* Handle ejection */
+  if (r->type == BROWSER__ACTION__TYPE__CREATE) {
+    /* Create folder */
+    g_file_make_directory_async (
+        file, G_PRIORITY_DEFAULT, NULL, action_create_cb, req);
+    return true;
+  } else if (r->type == BROWSER__ACTION__TYPE__RENAME) {
+    /* Save path */
+    melo_request_set_user_data (req, g_strdup (r->path));
+
+    /* Rename file / folder */
+    g_file_set_display_name_async (
+        file, r->name, G_PRIORITY_DEFAULT, NULL, action_rename_cb, req);
+    return true;
+  } else if (r->type == BROWSER__ACTION__TYPE__DELETE) {
+    /* Eject volume / mount */
+    if (volume || mount) {
+      /* Ejection first, unmount otherwise */
+      if (volume && g_volume_can_eject (volume)) {
+        g_volume_eject_with_operation (
+            volume, G_MOUNT_UNMOUNT_NONE, NULL, NULL, volume_eject_cb, req);
+        volume = NULL;
+      } else if (mount && g_mount_can_eject (mount)) {
+        g_mount_eject_with_operation (
+            mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL, mount_eject_cb, req);
+        mount = NULL;
+      } else if (mount && g_mount_can_unmount (mount)) {
+        g_mount_unmount_with_operation (
+            mount, G_MOUNT_UNMOUNT_NONE, NULL, NULL, mount_unmount_cb, req);
+        mount = NULL;
+      } else
+        melo_request_complete (req);
+
+      /* Release objects */
+      g_clear_object (&mount);
+      g_clear_object (&volume);
+    } else {
+      /* Save path */
+      melo_request_set_user_data (req, g_strdup (r->path));
+
+      /* Delete file */
+      g_file_delete_async (
+          file, G_PRIORITY_DEFAULT, NULL, action_delete_cb, req);
+    }
     return true;
   }
-
-  /* Generate URI from path */
-  if (!melo_file_browser_get_uri (browser, r->path, &file, NULL, NULL) || !file)
-    return false;
 
   /* Create asynchronous object */
   action = calloc (1, sizeof (*action));
