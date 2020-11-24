@@ -15,10 +15,14 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA.
  */
 
+#include <stdatomic.h>
+
 #define MELO_LOG_TAG "request"
 #include <melo/melo_log.h>
 
 #include "melo/melo_request.h"
+
+static atomic_uint request_count;
 
 typedef enum _MeloRequestState {
   MELO_REQUEST_STATE_PENDING = 0,
@@ -47,6 +51,7 @@ static void
 melo_request_finalize (GObject *gobject)
 {
   MeloRequest *req = MELO_REQUEST (gobject);
+  unsigned int count;
 
   /* Send empty message to finish request */
   if (req->async.cb && req->state == MELO_REQUEST_STATE_PENDING)
@@ -55,7 +60,10 @@ melo_request_finalize (GObject *gobject)
   /* Call destroyed callback */
   g_signal_emit (req, signals[DESTROYED], 0);
 
-  MELO_LOGD ("request %p destroyed", req);
+  /* Decrease debug counter */
+  count = atomic_fetch_sub (&request_count, 1) - 1;
+
+  MELO_LOGD ("request %p destroyed (%u)", req, count);
 
   /* Chain up to the parent class */
   G_OBJECT_CLASS (melo_request_parent_class)->finalize (gobject);
@@ -122,6 +130,9 @@ melo_request_new (MeloAsyncData *async, GObject *obj)
   /* Initialize request */
   req->async = *async;
   req->obj = obj;
+
+  /* Increase debug counter */
+  atomic_fetch_add (&request_count, 1);
 
   return req;
 }
