@@ -1038,13 +1038,25 @@ request_cancelled_cb (MeloRequest *req, void *user_data)
 {
   MeloFileBrowserMediaList *mlist = user_data;
 
-  /* Stop discoverer */
-  if (mlist->disco)
-    gst_discoverer_stop (mlist->disco);
-  mlist->disco_count = 0;
-
   /* Cancel GIO */
   g_cancellable_cancel (mlist->cancel);
+
+  /* Stop discoverer */
+  if (mlist->disco) {
+    gst_discoverer_stop (mlist->disco);
+
+    /* Reset discoverer count */
+    if (mlist->disco_count) {
+      mlist->disco_count = 0;
+
+      /* No pending IO: release request */
+      if (mlist->done) {
+        g_object_unref (mlist->disco);
+        melo_request_complete (mlist->req);
+        free (mlist);
+      }
+    }
+  }
 }
 
 static void
@@ -1401,13 +1413,25 @@ action_cancelled_cb (MeloRequest *req, void *user_data)
 {
   MeloFileBrowserAction *action = user_data;
 
-  /* Stop discoverer */
-  if (action->disco)
-    gst_discoverer_stop (action->disco);
-  action->disco_count = 0;
-
   /* Cancel GIO */
   g_cancellable_cancel (action->cancel);
+
+  /* Stop discoverer */
+  if (action->disco) {
+    gst_discoverer_stop (action->disco);
+
+    /* Reset discoverer count */
+    if (action->disco_count) {
+      action->disco_count = 0;
+
+      /* No pending IO: release request */
+      if (!action->ref_count) {
+        g_object_unref (action->disco);
+        melo_request_complete (action->req);
+        free (action);
+      }
+    }
+  }
 }
 
 static bool
