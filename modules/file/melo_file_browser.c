@@ -1783,13 +1783,12 @@ action_children_cb (
         1, 0, MELO_LIBRARY_FIELD_NONE, false, false, MELO_LIBRARY_FIELD_PLAYER,
         MELO_FILE_PLAYER_ID, MELO_LIBRARY_FIELD_PATH, path,
         MELO_LIBRARY_FIELD_MEDIA, media, MELO_LIBRARY_FIELD_LAST);
-    g_free (path);
 
     /* Do action as regular file */
     if (action->type == BROWSER__ACTION__TYPE__PLAY)
-      melo_playlist_play_media (MELO_FILE_PLAYER_ID, uri, NULL, lib.tags);
+      melo_playlist_play_media (MELO_FILE_PLAYER_ID, uri, media, lib.tags);
     else if (action->type == BROWSER__ACTION__TYPE__ADD)
-      melo_playlist_add_media (MELO_FILE_PLAYER_ID, uri, NULL, lib.tags);
+      melo_playlist_add_media (MELO_FILE_PLAYER_ID, uri, media, lib.tags);
     else {
       if (action->type == BROWSER__ACTION__TYPE__SET_FAVORITE && lib.id)
         melo_library_update_media_flags (
@@ -1799,6 +1798,7 @@ action_children_cb (
             lib.id, MELO_LIBRARY_FLAG_FAVORITE, true);
       melo_tags_unref (lib.tags);
     }
+    g_free (path);
 
     /* Release request, source object and asynchronous object */
     melo_request_complete (action->req);
