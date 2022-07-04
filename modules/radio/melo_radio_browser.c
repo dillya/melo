@@ -27,8 +27,8 @@
 #include "melo_radio_browser.h"
 #include "melo_radio_player.h"
 
-#define MELO_RADIO_BROWSER_URL "http://fr1.api.radio-browser.info/json/"
-#define MELO_RADIO_BROWSER_USER_AGENT "rad.io for Melo (Android API)"
+#define MELO_RADIO_BROWSER_URL "http://all.api.radio-browser.info/json/"
+#define MELO_RADIO_BROWSER_USER_AGENT "Melo/1.0.0"
 #define MELO_RADIO_BROWSER_ASSET_URL ""
 
 typedef struct {
