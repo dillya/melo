@@ -58,6 +58,12 @@ To enable network support, the following command should be additionally used:
 apt install libnm-dev
 ```
 
+To enable the UPnP support, the following command should be additionally used:
+
+```sh
+apt install libgupnp-1.0-dev rygel-2.6-dev
+```
+
 Then, you are ready to build Melo:
 
 ```sh
