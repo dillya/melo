@@ -25,7 +25,7 @@ proto_gen = generator(
 		'@INPUT@'
 	]
 )
-proto_files = [ 'proto/network.proto' ]
+proto_files = [ 'proto/network.proto', 'proto/system.proto' ]
 proto_gen_src = proto_gen.process(
 	proto_files,
 	preserve_path_from : meson.current_source_dir(),
@@ -41,6 +41,7 @@ src = [
 	'main.c',
 	'media.c',
 	'settings.c',
+	'system.c',
 	'websocket.c'
 ]
 cflags = []

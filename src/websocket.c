@@ -28,6 +28,7 @@
 #include "network.h"
 #endif
 
+#include "system.h"
 #include "websocket.h"
 
 typedef enum {
@@ -40,6 +41,7 @@ typedef enum {
   WEBSOCKET_OBJECT_PLAYER,
   WEBSOCKET_OBJECT_PLAYLIST,
   WEBSOCKET_OBJECT_SETTINGS,
+  WEBSOCKET_OBJECT_SYSTEM,
 #ifdef NETWORK_SUPPORT
   WEBSOCKET_OBJECT_NETWORK,
 #endif
@@ -97,6 +99,9 @@ websocket_parse_path (
   } else if (!strncmp (path, "settings", 8)) {
     *obj = WEBSOCKET_OBJECT_SETTINGS;
     path += 8;
+  } else if (!strncmp (path, "system", 6)) {
+    *obj = WEBSOCKET_OBJECT_SYSTEM;
+    path += 6;
 #ifdef NETWORK_SUPPORT
   } else if (!strncmp (path, "network", 7)) {
     *obj = WEBSOCKET_OBJECT_NETWORK;
@@ -262,6 +267,9 @@ websocket_request_cb (MeloWebsocket *ws, const char *path,
     break;
   case WEBSOCKET_OBJECT_SETTINGS:
     ret = melo_settings_handle_request (msg, websocket_async_cb, ws);
+    break;
+  case WEBSOCKET_OBJECT_SYSTEM:
+    ret = system_handle_request (msg, websocket_async_cb, ws);
     break;
 #ifdef NETWORK_SUPPORT
   case WEBSOCKET_OBJECT_NETWORK:

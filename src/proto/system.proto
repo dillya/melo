@@ -1,0 +1,20 @@
+/* Melo system protobuf */
+
+syntax = "proto3";
+
+package System;
+
+/* System request */
+message Request {
+  /* Requests */
+  oneof req {
+    /* Power off the system (resp: none) */
+    bool power_off = 10;
+    /* Reboot the system (resp: none) */
+    bool reboot = 11;
+  }
+}
+
+/* System response */
+message Response {
+}
