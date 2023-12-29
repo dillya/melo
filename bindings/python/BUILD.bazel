@@ -1,0 +1,24 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
+
+pybind_extension(
+    name = "melopy",
+    srcs = glob(["src/*.cc", "src/*.h"]),
+    deps = [
+        "//:libmelo"
+    ],
+)
+
+py_library(
+    name = "melopy",
+    imports = ["."],
+    data = [":melopy.so"],
+)
+
+py_test(
+    name = "melopy_test",
+    srcs = glob(["tests/*.py"]),
+    deps = [
+        ":melopy",
+        "//:melopy_proto",
+    ],
+)

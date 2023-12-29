@@ -1,0 +1,56 @@
+# Bazel BUILD file for Melo
+
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+cc_library(
+    name = "libmelo",
+    srcs = glob(["lib/**/*.cc"]),
+    hdrs = glob(["include/melo/**/*.h"]),
+    includes = ["include"],
+    deps = [
+       ":libmelo_cc_proto",
+        "@spdlog",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "melo",
+    srcs = glob(["src/**/*.cc"]),
+    deps = [
+        ":libmelo",
+    ],
+)
+
+cc_test(
+  name = "libmelo_test",
+  size = "small",
+  srcs = glob(["tests/lib/*.cc"]),
+  deps = [
+    ":libmelo",
+    "@googletest//:gtest_main",
+  ],
+)
+
+# TODO
+proto_library(
+    name = "libmelo_proto",
+    #srcs = glob(["proto/*.proto"]),
+    srcs = ["proto/browser.proto"],
+    visibility = ["//visibility:public"],
+)
+
+cc_proto_library(
+    name = "libmelo_cc_proto",
+    deps = [":libmelo_proto"],
+)
+
+# TODO
+load("@protobuf//:protobuf.bzl", "py_proto_library")
+#load("@rules_python//python:proto.bzl", "py_proto_library")
+py_proto_library(
+    name = "melopy_proto",
+    srcs = ["proto/browser.proto"],
+    #deps = [":libmelo_proto"],
+    visibility = ["//visibility:public"],
+)

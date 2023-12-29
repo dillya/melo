@@ -1,0 +1,2 @@
+# Enable C++17
+build --cxxopt=-std=c++17

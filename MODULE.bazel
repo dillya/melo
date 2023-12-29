@@ -1,0 +1,21 @@
+module(
+    name = "melo",
+    version = "0.0.0",
+    compatibility_level = 1,
+)
+
+# Library dependencies
+bazel_dep(name = "rules_cc", version = "0.0.9")
+bazel_dep(name = "rules_proto", version = "6.0.0-rc1")
+bazel_dep(name = "protobuf", version = "21.7")
+bazel_dep(name = "spdlog", version = "1.12.0")
+
+# Test dependencies
+bazel_dep(name = "googletest", version = "1.14.0")
+
+# Python binding dependencies
+bazel_dep(name = "pybind11_bazel", version = "2.11.1")
+
+# Load Pybind
+python_configure = use_extension("@pybind11_bazel//:python_configure.bzl", "extension")
+use_repo(python_configure, "local_config_python", "pybind11")

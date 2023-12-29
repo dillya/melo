@@ -1,0 +1,37 @@
+// Melo Browser protobuf
+
+syntax = "proto3";
+
+package Browser;
+
+// Browser informations
+message Info {
+  string name = 1; // Displayed name of the browser
+  string description = 2; // Description of the browser
+}
+
+// Event from browser
+message Event {
+  // Event type
+  oneof event {
+    // Global context
+    Info added = 10; // A new browser has been added
+    Info removed = 11; // A browser has been removed
+  }
+}
+
+// Request to browser
+message Request {
+  // Request type
+  oneof request {
+    string dummy = 10; // TODO: dummy
+  }
+}
+
+// Response from browser
+message Response {
+  // Response type
+  oneof response {
+    string dummy = 10; // TODO: dummy
+  }
+}
