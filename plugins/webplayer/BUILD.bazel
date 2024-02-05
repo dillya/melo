@@ -1,0 +1,8 @@
+py_library(
+    name = "melo_webplayer_plugin",
+    srcs = glob(["*.py"]),
+    data = [
+        "manifest.toml",
+    ],
+    visibility = ["//visibility:public"],
+)

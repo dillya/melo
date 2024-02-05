@@ -4,12 +4,14 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 cc_library(
     name = "libmelo",
-    srcs = glob(["lib/**/*.cc"]),
+    srcs = glob(["lib/**/*.cc", "lib/**/*.h"]),
     hdrs = glob(["include/melo/**/*.h"]),
     includes = ["include"],
     deps = [
        ":libmelo_cc_proto",
+        "@cpptoml",
         "@spdlog",
+        "@pybind11//:pybind11_embed",
     ],
     visibility = ["//visibility:public"],
 )
@@ -20,6 +22,15 @@ cc_binary(
     deps = [
         ":libmelo",
     ],
+    data = [
+        "//plugins/file:melo_file_plugin",
+        "//plugins/spotify:melo_spotify_plugin",
+        "//plugins/webplayer:melo_webplayer_plugin",
+    ],
+    env = {
+        "MELO_PLUGINS_PATH": "plugins",
+    },
+    linkstatic=False,
 )
 
 cc_test(

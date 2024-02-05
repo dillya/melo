@@ -13,13 +13,37 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+#include <cstdlib>
 #include <iostream>
 
-#include <melo/browser.h>
+#include <melo/core.h>
 #include <melo/log.h>
 
 int main(int argc, char *argv[]) {
+  melo::Core core;
+
+  // Get plugins path from environment
+  std::string plugins_path = "/var/lib/melo/plugins";
+  char *env_plugins_path = std::getenv("MELO_PLUGINS_PATH");
+  if (env_plugins_path)
+    plugins_path = env_plugins_path;
+
+  // Load plugins
+  if (!core.load_plugins(plugins_path))
+    MELO_LOGW("failed to load plugins");
+
   MELO_LOGI("Melo is ready");
+
+  // TODO
+  auto player = core.get_player("melo.file.player");
+  MELO_LOGW("player name is {}", player ? player->get_name() : "-");
+
+  // TODO
+  player = core.get_player("melo.spotify.player");
+  MELO_LOGW("player name is {}", player ? player->get_name() : "-");
+
+  // Main loop
+  // TODO
 
   return 0;
 }

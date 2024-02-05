@@ -1,0 +1,11 @@
+cc_library(
+    name = "melo_file_plugin",
+    srcs = glob(["*.cc"]),
+    deps = [
+       "//:libmelo",
+    ],
+    data = [
+        "manifest.toml",
+    ],
+    visibility = ["//visibility:public"],
+)

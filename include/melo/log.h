@@ -38,4 +38,33 @@
 /** Log debug message. */
 #define MELO_LOGD(...) SPDLOG_DEBUG(__VA_ARGS__)
 
+/*
+ * Extended API
+ */
+
+/** Log message with custom file, line and function. */
+#define MELO_LOG_EXT(file, line, func, level, ...) \
+  (spdlog::default_logger_raw())                   \
+      ->log(spdlog::source_loc{file, line, func}, level, __VA_ARGS__)
+
+/** Log critical message with custom file, line and function. */
+#define MELO_LOGC_EXT(file, line, func, ...) \
+  MELO_LOG_EXT(file, line, func, spdlog::level::critical, __VA_ARGS__)
+
+/** Log error message with custom file, line and function. */
+#define MELO_LOGE_EXT(file, line, func, ...) \
+  MELO_LOG_EXT(file, line, func, spdlog::level::err, __VA_ARGS__)
+
+/** Log warning message with custom file, line and function. */
+#define MELO_LOGW_EXT(file, line, func, ...) \
+  MELO_LOG_EXT(file, line, func, spdlog::level::warn, __VA_ARGS__)
+
+/** Log info message with custom file, line and function. */
+#define MELO_LOGI_EXT(file, line, func, ...) \
+  MELO_LOG_EXT(file, line, func, spdlog::level::info, __VA_ARGS__)
+
+/** Log debug message with custom file, line and function. */
+#define MELO_LOGD_EXT(file, line, func, ...) \
+  MELO_LOG_EXT(file, line, func, spdlog::level::debug, __VA_ARGS__)
+
 #endif  // MELO_LOG_H_

@@ -1,0 +1,8 @@
+name = "File plugin"
+version = "1.0.0"
+
+[melo]
+version = "1.0.0"
+
+[native]
+filename = "libmelo_file_plugin.so"
