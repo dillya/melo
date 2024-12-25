@@ -2127,19 +2127,6 @@ melo_file_browser_handle_request (
 static void write_all_cb (
     GObject *source_object, GAsyncResult *res, gpointer user_data);
 
-#ifndef g_queue_clear_full
-static void
-g_queue_clear_full (GQueue *queue, GDestroyNotify free_func)
-{
-  g_return_if_fail (queue != NULL);
-
-  if (free_func != NULL)
-    g_queue_foreach (queue, (GFunc) free_func, NULL);
-
-  g_queue_clear (queue);
-}
-#endif
-
 static void
 melo_file_browser_put_next_chunk (MeloFileBrowserPut *put, GBytes *chunk)
 {
